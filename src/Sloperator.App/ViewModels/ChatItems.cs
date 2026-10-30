@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using Sloperator.Core.Agent;
 using Sloperator.Core.Chats;
 using Sloperator.Core.Llm;
+using Sloperator.Core.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -418,6 +419,61 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
     {
         State = ToolItemState.Denied;
         _approval?.TrySetResult(false);
+    }
+}
+
+/// <summary>
+/// The offer of text recognition, on a card of its own where find_text found none installed: the
+/// model's words offering it were often skipped (the user, 2026-10-30). Install, Not now (offered
+/// again the next time it is needed), or Turn off (Settings' Use text recognition). Installing,
+/// Windows asks whether PowerShell may make changes, which looks alarming, so the card says so first.
+/// </summary>
+public sealed partial class TextRecognitionItem(ITextReader reader, Action turnOff) : ChatItemViewModel
+{
+    /// <summary>What the card says under its title: the offer, then how the install went.</summary>
+    [ObservableProperty]
+    private string _status = "With it, the agent finds buttons, menus and text on your screen in one step and clicks them more surely. It's part of Windows, a download of a few MB.";
+
+    /// <summary>The buttons show until one is chosen.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsWarning))]
+    private bool _isOpen = true;
+
+    [ObservableProperty]
+    private bool _isInstalling;
+
+    /// <summary>Said before Install is pressed, so Windows' prompt comes as no surprise.</summary>
+    public bool ShowsWarning => IsOpen;
+
+    [RelayCommand]
+    private async Task InstallAsync()
+    {
+        IsOpen = false;
+        IsInstalling = true;
+        Status = "Installing… Windows now asks whether Windows PowerShell may make changes to your device: click Yes.";
+        var result = await reader.InstallAsync(CancellationToken.None);
+        IsInstalling = false;
+        Status = result switch
+        {
+            TextInstall.Installed => $"Installed: {string.Join(", ", reader.Languages())}. The agent reads the screen's text from its next look.",
+            TextInstall.Declined => "Not installed: Windows' permission prompt was declined. It's offered again the next time it's needed.",
+            _ => "Not installed: Windows couldn't add it (is the PC online?). You can add a language in Settings → Advanced → Text recognition.",
+        };
+    }
+
+    [RelayCommand]
+    private void NotNow()
+    {
+        IsOpen = false;
+        Status = "Not installed for now. It's offered again the next time it's needed.";
+    }
+
+    [RelayCommand]
+    private void TurnOff()
+    {
+        IsOpen = false;
+        turnOff();
+        Status = "Text recognition is off: the agent won't read the screen's text or offer it again. Turn it back on in Settings → Advanced.";
     }
 }
 

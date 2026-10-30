@@ -132,6 +132,8 @@ internal sealed unsafe class WindowsTextReader : ITextReader
         }
     }
 
+    public Task<TextInstall> InstallAsync(CancellationToken ct) => TextRecognitionInstall.RunAsync(Languages, ct);
+
     /// <summary>An engine for the user's languages, and the largest side it reads; no engine when none of them can be read.</summary>
     private static (nint Engine, uint MaxSide) CreateEngine()
     {
@@ -318,4 +320,44 @@ internal sealed unsafe class WindowsTextReader : ITextReader
     [DllImport("combase.dll")] private static extern int WindowsCreateString(char* source, uint length, nint* hstring);
     [DllImport("combase.dll")] private static extern int WindowsDeleteString(nint hstring);
     [DllImport("combase.dll")] private static extern char* WindowsGetStringRawBuffer(nint hstring, uint* length);
+}
+
+/// <summary>
+/// Adds Windows' OCR pack of the user's language (English when there is none for it) through an
+/// elevated PowerShell, which Windows asks the user to allow: adding a capability needs an
+/// administrator. One encoded command, not a script, so no execution policy stops it.
+/// </summary>
+[SupportedOSPlatform("windows")]
+internal static class TextRecognitionInstall
+{
+    /// <param name="languages">The languages Windows reads once it is done, to tell an install that took from one that didn't.</param>
+    public static async Task<TextInstall> RunAsync(Func<IReadOnlyList<string>> languages, CancellationToken ct)
+    {
+        var tag = System.Globalization.CultureInfo.CurrentCulture.Name;
+        var command = $"$ErrorActionPreference = 'Stop'; try {{ Add-WindowsCapability -Online -Name 'Language.OCR~~~{tag}~0.0.1.0' | Out-Null }} " +
+                      "catch { Add-WindowsCapability -Online -Name 'Language.OCR~~~en-US~0.0.1.0' | Out-Null }";
+        var start = new System.Diagnostics.ProcessStartInfo("powershell.exe")
+        {
+            UseShellExecute = true,
+            Verb = "runas",
+            WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
+            Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " + Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(command)),
+        };
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(start);
+            if (process is null)
+                return TextInstall.Failed;
+            await process.WaitForExitAsync(ct).ConfigureAwait(false);
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223) // ERROR_CANCELLED: the user said no
+        {
+            return TextInstall.Declined;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return TextInstall.Failed;
+        }
+        return languages().Count > 0 ? TextInstall.Installed : TextInstall.Failed;
+    }
 }

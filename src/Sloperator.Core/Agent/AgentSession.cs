@@ -42,6 +42,13 @@ public interface IAgentObserver
     /// over a slow VPN sending it took minutes that looked like the model thinking.
     /// </summary>
     void OnSending(long sent, long total) { }
+
+    /// <summary>
+    /// find_text found no text recognition installed: the app offers it on a card of its own (install,
+    /// not now, turn off), which the user sees where the model's own words were often skipped.
+    /// </summary>
+    void OfferTextRecognition() { }
+
     void OnToolFinished(ToolCall call, ToolResult result);
 
     /// <summary>
@@ -358,6 +365,7 @@ public sealed partial class AgentSession(
             toolContext.Ask = (images, question, ct2) => toolContext.SeesImages ? eyes.AskAsync(images, question, ct2) : Task.FromResult<string?>(null);
         }
         toolContext.ResetContext ??= ModelAsksReset;
+        toolContext.OfferTextRecognition = observer.OfferTextRecognition;
         toolContext.InConversation ??= text => History.Any(m => m.Content?.Contains(text, StringComparison.Ordinal) == true ||
                                                                 m.Parts?.Any(p => p.Text?.Contains(text, StringComparison.Ordinal) == true) == true);
         var cutOffs = 0;

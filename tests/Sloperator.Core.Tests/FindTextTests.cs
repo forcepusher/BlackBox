@@ -71,6 +71,20 @@ public class FindTextTests
     {
         public IReadOnlyList<TextLine>? Read(RawImage image) => null;
         public IReadOnlyList<string> Languages() => [];
+        public Task<TextInstall> InstallAsync(CancellationToken ct) => Task.FromResult(TextInstall.Failed);
+    }
+
+    [Fact]
+    public async Task In_the_app_the_offer_is_a_card_and_the_model_is_told_not_to_ask()
+    {
+        var offers = 0;
+        var ctx = new ToolContext { Platform = new FakePlatform { Text = new NoLanguageReader() }, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath(),
+            OfferTextRecognition = () => offers++ };
+        var result = await new FindTextTool().ExecuteAsync(new JsonObject { ["text"] = "OK" }, ctx, CancellationToken.None);
+        Assert.True(result.IsError);
+        Assert.Equal(1, offers);
+        Assert.Contains("don't ask them about it yourself, and don't install it", result.Text);
+        Assert.DoesNotContain("Add-WindowsCapability", result.Text);
     }
 
     [Fact]

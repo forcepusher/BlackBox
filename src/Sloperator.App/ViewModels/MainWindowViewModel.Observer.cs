@@ -152,6 +152,22 @@ public sealed partial class MainWindowViewModel
         });
     }
 
+    /// <summary>The offer of text recognition on its card; one at a time while one is still waiting for an answer.</summary>
+    void IAgentObserver.OfferTextRecognition() => PostTimed(at =>
+    {
+        if (_runDetached || _platform.Text is not { } reader || Items.OfType<TextRecognitionItem>().Any(i => i.IsOpen || i.IsInstalling))
+            return;
+        Items.Insert(NoticeIndex(), new TextRecognitionItem(reader, TurnOffTextRecognition) { At = at });
+        NotifyUser("Text recognition isn't installed: install it?");
+    });
+
+    /// <summary>The card's Turn off: Settings' Use text recognition, from the next message on.</summary>
+    private void TurnOffTextRecognition()
+    {
+        _settings.Agent.EnableTextRecognition = false;
+        SaveSettings();
+    }
+
     void IAgentObserver.OnNotice(string text) => ShowNotice(text, null);
 
     void IAgentObserver.OnNotice(string text, Exception error) => ShowNotice(text, error);
