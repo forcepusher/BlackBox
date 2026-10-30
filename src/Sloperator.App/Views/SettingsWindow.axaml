@@ -62,18 +62,12 @@
 
         <TextBlock Classes="h2" Text="Advanced" />
         <Grid Classes="form" ColumnDefinitions="160,*">
-          <TextBlock Classes="label" Text="Max screenshot size" />
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="0,4">
-            <NumericUpDown x:Name="ScreenshotWidthBox" Value="{Binding ScreenshotWidth}" LostFocus="OnSizeLostFocus" Minimum="{x:Static vm:SettingsViewModel.MinWidth}" Maximum="{x:Static vm:SettingsViewModel.MaxSide}"
-                           Increment="64" FormatString="0" ClipValueToMinMax="True" Width="96" ShowButtonSpinner="False" AutomationProperties.Name="Max screenshot width" />
-            <TextBlock Text="×" VerticalAlignment="Center" />
-            <NumericUpDown x:Name="ScreenshotHeightBox" Value="{Binding ScreenshotHeight}" LostFocus="OnSizeLostFocus" Minimum="{x:Static vm:SettingsViewModel.MinHeight}" Maximum="{x:Static vm:SettingsViewModel.MaxSide}"
-                           Increment="64" FormatString="0" ClipValueToMinMax="True" Width="96" ShowButtonSpinner="False" AutomationProperties.Name="Max screenshot height" />
-            <TextBlock Classes="muted" Text="pixels" VerticalAlignment="Center" />
-          </StackPanel>
+          <TextBlock Classes="label" Text="Screenshot size" />
+          <ComboBox Grid.Column="1" ItemsSource="{Binding ScreenshotSizes}" SelectedIndex="{Binding ScreenshotSizeIndex}" HorizontalAlignment="Stretch"
+                    AutomationProperties.Name="Screenshot size" />
         </Grid>
         <TextBlock Classes="muted" TextWrapping="Wrap"
-                   Text="Larger screens are scaled down to fit and use less context. 2560 × 1080 by default." />
+                   Text="Screenshots keep your screen's shape and are only scaled down, never up. Bigger ones show more detail and use more context." />
       </StackPanel>
     </ScrollViewer>
   </DockPanel>

@@ -2416,11 +2416,17 @@ OpenRouter; spelling out the pixel range or a worked example made it 5/28), and 
 on the grid and 3/28 in pixels (31B through OpenRouter: 1/28 and 0/28). The user had the grid taken out anyway: one way of pointing for every
 model, no forks by model name. Zoom's rulers, `mouse_drag` and pictures are all in pixels.
 
-Screenshots are scaled down to fit Settings → Advanced → Max screenshot size, keeping their shape
-and never scaled up (`AgentSettings.ScreenshotMaxWidth`/`ScreenshotMaxHeight`, kept within
-640×360..16384 when read). It was dropped on 2026-10-16 for always-native, and came back because a
-4K screen at full resolution takes four times the context of Full HD. 2560×1080 by default (the
-user: "wide full HD"): 1920×1080 and 21:9 screens go as they are, 4K goes at 1920×1080. Clicks map
+Screenshots are scaled down to Settings → Advanced → Screenshot size, keeping their shape and never
+scaled up (`AgentSettings.ScreenshotSize`: up to 1080 tall, full resolution, or up to 720 tall; each
+entry shows what the primary screen comes out at). A width × height box before it was dropped on
+2026-10-16 for always-native, and came back because a 4K screen at full resolution takes four times
+the context of Full HD; on 30 October 2026 the user replaced the box, which they found misleading,
+with this choice ("native, scaled down to 1080p vertically" by default). A saved box becomes the
+choice closest to its height. A screen 1080 high of any width goes as it is, 4K goes at 1920×1080,
+5120×1440 at 3840×1080 rather than the old box's 2560×720. Tests and the click benchmark still set a
+box of their own (`ScreenshotMaxWidth`/`ScreenshotMaxHeight`, not saved). On the click benchmark (Qwen
+3.8, 3 retries, grid base) full size hit 92 of 114 first and 99 in the end, 1920×1080 88 and 99
+(ultrawide buttons 4/5 to 1/5), 1280×720 55 and 70, with 19 trials never finding the target. Clicks map
 back through `ScreenSpace` per monitor, in physical pixels, so each screen's own scaling and its
 place in the desktop don't matter (`ToolTests.Screenshots_fit_the_max_size_and_clicks_land_on_the_real_screen_of_every_monitor`).
 That holds because the whole process is per-monitor DPI aware (the manifest, shared by the CLI, and

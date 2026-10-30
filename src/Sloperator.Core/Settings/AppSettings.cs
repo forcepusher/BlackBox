@@ -4,6 +4,14 @@ using System.Text.Json.Serialization;
 
 namespace Sloperator.Core.Settings;
 
+/// <summary>How tall screenshots may be; they keep the screen's shape and are never scaled up.</summary>
+public enum ScreenshotSize
+{
+    UpTo1080,
+    Full,
+    UpTo720,
+}
+
 public enum ApprovalMode
 {
     /// <summary>Ask before every tool call.</summary>
@@ -277,25 +285,37 @@ public sealed class AgentSettings
     public ApprovalMode Approval { get; set; } = ApprovalMode.Never;
 
     /// <summary>
-    /// The box a screenshot is scaled down to fit, keeping its shape and never scaled up: a 4K
-    /// screen at full resolution costs four times the context of one at 1920x1080. 2560x1080
-    /// by default (the user: "wide full HD"), so Full HD and 21:9 screens go as they are. At full
-    /// resolution qwen3.8 hit text links 15/16 against 8/16 at 1920x1080, and buttons on a
-    /// 5120x1440 screen 7/16 against 4/16 (ClickAccuracyTests, two rounds).
+    /// How tall screenshots may be: they keep the screen's width and shape, scaled down (never up) only
+    /// when the screen is taller, since a 4K screen at full resolution costs four times the context of
+    /// one at 1920x1080. Up to 1080 tall by default (the user: native, scaled down to 1080p
+    /// vertically), so a 5120x1440 screen goes at 3840x1080. Shrunk to 1920 wide on the click benchmark
+    /// Qwen 3.8 lost ultrawide buttons (4/5 to 1/5), and at 1280x720 it hit 55 of 114 first where full
+    /// size hit 92 (30 October 2026).
     /// </summary>
-    public int ScreenshotMaxWidth { get; set; } = DefaultScreenshotWidth;
+    public ScreenshotSize ScreenshotSize { get; set; } = ScreenshotSize.UpTo1080;
 
-    public int ScreenshotMaxHeight { get; set; } = DefaultScreenshotHeight;
+    /// <summary>A box of their own for tests and the click benchmark, in place of <see cref="ScreenshotSize"/>'s.</summary>
+    [JsonIgnore]
+    public int? ScreenshotMaxWidth { get; set; }
 
-    public const int DefaultScreenshotWidth = 2560, DefaultScreenshotHeight = 1080;
+    [JsonIgnore]
+    public int? ScreenshotMaxHeight { get; set; }
 
     /// <summary>The smallest box (a smaller one is too blurry to read a button by) and the largest side.</summary>
     public const int MinScreenshotWidth = 640, MinScreenshotHeight = 360, MaxScreenshotSide = 16384;
 
-    /// <summary>The box screenshots fit, with a hand-edited settings.json's sides kept in range.</summary>
+    /// <summary>The box screenshots fit, its sides kept in range.</summary>
     [JsonIgnore]
     public (int Width, int Height) ScreenshotBox =>
-        (Math.Clamp(ScreenshotMaxWidth, MinScreenshotWidth, MaxScreenshotSide), Math.Clamp(ScreenshotMaxHeight, MinScreenshotHeight, MaxScreenshotSide));
+        (Math.Clamp(ScreenshotMaxWidth ?? MaxScreenshotSide, MinScreenshotWidth, MaxScreenshotSide),
+         Math.Clamp(ScreenshotMaxHeight ?? TallestFor(ScreenshotSize), MinScreenshotHeight, MaxScreenshotSide));
+
+    private static int TallestFor(ScreenshotSize size) => size switch
+    {
+        ScreenshotSize.Full => MaxScreenshotSide,
+        ScreenshotSize.UpTo720 => 720,
+        _ => 1080,
+    };
 
     /// <summary>
     /// The JPEG quality screenshots are sent with (zoomed pictures go at 90). 70 was a tenth to a quarter
@@ -443,6 +463,16 @@ public sealed class SettingsStore(AppPaths paths)
         root.Remove("remote");
         root.Remove("local");
         root.Remove("backend");
+        // The width x height box before the Screenshot size choice (30 October 2026): its height picks the closest one.
+        if (root["agent"] is JsonObject agent && agent["screenshotSize"] is null &&
+            agent["screenshotMaxHeight"] is JsonValue h && h.GetValueKind() == JsonValueKind.Number)
+        {
+            var height = h.GetValue<double>();
+            if (height <= 720)
+                agent["screenshotSize"] = "upTo720";
+            else if (height > 1080)
+                agent["screenshotSize"] = "full";
+        }
         return root.ToJsonString();
     }
 

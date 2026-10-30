@@ -1,7 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Sloperator.App.ViewModels;
-using Sloperator.Core.Settings;
 
 namespace Sloperator.App.Views;
 
@@ -22,11 +21,4 @@ public partial class SettingsWindow : Window
     }
 
     private void OnCancel(object? sender, RoutedEventArgs e) => Close(false);
-
-    /// <summary>A screenshot size field left empty shows the default again, which is what it saves.</summary>
-    private void OnSizeLostFocus(object? sender, RoutedEventArgs e)
-    {
-        if (sender is NumericUpDown { Value: null } box)
-            box.Value = box == ScreenshotWidthBox ? AgentSettings.DefaultScreenshotWidth : AgentSettings.DefaultScreenshotHeight;
-    }
 }
