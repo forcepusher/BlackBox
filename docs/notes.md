@@ -1429,9 +1429,11 @@ in a chat, and the cards and heading are where they were to the pixel.
 The line under the heading is `ScreenNote`: what the agent may do on the screen, after Settings'
 "Enable screenshots" and "Enable keyboard and mouse control" and whether the model takes images
 (the user, 2026-10-30: it said keyboard and mouse whatever Settings said). Four lines, each one line
-down to MinWidth: "I may use your keyboard and mouse when needed.", "I can see your screen but won't
-touch the keyboard or mouse.", "I can't see your screen or use the keyboard and mouse." and, in the
-warning colour as something to fix, "This model can't see your screen: pick another one." It changes
+down to MinWidth at 100% and 125%: "I may use your keyboard and mouse when needed (see Settings).",
+"I can see your screen but won't touch the keyboard or mouse (see Settings).", "I can't see your
+screen or use the keyboard and mouse (see Settings)." (the three that Settings decides say where, as
+the Pause/Break card's approval line does; the user, 2026-10-30) and, in the warning colour as
+something to fix, "This model can't see your screen: pick another one." It changes
 as Settings is saved (here or in another window) and as the model's image support is found out; the
 same words were a warning line on the "Use any app" card before, said twice.
 

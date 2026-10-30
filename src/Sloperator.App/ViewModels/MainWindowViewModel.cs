@@ -147,9 +147,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// </summary>
     public string ScreenNote =>
         !_settings.Server.SupportsVision ? "This model can't see your screen: pick another one." :
-        !_settings.Agent.EnableScreenshots ? "I can't see your screen or use the keyboard and mouse." :
-        !_settings.Agent.EnableControl ? "I can see your screen but won't touch the keyboard or mouse." :
-        "I may use your keyboard and mouse when needed.";
+        !_settings.Agent.EnableScreenshots ? "I can't see your screen or use the keyboard and mouse (see Settings)." :
+        !_settings.Agent.EnableControl ? "I can see your screen but won't touch the keyboard or mouse (see Settings)." :
+        "I may use your keyboard and mouse when needed (see Settings).";
 
     /// <summary>The model takes no images: the line is in the warning colour, as something to fix.</summary>
     public bool ScreenNoteWarns => !_settings.Server.SupportsVision;
