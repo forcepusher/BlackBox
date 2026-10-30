@@ -1590,7 +1590,8 @@ Servers' lists unlike the dropdowns'):
   words keep Fluent's 10: they follow the paperclip, not a border. Before, the Side panel's word
   was 9 in (8 at 100%), History's and the buttons' 9, the fields' 11 and the dropdowns' 12. Wider
   buttons leave the top bar's server status less room at the window's MinWidth, where it was cut
-  short already ("Conne…", and with a side panel open only its dot); Video generator's names column
+  short already ("Conne…", and with a side panel open only its dot; now it is whole or gone, see
+  Several windows); Video generator's names column
   is 120 (was 112) for "+ Sound line" with a button's 12.
 - **Sizes**: a button, dropdown or text box is 32 high, as Fluent's text boxes and dropdowns are; a
   small button (in a card, under a preview, in a player, over the diff) 24. `Button` (and the app's
@@ -1704,7 +1705,13 @@ takes its look from its kind:
 ## Several windows
 **New window** in the top bar opens another chat window, with its own chat, agent
 and MCP servers. (It was an icon at first, to keep the bar within the narrowest window, and went
-unnoticed; now the server's status text is what gets shorter in a narrow window.) Starting Sloperator
+unnoticed; now the server's status text is what gives way in a narrow window.) It goes whole or
+not at all (`WholeRow`, the user, 2026-10-30): cut to "Conne…" at the window's MinWidth, and to the
+dot and "…" beside Video generator's longer name in the Side panel dropdown, it read as broken. Each
+part shows only if it and all before it fit in full: the context's use ("· 35k of 100k used") goes
+first, then the status word, and the dot stays, 12 from History, the status in the row's tooltip.
+Measured, not a width breakpoint, as the status words and the dropdown's name differ in length.
+`WholeRowTests` checks each part is in full or past the clipped right edge. Starting Sloperator
 again does the same: one Sloperator runs per `Data` folder (`SingleInstance`), and a second start of
 the exe asks it for another window and ends at once. All the windows are one process
 (`ChatWindows` keeps them), so what they share needs no talk between programs; Sloperator ends with
