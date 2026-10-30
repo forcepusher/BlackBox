@@ -2698,7 +2698,9 @@ That is the CLI. In the app the model's words offering it went unread (the user:
 of that is being read"), and so did a card in the chat, scrolled away by the run, so the offer is a
 card on the chat bar above the message box (`TextRecognitionOffer`, through
 `IAgentObserver.OfferTextRecognition`): Install (it says Windows will ask about PowerShell), Not now,
-Turn off. The model is told the user has been offered it and not to ask or install it itself. Not now
+Turn off. It sits in the intro heading's row, which the chat spans, so the chat's bar keeps running down
+to the message box while it shows (the user asked; same as the start screen). The model is told the
+user has been offered it and not to ask or install it itself. Not now
 takes the card away at once; after an install or Turn off what happened shows for 6 s first. The
 install starts its elevated process off the UI thread, which otherwise froze until Windows' prompt
 was answered. Clicking No on that prompt (error 1223) leaves it uninstalled and offered again next time.

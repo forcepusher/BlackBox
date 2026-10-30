@@ -63,6 +63,8 @@ public partial class MainWindow : Window
         };
         ChatScroll.SizeChanged += (_, _) => FitIntroHeading();
         IntroHeading.SizeChanged += (_, _) => FitIntroHeading();
+        OfferRow.SizeChanged += (_, _) => FitIntroHeading();
+        OfferRow.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) FitIntroHeading(); };
         InputRow.SizeChanged += (_, _) => FitIntroHeading();
         ChatScroll.AddHandler(PointerWheelChangedEvent, (_, e) =>
         {
@@ -138,9 +140,11 @@ public partial class MainWindow : Window
         IntroHeading.IsVisible = room - _headingHeight >= 64;
         // The chat runs over the heading's row, so its bar goes down to the chat box on the start
         // screen as in a chat (the user, 2026-10-30: it stopped at the heading); what scrolls stops
-        // at the heading's top, the cards never going under it.
+        // at the heading's top, the cards never going under it. The same for the offer of text
+        // recognition, in that row too: the bar keeps its length while the offer is up.
+        var below = Math.Max(IntroHeading.IsVisible ? IntroHeading.Bounds.Height : 0, OfferRow.IsVisible ? OfferRow.Bounds.Height : 0);
         if (_chatPresenter is not null)
-            _chatPresenter.Margin = new Thickness(0, 0, 0, IntroHeading.IsVisible ? IntroHeading.Bounds.Height : 0);
+            _chatPresenter.Margin = new Thickness(0, 0, 0, below);
     }
 
     /// <summary>What scrolls in the chat, inside its bar (see FitIntroHeading).</summary>
