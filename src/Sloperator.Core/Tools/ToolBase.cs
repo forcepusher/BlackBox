@@ -33,6 +33,9 @@ public sealed class ToolContext
     /// <summary>The app's top bar, for model_server to switch the server, key and model Sloperator runs on; null where there is none (the CLI).</summary>
     public IModelServerSwitch? ModelServer { get; init; }
 
+    /// <summary>The relative grid the model gives x/y on (see <see cref="ScreenSpace"/>), or null for screenshot pixels: measured at a chat's start (see <see cref="Agent.PointingCalibration"/>).</summary>
+    public int? CoordinateGrid { get; set; }
+
     /// <summary>
     /// The longest side a screenshot may have for this model, whatever the setting: Claude makes
     /// larger ones smaller itself (and refuses them over 2000 px in a request with more than 20
@@ -182,12 +185,12 @@ public sealed class ToolContext
     public ScreenSpace GetScreenSpace(int screen)
     {
         var screens = Screens;
-        return new(screens[Math.Clamp(screen, 0, screens.Count - 1)], ScreenshotBox());
+        return new(screens[Math.Clamp(screen, 0, screens.Count - 1)], ScreenshotBox(), CoordinateGrid);
     }
 
     /// <summary>One <see cref="ScreenSpace"/> per monitor, in <see cref="Screens"/> order.</summary>
     public IReadOnlyList<ScreenSpace> ScreenSpaces() =>
-        Screens.Select(s => new ScreenSpace(s, ScreenshotBox())).ToList();
+        Screens.Select(s => new ScreenSpace(s, ScreenshotBox(), CoordinateGrid)).ToList();
 
     /// <summary>The box screenshots are made to fit: the setting's, within <see cref="MaxScreenshotSide"/>.</summary>
     private (int Width, int Height) ScreenshotBox()

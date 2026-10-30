@@ -36,10 +36,10 @@ public static class SystemPrompt
             sb.AppendLine("- You see one screen at a time. screenshot shows the screen you looked at last (screen 1 at first); pass screen=N to look at another. " +
                           "All x/y arguments refer to the screen in the latest screenshot. To act on another screen, take its screenshot first.");
         }
-        else if (screen is not null)
+        else if (screen is { Grid: null })
             sb.AppendLine($"- Screenshots are {screen.ImageWidth}x{screen.ImageHeight} pixels.");
         if (screen is not null)
-            sb.AppendLine("- Coordinates: " + screen.Describe());
+            sb.AppendLine("- Coordinates: " + screen.Describe() + (screen.Proportions() is { } p ? " " + p : ""));
         sb.AppendLine();
         sb.AppendLine("How to work:");
         // Asked to search when unsure, models weren't: Nemotron built a geometry nodes graph in
@@ -213,6 +213,8 @@ public static class SystemPrompt
             r.X + r.Width <= p.X ? "left of screen 1" :
             r.Y >= p.Y + p.Height ? "below screen 1" :
             r.Y + r.Height <= p.Y ? "above screen 1" : "overlapping screen 1";
-        return $"{index + 1} ({position}, {r.Width}x{r.Height}, screenshots {s.ImageWidth}x{s.ImageHeight})";
+        return s.Grid is null
+            ? $"{index + 1} ({position}, {r.Width}x{r.Height}, screenshots {s.ImageWidth}x{s.ImageHeight})"
+            : $"{index + 1} ({position}, {r.Width}x{r.Height})";
     }
 }

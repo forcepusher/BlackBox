@@ -174,7 +174,11 @@ public sealed class ScreenshotTool : Tool
         ctx.DesktopTurn?.Looked(ctx);
         var jpeg = space.Encode(frame, ctx.Settings.ScreenshotQuality);
         var count = ctx.Screens.Count;
-        var which = (count > 1 ? $"Screenshot of screen {ctx.CurrentScreen + 1} of {count}, " : "Screenshot ") + $"{space.ImageWidth}x{space.ImageHeight}.";
+        var which = count > 1 ? $"Screenshot of screen {ctx.CurrentScreen + 1} of {count}" : "Screenshot";
+        // The image size only matters when x/y are its pixels.
+        if (space.Grid is null)
+            which += (count > 1 ? ", " : " ") + $"{space.ImageWidth}x{space.ImageHeight}";
+        which += ".";
         var cursor = ctx.Platform.Input.GetCursorPosition();
         var cursorScreen = ctx.ScreenAt(cursor.X, cursor.Y);
         var (cx, cy) = space.ToModel(cursor.X, cursor.Y);
@@ -283,7 +287,8 @@ public sealed class MouseDragTool : DesktopActionTool
         {
             input.MouseUp(MouseButton.Left);
         }
-        // In screen pixels, as apps measure what was drawn or selected.
+        // In screen pixels, as apps measure what was drawn or selected: on the 0-1000 grid equal
+        // x and y steps are not equal distances.
         return $"Dragged {Math.Abs(x2 - x1)} x {Math.Abs(y2 - y1)} px on screen.";
     }
 }

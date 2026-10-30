@@ -151,6 +151,18 @@ public class ClickAccuracyTests
         ClickCheck.Enabled = Env("BB_CLICK_CHECK") != "0";
         var zoom = Env("BB_CLICK_ZOOM") != "0";
         var looks = int.TryParse(Env("BB_CLICK_LOOKS"), out var lk) ? lk : 4;
+        // How the model points, measured once for the run as each chat is in the app (see
+        // PointingCalibration), on the main scenes' screen; BB_CLICK_CALIBRATE=0 keeps pixels.
+        int? grid = null;
+        if (Env("BB_CLICK_CALIBRATE") != "0")
+        {
+            var space = new ScreenSpace(Primary, (AgentSettings.MaxScreenshotSide, height));
+            var probe = BackendConnection.Create(http, server);
+            var answer = await new FreshLook(probe.Client, probe.Options)
+                .AskAsync([PointingCalibration.Picture(space.ImageWidth, space.ImageHeight)], PointingCalibration.Question(space.ImageWidth, space.ImageHeight), CancellationToken.None);
+            grid = PointingCalibration.Read(answer, space.ImageWidth, space.ImageHeight);
+            Log($"Pointing check: {(grid is null ? "pixels" : $"0-{grid} grid")} (answer: {answer?.ReplaceLineEndings(" ").Clip(160)})");
+        }
         // Windows' own text recognition reads the fake screens, as it reads the real one.
         var findText = Env("BB_CLICK_FINDTEXT") != "0";
 #if WINDOWS
@@ -174,7 +186,7 @@ public class ClickAccuracyTests
                 var settings = new AgentSettings { ScreenshotMaxHeight = height };
                 if (int.TryParse(Env("BB_CLICK_QUALITY"), out var quality))
                     settings.ScreenshotQuality = quality;
-                var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = Path.GetTempPath() };
+                var ctx = new ToolContext { Platform = platform, Settings = settings, WorkingDirectory = Path.GetTempPath(), CoordinateGrid = grid };
                 if (trial == 0)
                     File.WriteAllBytes(Path.Combine(Path.GetTempPath(), $"bb-click-{tag}-{scene.Name}.jpg"), ScreenshotTool.Take(new ToolContext
                     {
@@ -243,7 +255,7 @@ public class ClickAccuracyTests
         }
         foreach (var line in summary)
             Log(line);
-        Log($"TOTAL {allHits}/{allTrials} with {Model}, screenshots up to {height} tall, " +
+        Log($"TOTAL {allHits}/{allTrials} with {Model}, screenshots up to {height} tall, {(grid is null ? "pixels" : $"0-{grid} grid")}, " +
             (zoom ? "zoom tool" : "no zoom tool") + $", JPEG quality {Env("BB_CLICK_QUALITY") ?? new AgentSettings().ScreenshotQuality.ToString()}");
         if (retries > 0)
             Log($"RETRY {fixedLater}/{retried} first-click misses hit within {retries} more tries (miss check {(ClickCheck.Enabled ? "on" : "off")}, {(zoom ? "zoom tool" : "no zoom tool")})");

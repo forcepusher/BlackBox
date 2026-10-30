@@ -11,16 +11,19 @@ namespace Sloperator.Core.Platform;
 /// The screen is scaled down to fit a box (e.g. 1600×900) keeping its shape; it is never scaled
 /// up. Sides are rounded to multiples of 32 (the Qwen vision patch grid) so the vision encoder does
 /// not resize the image again.
-/// The model's x/y are pixels of that image.
+/// The model's x/y are either pixels of that image, or, for models trained that way (Qwen3 and
+/// later), a 0-1000 grid over it whatever its size.
 /// </remarks>
 public sealed class ScreenSpace
 {
     private const int Patch = 32;
 
     /// <param name="box">Largest size to send, or null for the screen's own resolution.</param>
-    public ScreenSpace(ScreenRect screen, (int Width, int Height)? box)
+    /// <param name="grid">Size of the relative grid the model's x/y are on (1000), or null for image pixels.</param>
+    public ScreenSpace(ScreenRect screen, (int Width, int Height)? box, int? grid = null)
     {
         Screen = screen;
+        Grid = grid;
         var scale = box is { } b ? Math.Min(1.0, Math.Min((double)b.Width / screen.Width, (double)b.Height / screen.Height)) : 1.0;
         ImageWidth = Snap(screen.Width * scale);
         ImageHeight = Snap(screen.Height * scale);
@@ -29,33 +32,49 @@ public sealed class ScreenSpace
     public ScreenRect Screen { get; }
     public int ImageWidth { get; }
     public int ImageHeight { get; }
+    public int? Grid { get; }
+
+    /// <summary>The largest x and y the model can give.</summary>
+    public int ModelWidth => Grid ?? ImageWidth;
+    public int ModelHeight => Grid ?? ImageHeight;
 
     private static int Snap(double size) => Math.Max(Patch, (int)Math.Round(size / Patch) * Patch);
 
     /// <summary>
-    /// How the model's x/y relate to the screenshot, for the system prompt. Pixels come with the
-    /// image's size: told only "pixels of the screenshot", DeepSeek V4.1 Flash answered fresh looks
-    /// on a 0-1000 grid, so on a 2560-wide screen every x it found landed at 1000/2560 of the
-    /// target's (the Hierarchy tab at x 1368 came back as 551; 8 of 8 Unity targets so). Every model
-    /// is asked for pixels, those trained on that grid too: told the size, Qwen 3.8 (q6_k_xl) hit
-    /// 21/28 in pixels against 19/28 on its grid (ClickAccuracyTests, 2026-10-29).
+    /// How the model's x/y relate to the screenshot, for the system prompt. Pixels
+    /// come with the image's size: told only "pixels of the screenshot", DeepSeek V4.1 Flash answered
+    /// fresh looks on a 0-1000 grid, so on a 2560-wide screen every x it found landed at 1000/2560
+    /// of the target's (the Hierarchy tab at x 1368 came back as 551; 8 of 8 Unity targets so).
     /// </summary>
-    public string Describe() => $"x/y are pixels of the screenshot, which is {ImageWidth}x{ImageHeight}, origin top-left.";
+    public string Describe() => Grid is { } g
+        ? $"x/y are on a 0-{g} grid over the screenshot, whatever its size: (0, 0) is its top-left corner and ({g}, {g}) its bottom-right."
+        : $"x/y are pixels of the screenshot, which is {ImageWidth}x{ImageHeight}, origin top-left.";
+
+    /// <summary>
+    /// That grid steps aren't square, for the system prompt. Drawing a circle in Paint, qwen3.8
+    /// dragged as many x steps as y steps twice and got 385×241 px ovals before it worked it out.
+    /// </summary>
+    public string? Proportions() => Grid is { } g && Screen.Width != Screen.Height
+        ? FormattableString.Invariant(
+            $"The grid isn't square: on this {Screen.Width}x{Screen.Height} screen one x step is {Screen.Width / (double)g:0.##} px and one y step ") +
+          FormattableString.Invariant(
+            $"{Screen.Height / (double)g:0.##} px, so something as tall as it is wide spans {Screen.Width / (double)Screen.Height:0.##} times as many y steps as x steps.")
+        : null;
 
     public (int X, int Y) ToScreen(double modelX, double modelY)
     {
         // Fractions of the screenshot, (0.87, 0.88), whatever the model was asked for: Kilo's free
-        // Nemotron models slip into them. No point meant in pixels is that near the corner.
+        // Nemotron models slip into them. No point meant in pixels or on the grid is that near the corner.
         if (modelX is >= 0 and <= 1 && modelY is >= 0 and <= 1 && (modelX % 1 != 0 || modelY % 1 != 0))
-            (modelX, modelY) = (modelX * ImageWidth, modelY * ImageHeight);
-        var x = Screen.X + (int)Math.Round(Math.Clamp(modelX, 0, ImageWidth) * Screen.Width / ImageWidth);
-        var y = Screen.Y + (int)Math.Round(Math.Clamp(modelY, 0, ImageHeight) * Screen.Height / ImageHeight);
+            (modelX, modelY) = (modelX * ModelWidth, modelY * ModelHeight);
+        var x = Screen.X + (int)Math.Round(Math.Clamp(modelX, 0, ModelWidth) * Screen.Width / ModelWidth);
+        var y = Screen.Y + (int)Math.Round(Math.Clamp(modelY, 0, ModelHeight) * Screen.Height / ModelHeight);
         return (Math.Min(x, Screen.X + Screen.Width - 1), Math.Min(y, Screen.Y + Screen.Height - 1));
     }
 
     public (int X, int Y) ToModel(int screenX, int screenY) =>
-        ((int)Math.Round((double)(screenX - Screen.X) * ImageWidth / Screen.Width),
-         (int)Math.Round((double)(screenY - Screen.Y) * ImageHeight / Screen.Height));
+        ((int)Math.Round((double)(screenX - Screen.X) * ModelWidth / Screen.Width),
+         (int)Math.Round((double)(screenY - Screen.Y) * ModelHeight / Screen.Height));
 
     /// <summary>Downscales a captured frame to the model's view and encodes it as JPEG.</summary>
     public byte[] Encode(RawImage frame, int quality = 85)

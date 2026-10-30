@@ -41,8 +41,8 @@ public sealed class ZoomTool : Tool
         var space = ctx.GetScreenSpace();
         var (cx, cy) = space.ToScreen(RequireNumber(args, "x"), RequireNumber(args, "y"));
         var screen = space.Screen;
-        var width = Side(GetNumber(args, "width"), space.ImageWidth, screen.Width);
-        var height = Side(GetNumber(args, "height"), space.ImageHeight, screen.Height);
+        var width = Side(GetNumber(args, "width"), space.ModelWidth, screen.Width);
+        var height = Side(GetNumber(args, "height"), space.ModelHeight, screen.Height);
         var region = new ScreenRect(Math.Clamp(cx - width / 2, screen.X, screen.X + screen.Width - width),
             Math.Clamp(cy - height / 2, screen.Y, screen.Y + screen.Height - height), width, height);
         var frame = ctx.Platform.Screen.Capture(region, includeCursor: true);

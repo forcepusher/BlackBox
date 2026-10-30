@@ -78,7 +78,7 @@ public sealed class ReadFileTool : Tool
             // box when the model had to find a program to show it on screen.
             if (!ctx.SeesImages)
                 return ToolResult.Error($"{path} is a picture, and the model in use can't see images.");
-            return Picture.Read(path) with { Files = [path] };
+            return Picture.Read(path, ctx.CoordinateGrid) with { Files = [path] };
         }
         if (DocumentText.Handles(path))
         {

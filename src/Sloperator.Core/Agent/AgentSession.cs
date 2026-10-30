@@ -258,11 +258,11 @@ public sealed partial class AgentSession(
                         _guesswork?.StartRun(input.Text);
                     }
                     first = false;
-                    History.Add(input.ToMessage(toolContext.SeesImages));
+                    History.Add(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid));
                     continue;
                 }
                 _guesswork?.Heard(input.Text);
-                History.Add(Interjection(input.ToMessage(toolContext.SeesImages)));
+                History.Add(Interjection(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid)));
             }
             toolContext.UserPictures = UserInput.PicturesIn(History);
         }
@@ -339,6 +339,9 @@ public sealed partial class AgentSession(
 
     public Task RunAsync(string userText, IAgentObserver observer, CancellationToken ct) => RunAsync(new UserInput(userText), observer, ct);
 
+    /// <summary>Runs before the user's message goes in, at the start of every run: a chat's pointing check (see <see cref="PointingCalibration"/>).</summary>
+    public Func<IAgentObserver, CancellationToken, Task>? BeforeRun { get; set; }
+
     /// <summary>Runs the task the user sent: the model works on it, with its tools, until it is done or stopped.</summary>
     public async Task RunAsync(UserInput input, IAgentObserver observer, CancellationToken ct)
     {
@@ -348,7 +351,9 @@ public sealed partial class AgentSession(
         // screen 2 in its last screenshot, the model clicked and typed into Notepad on screen 1.
         if (ScreenShown(History) is { } lastSeen)
             toolContext.CurrentScreen = lastSeen.Screen;
-        History.Add(input.ToMessage(toolContext.SeesImages));
+        if (BeforeRun is { } before)
+            await before(observer, ct).ConfigureAwait(false);
+        History.Add(input.ToMessage(toolContext.SeesImages, toolContext.CoordinateGrid));
         // A picture given earlier in the chat (a reference sheet) is still the one to follow.
         toolContext.UserPictures = UserInput.PicturesIn(History);
         toolContext.UserMessage = _arrived.Token;

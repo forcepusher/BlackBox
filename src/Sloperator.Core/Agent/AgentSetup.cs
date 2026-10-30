@@ -66,12 +66,41 @@ public static class AgentSetup
         var registry = ToolRegistry.CreateDefault(includeScreenTools: screens is not null, extra: [new McpServersTool(), .. (modelServer is null ? (Tool[])[] : [new ModelServerTool()]), .. mcp.Tools], includeIndex: folderIndex,
             includeControl: agent.Controls, includeFindText: agent.EnableTextRecognition);
         mcpSetup.Registry = registry;
-        string Prompt() => SystemPrompt.Build(platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, mcp.Connected, webSearch: true, paths.ToolsDir, paths.ScratchDir,
-            folderIndex, control: agent.Controls, modelServer: modelServer is not null, findText: agent.EnableTextRecognition);
+        // The screens as the model points at them now: in pixels, or on its grid once measured.
+        string Prompt() => SystemPrompt.Build(platform.Name, screens is null ? null : ctx.ScreenSpaces(), ctx.WorkingDirectory, agent.CustomInstructions, mcp.Connected, webSearch: true,
+            paths.ToolsDir, paths.ScratchDir, folderIndex, control: agent.Controls, modelServer: modelServer is not null, findText: agent.EnableTextRecognition);
         var session = new AgentSession(backend.Client, backend.Options, registry, ctx, Prompt(), history, backend.ContextTokens);
         // A server the agent adds or removes: the prompt then lists the servers as the next
         // message's will, in the same request whose tools change anyway.
         mcpSetup.ToolsChanged = () => session.UsePrompt(Prompt());
+        // Before a chat's first click: does this model point in pixels or on a grid? Measured once
+        // a chat (and again after a switch to another model), before its first request is made.
+        if (screens is not null && agent.Controls)
+            session.BeforeRun = async (observer, ct) =>
+            {
+                var model = backend.Options.Model ?? "";
+                if (!Pointing.TryGetValue(session.History, out var measured) || measured.Model != model)
+                {
+                    var space = ctx.ScreenSpaces()[0];
+                    var answer = await new FreshLook(backend.Client, backend.Options)
+                        .AskAsync([PointingCalibration.Picture(space.ImageWidth, space.ImageHeight)], PointingCalibration.Question(space.ImageWidth, space.ImageHeight), ct)
+                        .ConfigureAwait(false);
+                    measured = new(model, PointingCalibration.Read(answer, space.ImageWidth, space.ImageHeight));
+                    Pointing.AddOrUpdate(session.History, measured);
+                    if (measured.Grid is { } grid)
+                        observer.OnNotice($"This model points on a 0-{grid} grid rather than in pixels, so its clicks are read on that grid.");
+                }
+                if (ctx.CoordinateGrid != measured.Grid)
+                {
+                    ctx.CoordinateGrid = measured.Grid;
+                    session.UsePrompt(Prompt());
+                }
+            };
         return session;
     }
+
+    /// <summary>How a chat's model points, by the chat's history: a run per message shares it.</summary>
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<List<ChatMessage>, Measured> Pointing = new();
+
+    private sealed record Measured(string Model, int? Grid);
 }
