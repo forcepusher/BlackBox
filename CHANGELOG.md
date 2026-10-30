@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Claude keeps it across tool calls.
 - After a click that changed nothing on screen, the agent is told to zoom in and click again, and to
   stop only when the zoom shows the thing was already selected, so it corrects more of its misses.
+  If it ends its answer right after such a click anyway, it is asked once to check the click first.
 - File changes lists each file on one compact line, its name and its counts, so a long list fits;
   whether it was modified or renamed shows in its tooltip.
 - The model list is read from the server again each time its dropdown opens, so a model loaded there

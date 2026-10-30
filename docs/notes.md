@@ -2487,6 +2487,12 @@ wording alone doesn't stop that. On a slightly older develop, without any note i
 in the end (90 and 103 with the old note): without it the
 model doesn't know a click missed, and ten misses ended with the model calling the click done.
 
+So when a reply without tool calls follows a click whose result says nothing changed, the model is
+asked once ("[Sloperator] Your last click changed nothing on screen ... yet you ended there") to zoom
+in and check; a second end stands. It is the one end-of-answer nudge kept after they were removed on
+27 October, and only for this case. Same base and bench: 94 first and 107 in the end (13 of 18 misses
+fixed), against 96 and 104 without it; no trial ended as done after a miss, against four.
+
 Pixel coordinates are described with the image's size ("pixels of the screenshot, which is
 2560x1088"). Told only "pixels of the screenshot", DeepSeek V4.1 Flash answered on a 0-1000 grid, the
 way it was trained to point: on a 2560x1080 Unity screenshot it put the Hierarchy tab, at x 1368, at

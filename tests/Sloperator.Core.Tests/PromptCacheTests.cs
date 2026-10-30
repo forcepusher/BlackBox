@@ -48,7 +48,9 @@ public class PromptCacheTests
         var history = new List<ChatMessage>();
         await using var mcp = new McpHost();
         using var ssh = new SshHosts(paths.KnownHostsFile);
-        var platform = new FakePlatform();
+        // The dialog closes when clicked: a click that changed nothing would get the miss check's question.
+        var platform = new FakePlatform { Desktop = new RawImage(200, 100, new byte[200 * 100 * 4]) };
+        platform.OnClick = p => Array.Fill(p.Desktop!.Bgra, (byte)0xFF);
 
         foreach (var (message, stopAfter, ended) in new (string, TimeSpan?, AgentStopReason)[]
         {
