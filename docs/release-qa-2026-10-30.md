@@ -9,7 +9,7 @@ the opt-in tests that need its programs) are in their own section.
 
 | Model | Laptop tasks passed | Second-monitor tasks (workstation) | Long runs |
 |---|---|---|---|
-| Qwen 3.8 27B | 12 of 12 | 3 of 4 | 2048 in the browser: pass, 10 of 10 checks; ComfyUI 8 of 9; Unity 2048 on the workstation |
+| Qwen 3.8 27B | 12 of 12 | 3 of 4 | 2048 in the browser: pass, 10 of 10 checks; 2048 in Unity: pass, 1 h 55 min; ComfyUI 8 of 9 |
 | Claude Haiku 5.5 | 12 of 12 | 4 of 4 | chat-test: every check of 4 scenarios |
 | Nemotron 3.5 Super VL | 10 of 12 | 4 of 4 (Kilo) | – |
 
@@ -125,8 +125,12 @@ workstation's second-monitor runs went through Anthropic's Messages API.
   to fix. `game2048-check.mjs` (run on the workstation: the laptop has no Node) passed all 10 checks:
   start, readable board, moves by the rules, merges, score, game over exactly when no move is left,
   R, tiles inside the board, no script errors.
-- **2048 in Unity** (`unity2048-test.ps1`, Qwen): on the workstation, which has Unity 6000.3.23f1
-  and a second monitor for the log; started after the browser run so the two didn't share Qwen.
+- **2048 in Unity** (`unity2048-test.ps1`, Qwen, release build): on the workstation, which has Unity
+  6000.3.23f1 and a second monitor for the log, after the browser run so the two didn't share Qwen.
+  Passed in 1 h 55 min, 178 model calls, 0 tool errors, 8 context resets: the game made in Unity 6.3,
+  played in Play mode with real key presses to a score of 2420, Game Over and R checked, then a
+  Unity2048.exe built and played too. It fixed four bugs of its own on the way (the arrow keys, the
+  font, merging, the build folder).
 - **Folder index** (`index-bench.ps1 -Tasks wait -Runs 1`, Nemotron through OpenRouter): the script
   runs and scores as before. With the index 24 tool calls and 441k prompt tokens against 46 and
   936k without; both runs failed the task's check (they edited more files than asked), a model
