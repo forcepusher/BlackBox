@@ -355,17 +355,19 @@
           <Button Classes="ghost" Content="New window" Command="{Binding NewWindowCommand}" />
           <Button Classes="ghost" Content="Settings" Click="OnSettingsClick" />
         </StackPanel>
-        <!-- The server's state, between the name and the buttons: what gets shorter in a narrow window,
-             so the buttons keep their names. With no room at all it is clipped away rather than drawn
-             over History (Video generator's panel at its default width). -->
-        <DockPanel HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0" ClipToBounds="True">
-          <Ellipse DockPanel.Dock="Left" Classes="status" Classes.checking="{Binding IsChecking}" Classes.connected="{Binding IsConnected}" Classes.failed="{Binding IsFailed}"
-                   Width="9" Height="9" VerticalAlignment="Center" Margin="0,0,8,0" />
-          <TextBlock DockPanel.Dock="Left" Classes="muted" Text="{Binding ServerStatusText}" TextTrimming="CharacterEllipsis"
-                     ToolTip.Tip="{Binding ServerStatusText}" VerticalAlignment="Center" />
-          <TextBlock Classes="muted" Text="{Binding ContextUsage, StringFormat='· {0}'}" IsVisible="{Binding HasContextUsage}" TextTrimming="CharacterEllipsis"
+        <!-- The server's state, between the name and the buttons: what gives way in a narrow window, so
+             the buttons keep their names. Each part whole or not at all (WholeRow): the context's use
+             goes first, then the status word, and the dot stays, the word in its tooltip. With no room
+             at all the dot is clipped away rather than drawn over History (Video generator's panel at
+             its default width). -->
+        <views:WholeRow HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0" Background="Transparent"
+                        ToolTip.Tip="{Binding ServerStatusText}">
+          <Ellipse Classes="status" Classes.checking="{Binding IsChecking}" Classes.connected="{Binding IsConnected}" Classes.failed="{Binding IsFailed}"
+                   Width="9" Height="9" VerticalAlignment="Center" />
+          <TextBlock Classes="muted" Text="{Binding ServerStatusText}" VerticalAlignment="Center" Margin="8,0,0,0" />
+          <TextBlock Classes="muted" Text="{Binding ContextUsage, StringFormat='· {0}'}" IsVisible="{Binding HasContextUsage}"
                      ToolTip.Tip="{Binding ContextUsageTip}" VerticalAlignment="Center" Margin="6,0,0,0" />
-        </DockPanel>
+        </views:WholeRow>
       </DockPanel>
     </Border>
 
