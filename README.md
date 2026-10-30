@@ -46,6 +46,8 @@ dotnet test              # unit tests
 
 Details are in [docs/notes.md](docs/notes.md), which is meant to be read by LLMs, not people.
 
+Making a release: [docs/releasing.md](docs/releasing.md).
+
 ## Code signing policy
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
 [SignPath Foundation](https://signpath.org).
