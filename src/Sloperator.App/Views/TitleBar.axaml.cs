@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives.PopupPositioning;
 using Avalonia.Interactivity;
 
 namespace Sloperator.App.Views;
@@ -41,6 +42,8 @@ public partial class TitleBar : UserControl
         if (OperatingSystem.IsWindows() && window.TryGetPlatformHandle()?.Handle is { } hwnd && hwnd != 0)
         {
             Win32Properties.AddWndProcHookCallback(window, WndProc);
+            ToolTip.SetPlacement(MaximizeButton, PlacementMode.Custom);
+            ToolTip.SetCustomPopupPlacementCallback(MaximizeButton, PlaceTip);
             Platform.Windows.WindowsPlatform.RefreshFrame(hwnd);
             // Windows 11 draws its line round the whole window, the top too.
             Classes.Set("frameLine", Environment.OSVersion.Version.Build < 22000);
@@ -99,6 +102,7 @@ public partial class TitleBar : UserControl
                 return hit != HTCLIENT ? hit : Over(MaximizeButton, lParam) ? HTMAXBUTTON
                     : Over(this, lParam) && !Over(MinimizeButton, lParam) && !Over(CloseButton, lParam) ? HTCAPTION : HTCLIENT;
             case WM_NCMOUSEMOVE:
+                _pointer = new PixelPoint((short)(lParam & 0xFFFF), (short)((lParam >> 16) & 0xFFFF));
                 Hover(wParam == HTMAXBUTTON);
                 if (wParam == HTMAXBUTTON)
                     Platform.Windows.WindowsPlatform.TrackNonClientLeave(hwnd);
@@ -144,6 +148,20 @@ public partial class TitleBar : UserControl
         var at = control.PointToClient(new PixelPoint((short)(lParam & 0xFFFF), (short)((lParam >> 16) & 0xFFFF)));
         var height = control == this && this.FindResource("TitleBarHeight") is double strip ? strip : control.Bounds.Height;
         return control.IsEffectivelyVisible && new Rect(0, 0, control.Bounds.Width, height).Contains(at);
+    }
+
+    /// <summary>Where the pointer last was over the window's frame or maximize, in screen pixels.</summary>
+    private PixelPoint _pointer;
+
+    /// <summary>
+    /// Maximize's tooltip at the pointer, as every other tooltip is (<see cref="PlacementMode.Pointer"/>):
+    /// Avalonia takes the pointer from the window's pointer events, which there are none of over maximize.
+    /// </summary>
+    private void PlaceTip(CustomPopupPlacement placement)
+    {
+        placement.AnchorRectangle = new Rect(_window!.PointToClient(_pointer), new Size(1, 1));
+        placement.Anchor = PopupAnchor.TopLeft;
+        placement.Gravity = PopupGravity.BottomRight;
     }
 
     /// <summary>Waits the tooltip's delay once the pointer is on maximize, then shows its tooltip.</summary>

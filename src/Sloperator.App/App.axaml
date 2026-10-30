@@ -428,11 +428,6 @@
     <Style Selector="views|TitleBar.inactive Border.titleTopLine">
       <Setter Property="BorderBrush" Value="#80565656" />
     </Style>
-    <!-- The buttons' tooltips under them, maximize's too (shown by TitleBar: the window gets no pointer
-         events over it). -->
-    <Style Selector="Button.caption">
-      <Setter Property="ToolTip.Placement" Value="Bottom" />
-    </Style>
     <Style Selector="Image.titleIcon">
       <Setter Property="Width" Value="16" />
       <Setter Property="Height" Value="16" />
