@@ -184,7 +184,10 @@ public partial class MainWindow : Window
         FitTo(primary);
         beside?.Remember();
         if (beside?._normal is { } other)
-            placement = new Core.Settings.WindowPlacement { X = other.Position.X, Y = other.Position.Y, Width = other.Width, Height = other.Height };
+            placement = new Core.Settings.WindowPlacement { X = other.Position.X, Y = other.Position.Y, Width = other.Width, Height = other.Height, WithTitleBar = true };
+        // Saved under Windows' title bar: taller by the app's own, so the content is as tall as it was.
+        if (placement is { WithTitleBar: false } old)
+            placement = new Core.Settings.WindowPlacement { X = old.X, Y = old.Y, Width = old.Width, Height = old.Height + TitleBar.Room, Maximized = old.Maximized, WithTitleBar = true };
         // Some of the title bar must be on a screen, or the window can't even be dragged back.
         if (placement is not { } p || p.Width < MinWidth || p.Height < MinHeight
             || Screens.All.FirstOrDefault(s => s.WorkingArea.Intersects(new PixelRect(p.X + 40, p.Y + 4, 160, 24))) is not { } screen)
@@ -262,6 +265,7 @@ public partial class MainWindow : Window
                 Width = normal.Width,
                 Height = normal.Height,
                 Maximized = WindowState == WindowState.Maximized,
+                WithTitleBar = true,
             });
     }
 
@@ -804,7 +808,7 @@ public partial class MainWindow : Window
     private const double ChatMinWidth = ToolkitColumns.ChatMin;
 
     /// <summary>How short the chat may get: the window's own least height, as set in its markup.</summary>
-    private const double ChatMinHeight = 480;
+    private const double ChatMinHeight = 513;
 
     /// <summary>The part of the window the toolkit takes now, in pixels across; 0 with none.</summary>
     private double ToolkitWidth => _docked > 0 ? Columns.ColumnDefinitions[0].ActualWidth + Columns.ColumnDefinitions[1].ActualWidth : 0;

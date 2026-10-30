@@ -14,6 +14,12 @@ namespace Sloperator.App.Views;
 /// </summary>
 public partial class TitleBar : UserControl
 {
+    /// <summary>
+    /// How tall the bar is, its strip (App.axaml, TitleBarHeight) and the line under it: what a window
+    /// gets over the content it had under Windows' bar, and what a height saved then is short of.
+    /// </summary>
+    public const double Room = 33;
+
     private Window? _window;
 
     public TitleBar()
@@ -36,6 +42,8 @@ public partial class TitleBar : UserControl
         {
             Win32Properties.AddWndProcHookCallback(window, WndProc);
             Platform.Windows.WindowsPlatform.RefreshFrame(hwnd);
+            // Windows 11 draws its line round the whole window, the top too.
+            Classes.Set("frameLine", Environment.OSVersion.Version.Build < 22000);
             IsVisible = true;
         }
 #endif
@@ -52,6 +60,7 @@ public partial class TitleBar : UserControl
     {
         Classes.Set("inactive", !window.IsActive);
         Classes.Set("maximized", window.WindowState == WindowState.Maximized);
+        ToolTip.SetTip(MaximizeButton, window.WindowState == WindowState.Maximized ? "Restore Down" : "Maximize");
     }
 
     private void OnMinimize(object? sender, RoutedEventArgs e) => _window!.WindowState = WindowState.Minimized;
@@ -137,17 +146,48 @@ public partial class TitleBar : UserControl
         return control.IsEffectivelyVisible && new Rect(0, 0, control.Bounds.Width, height).Contains(at);
     }
 
+    /// <summary>Waits the tooltip's delay once the pointer is on maximize, then shows its tooltip.</summary>
+    private Avalonia.Threading.DispatcherTimer? _tip;
+
     private void Hover(bool over)
     {
+        if (over == MaximizeButton.Classes.Contains("hover"))
+            return;
         MaximizeButton.Classes.Set("hover", over);
-        if (!over)
+        _tip?.Stop();
+        if (over)
+        {
+            if (_tip is null)
+            {
+                _tip = new Avalonia.Threading.DispatcherTimer();
+                _tip.Tick += ShowTip;
+            }
+            _tip.Interval = TimeSpan.FromMilliseconds(ToolTip.GetShowDelay(MaximizeButton));
+            _tip.Start();
+        }
+        else
+        {
+            ToolTip.SetIsOpen(MaximizeButton, false);
             Press(false);
+        }
+    }
+
+    private void ShowTip(object? sender, EventArgs e)
+    {
+        _tip!.Stop();
+        if (MaximizeButton.Classes.Contains("hover") && !_pressed)
+            ToolTip.SetIsOpen(MaximizeButton, true);
     }
 
     private void Press(bool pressed)
     {
         _pressed = pressed;
         MaximizeButton.Classes.Set("pressed", pressed);
+        if (pressed)
+        {
+            _tip?.Stop();
+            ToolTip.SetIsOpen(MaximizeButton, false);
+        }
     }
 #endif
 }

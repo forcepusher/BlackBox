@@ -46,7 +46,7 @@ The agent itself works across the whole PC; relative paths and shell commands st
 Files it makes only to get a task done (a script, the script a reminder runs) go in `Data/scratch`
 rather than among yours: a reminder used to leave its script in the home folder. `settings.json`
 also keeps the main window's size and place, and it opens there again unless that place is no
-longer on a screen. It is never bigger than the screen it opens on: the default 900x760 is taller
+longer on a screen. It is never bigger than the screen it opens on: the default 900x793 is taller
 than a 1920x1080 laptop screen at 150% has room for, and the title bar opened above the screen
 with the message box under the taskbar.
 
@@ -857,8 +857,8 @@ short; File changes 560), then the window stops, at the panel's least plus the c
 the screen is wide). It goes back to the width it opened at, or was dragged to, as the window widens
 again; the splitter stops at both leasts. Before (bug of 2026-10-24) the window's least counted any
 panel as 480 while Video generator kept its 960, so the chat was squeezed to a few letters across, and
-opening on a narrow screen left the chat only 330. Video generator also needs the window 600 tall
-(`ToolkitOption.MinHeight`; the chat alone 480), else its viewer is squeezed to nothing over the
+opening on a narrow screen left the chat only 330. Video generator also needs the window 633 tall
+(`ToolkitOption.MinHeight`; the chat alone 513; both with the title bar, see Title bar), else its viewer is squeezed to nothing over the
 timeline; a shorter window grows to it as the panel opens. The video's name was in a StackPanel across,
 which gives a TextBlock all the room it wants: it was never cut short and pushed the fields over the
 buttons. The panel has a viewer with how the piece shown was made under it, and the
@@ -1429,7 +1429,7 @@ it was "a pure OCD trigger"); `FitIntroHeading` gives its content presenter a bo
 as the heading while the heading shows, so what scrolls still stops at the heading's top and the
 cards never go under it. Measured at 100% and 125%: the bar's box is the same on the start screen and
 in a chat, and the cards and heading are where they were to the pixel.
-The heading has 20 over the logo, not 12, so in the default window (900x760) the scroll ends in the
+The heading has 20 over the logo, not 12, so in the default window (900x760 under the title bar) the scroll ends in the
 gap under the third row of cards: at 12 the fourth row's top edge peeked out over the logo as a line,
 3.2 px at 125% and 1.6 at 100% (the user, 2026-10-30, "ugly"). The heading's row grows upward, so
 the logo and the cards stay where they were and only the scroll ends 8 sooner; 4 would have hidden
@@ -1723,6 +1723,14 @@ in a 16 box (`CaptionGlyph`, drawn on whole screen pixels: a path's 1 px stroke 
 and blurs). Under the pointer #2C2C2C, pressed #333333, close #C42B1C with a white sign; text and
 signs #808080 while the window isn't active. Windows 10 drew its own grey bar whatever DWM was asked
 (the caption colours are Windows 11's). The full-screen viewer has no title bar, as before.
+The buttons' tooltips (Minimize, Maximize or Restore Down, Close) are under them, as every button's
+in the app; maximize's is shown by the TitleBar after the tooltip delay, as the window gets no
+pointer events there. On Windows 10 a 1-pixel line runs along the top, over the strip's top row:
+Windows draws one round a window on its frame, which has no top now. It is drawn as Windows draws
+the sides, measured over black, white and #161616 (#262626, #7D7D7D, #2E2E2E active; #2B2B2B,
+#AAAAAA, #363636 not): #3A3A3A at 66%, #565656 at 50% while the window isn't active, so over the
+strip it is #2B2B2B and #333333. Not when maximized, nor on Windows 11, which draws its line round
+the whole window.
 
 **Native behaviour.** Windows is told the window has no caption, and the strip is its caption: the
 TitleBar's window hook (`Win32Properties.AddWndProcHookCallback`) answers `WM_NCCALCSIZE` with
@@ -1746,10 +1754,13 @@ the whole window the client, so the resize borders moved 8 px inside the window 
 scrollbar), Windows' line and shadow went, and the window, sized before the change, grew by the frame:
 closed as 900 x 760 it was saved as 914.4 x 797.6, more at each start. `WindowsPlatform.RefreshFrame`
 now lays the frame out again before the window is first shown, the client as big as it was, so
-Width and Height are the client with the bar in it, as they were the client under Windows' bar:
-the window's content is 33 shorter (32 strip and the line), and the window 38 px shorter at 125%
-(Windows' bar, its top line included). The window is as wide as before and its sides and
-bottom are Windows' frame as before. MainWindow's picture for docking the toolkit (`Shot`) is of the
+Width and Height are the client with the bar in it. They were the content under Windows' bar, so
+every height grew by the bar's 33 (`TitleBar.Room`: 32 strip and the line): the main window
+900 x 793 (least 513), Settings 733 (least 513), Video generator's least 633, and the content is as
+tall as before (950 px at 125%; the window 3 px taller than with Windows' bar, whose 38 were 30.4).
+A saved height without `WithTitleBar` (from before) grows by 33 once as the window opens, and is
+saved with it: 760 opened as 793, was saved as 792.8 (991 px) and stayed there. The window is as
+wide as before and its sides and bottom are Windows' frame as before. MainWindow's picture for docking the toolkit (`Shot`) is of the
 whole content, the bar too, as it is in the client area the cover goes over.
 
 Checked on Windows 10 at 125%, with the real mouse and keyboard (`.dev/title-bar-test`, scenario.ps1),
@@ -1759,10 +1770,11 @@ screen's left edge, Win+Left/Right/Up/Down, the system menu both ways, resizing 
 the top-left corner, the left and the bottom edge (outside the window, as before), Settings' close.
 Pixels at 125% (and 100%, a DPI-unaware build): strip 40 (32) rows, line 1 row, the title's capitals
 and the maximize and close signs centred to the pixel, minimize's line half a pixel under the middle
-(a 1-pixel line has no middle row in an even box). Differs from Windows' bar: no 1-pixel frame line
-over the top (Windows draws it on the sides and bottom only, there being no frame over the top); the
-icon is part of the caption (Windows' opens the system menu, and closes on a double-click); no
-tooltips on the buttons; shake wasn't tried (it would minimize every other window).
+(a 1-pixel line has no middle row in an even box). Differs from Windows' bar: the top line is
+drawn over the window's own colour, Windows' over what is behind the window (the sides still show
+the desktop through it), and in grey even where Windows shows the accent colour on window borders;
+the icon is part of the caption (Windows' opens the system menu, and closes on a double-click); the
+tooltips are the app's, under the buttons; shake wasn't tried (it would minimize every other window).
 
 ## Several windows
 **New window** in the top bar opens another chat window, with its own chat, agent
