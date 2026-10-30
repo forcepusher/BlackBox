@@ -356,6 +356,12 @@ public sealed class WindowPlacement
     public double Width { get; set; }
     public double Height { get; set; }
     public bool Maximized { get; set; }
+
+    /// <summary>
+    /// Height counts the app's own title bar (saved from 2026-10-30 on). Saved before, it was the
+    /// content under Windows' bar: opened, it grows by the bar so the content keeps its height.
+    /// </summary>
+    public bool WithTitleBar { get; set; }
 }
 
 /// <summary>How the window's toolkit panels show what they show, as the user last left it.</summary>

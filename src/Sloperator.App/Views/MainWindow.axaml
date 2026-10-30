@@ -6,7 +6,7 @@
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding WindowTitle}"
         Icon="/Assets/sloperator.ico"
-        Width="900" Height="760" MinWidth="660" MinHeight="480"
+        Width="900" Height="793" MinWidth="660" MinHeight="513"
         WindowStartupLocation="CenterScreen">
 
   <Window.Styles>

@@ -6,7 +6,7 @@
         x:DataType="vm:SettingsViewModel"
         Title="Sloperator settings"
         Icon="/Assets/sloperator.ico"
-        Width="720" Height="700" MinWidth="560" MinHeight="480"
+        Width="720" Height="733" MinWidth="560" MinHeight="513"
         WindowStartupLocation="CenterOwner">
 
   <Window.Styles>

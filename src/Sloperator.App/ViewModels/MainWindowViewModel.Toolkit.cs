@@ -57,7 +57,7 @@ public sealed partial class MainWindowViewModel
             vm => new FileChangesViewModel(vm)),
         new(FileInspectorName, "Look inside any file", 420, 0,
             vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir)),
-        new("Video generator", "Plan and make a video shot by shot", 770, 600,
+        new("Video generator", "Plan and make a video shot by shot", 770, 633,
             vm => new VideoGeneratorViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
     ];
 

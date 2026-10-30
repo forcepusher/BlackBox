@@ -10,7 +10,7 @@
     <!-- The buttons docked from the right edge in, so Close ends on it at every scale (in a row of
          their own, three widths rounded at 125% left a pixel between Close and the screen's corner). -->
     <DockPanel Classes="titleStrip">
-      <Button x:Name="CloseButton" DockPanel.Dock="Right" Classes="caption close" Click="OnClose" AutomationProperties.Name="Close">
+      <Button x:Name="CloseButton" DockPanel.Dock="Right" Classes="caption close" Click="OnClose" AutomationProperties.Name="Close" ToolTip.Tip="Close">
         <views:CaptionGlyph Kind="Close" />
       </Button>
       <Button x:Name="MaximizeButton" DockPanel.Dock="Right" Classes="caption" Click="OnMaximize" AutomationProperties.Name="Maximize">
@@ -19,11 +19,13 @@
           <views:CaptionGlyph Classes="restore" Kind="Restore" />
         </Panel>
       </Button>
-      <Button x:Name="MinimizeButton" DockPanel.Dock="Right" Classes="caption" Click="OnMinimize" AutomationProperties.Name="Minimize">
+      <Button x:Name="MinimizeButton" DockPanel.Dock="Right" Classes="caption" Click="OnMinimize" AutomationProperties.Name="Minimize" ToolTip.Tip="Minimize">
         <views:CaptionGlyph Kind="Minimize" />
       </Button>
       <Image Classes="titleIcon" Source="/Assets/sloperator.png" RenderOptions.BitmapInterpolationMode="HighQuality" IsHitTestVisible="False" />
       <TextBlock x:Name="TitleText" Classes="title" IsHitTestVisible="False" />
     </DockPanel>
+    <!-- Windows 10's frame line along the top, over the strip's top row (see TitleBar.FrameLine). -->
+    <Border Classes="titleTopLine" IsHitTestVisible="False" />
   </Panel>
 </UserControl>
