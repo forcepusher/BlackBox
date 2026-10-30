@@ -953,7 +953,11 @@ a song, in a Sound folder, with lip sync to its part under a shot) went with it.
 place to start one): each sound line has the dashed + after its last sound (`SoundLineItem.AddX`), and
 right-click on the line still has Create. The new sound offers **File…** (copies a sound in, as
 dropping one there does), **Foley** and **Music**, as buttons on it while it is new and first on its
-right-click menu after; its tooltip says "Nothing said yet." as a new clip's does. Foley turns it
+right-click menu after; its tooltip says what to do, as its preview does: "Pick File…, Foley or Music,
+or say in the chat what it should be." (both it and a new clip's said "Nothing said yet.", no help to
+the user, 2026-10-30; a clip's tooltip and preview now say "Say in the chat what happens in it.", and
+its block shows nothing between its frames until something is said, as the line under them already
+says "Say what happens in it"). Foley turns it
 into `"source": "foley"` and sends "Make it." at once (there is nothing to say first); Music keeps it a
 song and sends "Make it." once its style is said, else the status line asks for it. Either sends with
 the pick in the box, as a message the user sends does: `SendFromToolkit("Make it.")` used to go with
@@ -981,8 +985,8 @@ read), so the stretch is handed over at 25. Its prompt and negative prompt are t
 inputs: `VideoRoles.PromptInput` finds them there when no sampler's conditioning leads to a text.
 
 **Each sound line's volume** (the user, 2026-10-26: "Each sound line needs a volume slider"): a
-slider under its name, 0 to 2, saved in the video's .json as `soundLineVolumes` (left out while all
-are 1), one for each sound line (a deleted line's goes with it). Playing and joining multiply each
+slider under its name, 0 to 2 in steps of 5% (`Slider.volume`; the user, 2026-10-30: dragged, it
+landed on 111%), saved in the video's .json as `soundLineVolumes` (left out while all are 1), one for each sound line (a deleted line's goes with it). Playing and joining multiply each
 sound's own volume by its line's; the video tool lists the lines turned up or down and takes
 `soundLineVolumes` in a storyboard change.
 

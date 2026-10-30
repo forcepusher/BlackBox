@@ -55,7 +55,7 @@ public sealed partial class MainWindowViewModel
         new("None", "", 0, 0, null),
         new(FileChangesName, "Files the agent changed", 560, 0,
             vm => new FileChangesViewModel(vm)),
-        new(FileInspectorName, "Any file from the chat", 420, 0,
+        new(FileInspectorName, "Look inside any file", 420, 0,
             vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir)),
         new("Video generator", "Plan and make a video shot by shot", 770, 600,
             vm => new VideoGeneratorViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
