@@ -37,7 +37,11 @@ public sealed class ChatWindows
         // A ComfyUI an earlier Sloperator started and left at work is closed once its jobs are done.
         Core.Comfy.ComfyHub.For(paths.ComfyDir).CloseLeftover();
         Core.Media.MediaRelease.Releasing += LetGo;
-        Updater = new Updater(AnyBusy, paths.UpdateCheckFile);
+#if WINDOWS
+        Updater = new Updater(AnyBusy, paths.UpdateCheckFile, paths.UpdateRejectedFile, Sloperator.Platform.Windows.WindowsSignature.Of);
+#else
+        Updater = new Updater(AnyBusy, paths.UpdateCheckFile, paths.UpdateRejectedFile, _ => Sloperator.Core.Web.Signature.None);
+#endif
     }
 
     /// <summary>

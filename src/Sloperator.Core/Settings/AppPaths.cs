@@ -43,6 +43,9 @@ public sealed class AppPaths(string root)
     /// <summary>When Sloperator last asked GitHub for a new version, so a start within the hour doesn't ask again (see <see cref="Web.SelfUpdate"/>).</summary>
     public string UpdateCheckFile => Path.Combine(DataDir, "update-check.txt");
 
+    /// <summary>The version whose download wasn't kept, signed by another publisher than the running exe, so it isn't downloaded again (see <see cref="Web.SelfUpdate.Verify"/>).</summary>
+    public string UpdateRejectedFile => Path.Combine(DataDir, "update-rejected.txt");
+
     /// <summary>Portable programs the agent downloads to open what nothing on the PC opens (a PDF reader's text extractor, say), kept for later tasks.</summary>
     public string ToolsDir => Path.Combine(DataDir, "tools");
 

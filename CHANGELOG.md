@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   write to (Program Files) the line says the new version is out, with a link to download it.
 - **Check for updates** and **Check automatically** (on by default) under Settings → Updates. Off,
   Sloperator never contacts GitHub by itself.
+- A signed Sloperator only installs an update signed by the same publisher; one that isn't is
+  deleted and not downloaded again, and Settings → Updates says it couldn't be verified.
 - Releases are built by GitHub Actions and signed through SignPath, so Windows shows Sloperator's
   publisher instead of an unknown app once the signature has built up trust.
 - Right-click any picture in Sloperator for **Copy image**, and any other file (a video, a sound, a
