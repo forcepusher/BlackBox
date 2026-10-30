@@ -40,6 +40,9 @@ public sealed class AppPaths(string root)
     /// <summary>The SSH host keys Sloperator has seen, in OpenSSH's known_hosts format (see <see cref="Ssh.SshHosts"/>).</summary>
     public string KnownHostsFile => Path.Combine(DataDir, "known_hosts");
 
+    /// <summary>When Sloperator last asked GitHub for a new version, so a start within the hour doesn't ask again (see <see cref="Web.SelfUpdate"/>).</summary>
+    public string UpdateCheckFile => Path.Combine(DataDir, "update-check.txt");
+
     /// <summary>Portable programs the agent downloads to open what nothing on the PC opens (a PDF reader's text extractor, say), kept for later tasks.</summary>
     public string ToolsDir => Path.Combine(DataDir, "tools");
 

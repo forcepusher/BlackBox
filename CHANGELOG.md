@@ -6,11 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- Sloperator updates itself: it checks GitHub for a new version at start and once an hour (never
-  during a task), downloads it beside itself, and a line under the top bar says **Sloperator 1.2.0 is
-  ready**, with **Restart** and **What's new**. Restart opens the new version with the same chats;
-  closing Sloperator instead puts it in place for the next start. In a folder Sloperator can't write
-  to (Program Files) the line says the new version is out, with a link to download it.
+- Sloperator updates itself: it checks GitHub for a new version once an hour, across starts too
+  (never during a task), downloads it beside itself, and a line under the top bar says **Sloperator
+  1.2.0 is ready**, with **Restart** and **What's new**. Restart opens the new version with the same
+  chats; closing Sloperator instead puts it in place for the next start. In a folder Sloperator can't
+  write to (Program Files) the line says the new version is out, with a link to download it.
 - **Check for updates** and **Check automatically** (on by default) under Settings → Updates. Off,
   Sloperator never contacts GitHub by itself.
 - Releases are built by GitHub Actions and signed through SignPath, so Windows shows Sloperator's

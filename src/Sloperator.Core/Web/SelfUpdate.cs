@@ -26,6 +26,40 @@ public static class SelfUpdate
     public static bool IsNewer(GitHubRelease release, Version running) =>
         GitHubReleases.VersionOf(release.Tag) is { } version && version > GitHubReleases.Normal(running);
 
+    /// <summary>How often Sloperator asks GitHub by itself: once an hour, across starts too.</summary>
+    public static readonly TimeSpan Every = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// How long after a start its first check waits: <paramref name="soonest"/> (the window's own
+    /// start goes first) when the last check was <see cref="Every"/> or more ago, or never made or
+    /// unreadable; otherwise until <see cref="Every"/> after it. A clock set back counts as long ago.
+    /// </summary>
+    public static TimeSpan FirstCheckIn(DateTime? last, DateTime now, TimeSpan soonest)
+    {
+        if (last is not { } at || at > now)
+            return soonest;
+        var left = at + Every - now;
+        return left > soonest ? left : soonest;
+    }
+
+    /// <summary>When the last check was made, from <paramref name="file"/>; null when there is none or it can't be read.</summary>
+    public static DateTime? LastCheck(string file)
+    {
+        try
+        {
+            return DateTime.TryParse(File.ReadAllText(file).Trim(), System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind, out var at) ? at.ToUniversalTime() : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>Writes down that a check was made at <paramref name="when"/>; a Data folder that takes nothing just means the next start checks again.</summary>
+    public static void Checked(string file, DateTime when)
+    {
+        try { File.WriteAllText(file, when.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
     /// <summary>An exe's file version, as Explorer shows it; null when it has none or can't be read.</summary>
     public static Version? FileVersion(string path)
     {

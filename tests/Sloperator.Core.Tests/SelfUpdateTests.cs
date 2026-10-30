@@ -56,6 +56,39 @@ public class SelfUpdateTests : IDisposable
     }
 
     [Fact]
+    public void A_start_checks_at_once_only_when_the_last_check_was_an_hour_or_more_ago()
+    {
+        var now = new DateTime(2026, 10, 30, 9, 30, 0, DateTimeKind.Utc);
+        var soon = TimeSpan.FromSeconds(5);
+        Assert.Equal(soon, SelfUpdate.FirstCheckIn(null, now, soon)); // never checked
+        Assert.Equal(soon, SelfUpdate.FirstCheckIn(now.AddHours(-3), now, soon));
+        Assert.Equal(soon, SelfUpdate.FirstCheckIn(now.AddHours(-1), now, soon));
+        // Started again 20 minutes after a check: the next one is 40 minutes on, not now.
+        Assert.Equal(TimeSpan.FromMinutes(40), SelfUpdate.FirstCheckIn(now.AddMinutes(-20), now, soon));
+        // Not sooner than the window's own start, however close to the hour.
+        Assert.Equal(soon, SelfUpdate.FirstCheckIn(now.AddMinutes(-59).AddSeconds(-58), now, soon));
+        // A check "in the future" (the clock set back since) doesn't hold checks off for hours.
+        Assert.Equal(soon, SelfUpdate.FirstCheckIn(now.AddHours(5), now, soon));
+    }
+
+    [Fact]
+    public void The_time_of_the_last_check_is_kept_across_starts()
+    {
+        var file = Path.Combine(_root, "update-check.txt");
+        Assert.Null(SelfUpdate.LastCheck(file));
+
+        var at = new DateTime(2026, 10, 30, 9, 21, 43, 250, DateTimeKind.Utc);
+        SelfUpdate.Checked(file, at);
+        Assert.Equal(at, SelfUpdate.LastCheck(file));
+        Assert.Equal(DateTimeKind.Utc, SelfUpdate.LastCheck(file)?.Kind);
+
+        File.WriteAllText(file, "not a time");
+        Assert.Null(SelfUpdate.LastCheck(file));
+        // A Data folder that takes nothing: no error, the next start just checks.
+        SelfUpdate.Checked(Path.Combine(_root, "not there", "update-check.txt"), at);
+    }
+
+    [Fact]
     public async Task The_api_gives_the_tag_page_link_and_sha256()
     {
         var github = new FakeGitHub
