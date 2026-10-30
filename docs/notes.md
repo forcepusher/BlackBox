@@ -1427,9 +1427,15 @@ while it dances and is in a window.
 
 ## App icon
 `Assets/sloperator.ico` (the exe, the taskbar, every window's title bar) is drawn by
-`scripts/make-icon.ps1` from `docs/logo/blob.svg`, each size on its own (16, 20, 24, 32, 40, 48, 64,
-128, 256), 4x oversampled. Its blob has a soft drop shadow: rings of 9% black, eight of them from
-the edge out to size/24 (one pixel at 16 and 24 px, 11 at 256), so it fades out, set half that
+`scripts/make-icon.ps1` from `docs/logo/blob.svg`, each size on its own, 4x oversampled and shrunk
+by averaging each 4x4 block, so an edge pixel holds just how much of it the shape covers (a
+bicubic shrink, until 2026-10-30, left a pale ring inside every edge and a soft grey one outside).
+It has every size Windows asks for at 100 to 200%: 16, 20, 24, 28, 30, 32, 36, 40, 42, 48, 60, 64,
+72, 80, 96, 128 and 256. Avalonia hands the title bar 16 x scale and the taskbar 24 x scale, the
+nearest entry (`IconImpl.LoadBigIcon`); at 125% that was 32 for a 30 px button, which Windows shrank
+and blurred. Checked on the taskbar at 125% on 2026-10-30: the window's icon is 30 x 30 and the
+button shows it pixel for pixel; before, it was the 32 resampled.
+Its blob has a soft drop shadow: rings of 9% black, eight of them from the edge out to size/24 (one pixel at 16 and 24 px, 11 at 256), so it fades out, set half that
 lower than the blob. The bare yellow had no edge on a light taskbar and looked fuzzy there (the
 user's screenshot, 2026-10-30). Blob and shadow together fill the square side to side, and their
 top and bottom land on whole pixels. On a dark taskbar the shadow melts into the background. A
