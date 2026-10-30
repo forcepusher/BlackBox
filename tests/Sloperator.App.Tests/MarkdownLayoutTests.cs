@@ -61,6 +61,24 @@ public sealed class MarkdownLayoutTests
         Assert.Equal(before, after);
     }
 
+    [Fact]
+    public void Code_in_a_line_is_as_big_as_the_words_around_it()
+    {
+        // A reply's block got its text before it was in the window, at Avalonia's 12, and its code
+        // stayed 11 beside the reply's 14 (the user, 2026-10-30); it is the words' own size now.
+        var (text, code) = HeadlessApp.Run(() =>
+        {
+            var (window, scroll) = Show("Run `notes.md` now.", 1000);
+            var block = scroll.GetVisualDescendants().OfType<SelectableTextBlock>().First(b => b.Inlines?.Text?.Contains("notes.md") == true);
+            var runs = block.TextLayout.TextLines.SelectMany(l => l.TextRuns).Where(r => r.Text.Length > 0).ToList();
+            var sizes = (block.FontSize, runs.First(r => r.Text.ToString().Contains("notes")).Properties!.FontRenderingEmSize);
+            window.Close();
+            return sizes;
+        });
+        Assert.Equal(14, text);
+        Assert.Equal(14, code);
+    }
+
     /// <summary>Each character's font, weight and size, and each line's width, in a block as laid out.</summary>
     private static List<string> Shown(SelectableTextBlock block)
     {

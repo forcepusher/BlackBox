@@ -77,6 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files to ask about them, stage or discard them."
 
 ### Fixed
+- Code in a reply's line (`like this`) was much smaller than the words around it (11 beside 14);
+  it is the same size now, in a table too.
 - Selecting part of a reply redrew the selected words in the code font a size larger, and the rest of
   the line moved along as the selection grew; selected words now keep their own font, size and weight.
 - Every dropdown's word (**Side panel**, the model, the effort, the ones in Settings) sat a pixel low at

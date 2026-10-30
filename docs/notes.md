@@ -1511,6 +1511,17 @@ Everything else (buttons, fields, list and menu rows, chips, notices, the Though
 cells, History, Servers and Side panel rows, Copy, Discard) was centred at 100% and within half a
 pixel, level with its neighbours, at 125%.
 
+## Code in a reply's lines
+Code in a line of a reply (`MarkdownText`: a run in Cascadia Mono, or Consolas where Windows has no
+Cascadia, as on Windows 10) is the size of the words around it. It was meant to be a size under, but
+a block made in code (`MarkdownView.TextPart`, a table's cell) gets its text before it is in the
+window, at Avalonia's 12 rather than the reply's 14, so code came out 11 beside 14 (the user,
+2026-10-30: "code is much smaller"). Now a code run takes its block's size as it changes, and a
+block's runs are laid out again whenever its size changes (a heading run is two sizes over it).
+Compared at 100% and 125% (`.dev/centre-test/shots/code-size-*.png`): Consolas at 13 still read
+smaller than Inter at 14; at 14 its small letters are about as tall as Inter's. Code blocks stay 13
+and a tool's output and command 12.
+
 ## Selected text
 Avalonia (11.3.22, and its master) draws a selection in a text block made of runs (a reply: bold,
 code, headings, links) with properties of its own for the selected part, built from the block's size

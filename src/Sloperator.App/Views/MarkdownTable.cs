@@ -222,7 +222,7 @@ public sealed class MarkdownTable : Border
                 var typeface = new Typeface(code ? Mono : cell.FontFamily,
                     span.Style.HasFlag(MdStyle.Italic) ? FontStyle.Italic : FontStyle.Normal,
                     span.Style.HasFlag(MdStyle.Bold) ? FontWeight.SemiBold : cell.FontWeight);
-                var size = code ? cell.FontSize - 1 : cell.FontSize;
+                var size = cell.FontSize;
                 var start = 0;
                 for (var i = 0; i <= span.Text.Length; i++)
                 {
