@@ -37,7 +37,8 @@ Sloperator/
                videos/ (a folder per video: storyboard, frames, shots, song and the video, see Videos),
                index/ (the indexes of the folders the agent indexed, a file each, see Folder index),
                crash.log (errors no code caught, see below), errors.log (every error shown, see below),
-               sloperator.png (the notifications' icon, see Notify me when done)
+               sloperator.png (the notifications' icon, see Notify me when done),
+               update-check.txt (when Sloperator last asked GitHub for a new version, see Updates)
 ```
 
 Set `SLOPERATOR_HOME` to use a different root. Debug builds use `.dev/` in the repository.
@@ -3508,6 +3509,15 @@ its `digest`), and past the API's 60 requests an hour (often reached behind a VP
 `/releases/latest` redirect and the release's `expanded_assets` page. A check that comes due while a
 run is going in any window waits for the last run to end (`ChatWindows.BusyChanged`): no download
 competes with a task for the connection, and the line doesn't show up mid-task.
+
+Once an hour holds across starts too: every check (the button's as well) writes its time to
+`Data/update-check.txt`, and a start checks 5 s on only when the last check was an hour or more ago
+(or there is none, or it can't be read); otherwise its first check waits until an hour after the
+last (`SelfUpdate.FirstCheckIn`), and the hourly ones go on from there. Before (2026-10-30), every
+start checked, so opening and closing Sloperator a few times an hour asked GitHub each time, and
+without an account it allows 60 an hour per address. A time later than now (the clock set back) counts
+as long ago, so a wrong clock doesn't hold checks off. **Check for updates** in Settings checks
+right away, whenever the last check was.
 
 The tag ("1.2.0", "v1.2.0"; a "-beta" suffix is dropped) against the running exe's file version
 (Directory.Build.props `Version`): newer, and with `Sloperator.exe` among its files, it is downloaded

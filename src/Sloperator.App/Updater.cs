@@ -13,14 +13,17 @@ namespace Sloperator.App;
 public sealed partial class Updater : ObservableObject
 {
     private readonly Func<bool> _busy;
+    private readonly string _checkFile;
     private readonly DispatcherTimer _hourly;
     private bool _due, _checking;
 
     /// <param name="busy">Whether a run is going in any window.</param>
-    internal Updater(Func<bool> busy)
+    /// <param name="checkFile">Where the time of the last check is kept, across starts (Data/update-check.txt).</param>
+    internal Updater(Func<bool> busy, string checkFile)
     {
         _busy = busy;
-        _hourly = new DispatcherTimer(TimeSpan.FromHours(1), DispatcherPriority.Background, (_, _) => Due());
+        _checkFile = checkFile;
+        _hourly = new DispatcherTimer(SelfUpdate.Every, DispatcherPriority.Background, (_, _) => Due());
     }
 
     /// <summary>The running exe; null when it can't be told.</summary>
@@ -64,7 +67,9 @@ public sealed partial class Updater : ObservableObject
 
     /// <summary>
     /// The first window is up: what an earlier update left goes, and the first check is made a few
-    /// seconds on, after the window's own start (its server check, its MCP servers).
+    /// seconds on, after the window's own start (its server check, its MCP servers), or, when the
+    /// last start checked less than an hour ago, an hour after that check: once an hour across starts
+    /// too, not at every start. The hourly checks go on from the first.
     /// </summary>
     internal void Start(bool automatic)
     {
@@ -73,8 +78,11 @@ public sealed partial class Updater : ObservableObject
             SelfUpdate.CleanUp(exe);
         if (!Updatable)
             return;
-        _hourly.Start();
-        DispatcherTimer.RunOnce(Due, TimeSpan.FromSeconds(5));
+        DispatcherTimer.RunOnce(() =>
+        {
+            _hourly.Start();
+            Due();
+        }, SelfUpdate.FirstCheckIn(SelfUpdate.LastCheck(_checkFile), DateTime.UtcNow, TimeSpan.FromSeconds(5)));
     }
 
     /// <summary>A check is due: now, or once no run is going.</summary>
@@ -110,6 +118,7 @@ public sealed partial class Updater : ObservableObject
         }
         _checking = true;
         Status = "Checking…";
+        SelfUpdate.Checked(_checkFile, DateTime.UtcNow);
         try
         {
             var exe = Exe!;
