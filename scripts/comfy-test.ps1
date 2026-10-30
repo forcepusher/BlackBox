@@ -103,7 +103,9 @@ foreach ($name in $Tasks) {
     $checks += if ($match) { "made a $($t.Kind) file" } else { "FAIL: no $($t.Kind) file" }
     $best = $match | Select-Object -Last 1
     if ($best) {
-        $about = ([regex]::Matches($text, [regex]::Escape($best) + ': ([^\r\n]+)') | Select-Object -Last 1).Groups[1].Value
+        # The comfyui tool names the file by its path, the video tool by its name: "Shot s1 (s1.mp4): video ...".
+        $line = [regex]::Matches($text, '(?:' + [regex]::Escape($best) + '|\(' + [regex]::Escape((Split-Path $best -Leaf)) + '\)): ([^\r\n]+)') | Select-Object -Last 1
+        $about = if ($line) { $line.Groups[1].Value } else { '' }
         $seconds = if ($about -match '\(([\d.]+) s\)') { [double]$Matches[1] } elseif ($about -match 'sound ([\d.]+) s') { [double]$Matches[1] } else { $null }
         # A file the tool didn't describe (renamed or copied since): its length from ffprobe.
         if ($null -eq $seconds -and (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
