@@ -306,9 +306,9 @@
           </ComboBox.SelectionBoxItemTemplate>
           <ComboBox.ItemTemplate>
             <DataTemplate x:DataType="vm:ToolkitOption">
-              <StackPanel Spacing="1" Width="300">
+              <StackPanel Spacing="1">
                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
-                <TextBlock Classes="muted" Text="{Binding Description}" TextWrapping="Wrap"
+                <TextBlock Classes="muted" Text="{Binding Description}"
                            IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
               </StackPanel>
             </DataTemplate>

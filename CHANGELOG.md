@@ -125,6 +125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files to ask about them, stage or discard them."
 
 ### Fixed
+- The Side panel list is as wide as its longest line, with no empty space on the right of it.
 - The server's status in the top bar was cut short ("Conne…", or the dot and "…" beside a long Side
   panel name such as Video generator). Now it says the whole word, or shows the dot alone where the
   word doesn't fit, its tooltip saying it.
