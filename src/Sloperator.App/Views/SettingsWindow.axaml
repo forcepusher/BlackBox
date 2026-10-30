@@ -85,6 +85,16 @@
         </Grid>
         <TextBlock Classes="muted" TextWrapping="Wrap"
                    Text="Taller screens are scaled down, never up. Smaller uses less context, but clicks miss more." />
+        <Grid Classes="form" ColumnDefinitions="160,*" Margin="0,8,0,0" IsVisible="{Binding ShowsTextRecognition}">
+          <TextBlock Classes="label" Text="Text recognition" />
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" Margin="0,4">
+            <TextBlock Text="{Binding TextRecognition}" VerticalAlignment="Center" />
+            <Button Classes="ghost" Content="Add a language" Command="{Binding OpenLanguageSettingsCommand}" IsVisible="{Binding !HasTextRecognition}"
+                    ToolTip.Tip="Opens Windows' language settings: a language added there brings its text recognition" />
+          </StackPanel>
+        </Grid>
+        <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding ShowsTextRecognition}"
+                   Text="Windows reads text on the screen, so the agent finds a label or a value in one step." />
       </StackPanel>
     </ScrollViewer>
   </DockPanel>

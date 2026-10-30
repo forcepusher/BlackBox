@@ -34,7 +34,8 @@ public sealed class FindTextTool : Tool
         var space = ctx.GetScreenSpace();
         var lines = reader.Read(ctx.Platform.Screen.Capture(space.Screen, includeCursor: false));
         if (lines is null)
-            return Task.FromResult(ToolResult.Error("Windows has no text recognition language installed, so the screen's text can't be read; look with screenshot and zoom instead."));
+            return Task.FromResult(ToolResult.Error("Windows has no text recognition language installed, so the screen's text can't be read; look with screenshot and zoom instead. " +
+                "Tell the user once that finding things on screen goes faster with one: Sloperator's Settings → Advanced → Text recognition → Add a language."));
         return Task.FromResult(new ToolResult(Report(query, lines, space)));
     }
 

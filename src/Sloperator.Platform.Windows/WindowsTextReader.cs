@@ -104,6 +104,37 @@ internal sealed unsafe class WindowsTextReader : ITextReader
         }
     }
 
+    public IReadOnlyList<string> Languages()
+    {
+        lock (_gate)
+        {
+            _ = CoInitializeEx(0, 0);
+            nint statics = 0, list = 0;
+            try
+            {
+                statics = Factory("Windows.Media.Ocr.OcrEngine", IOcrEngineStatics);
+                // IOcrEngineStatics: get_AvailableRecognizerLanguages 7; ILanguage: get_DisplayName 7.
+                Check(((delegate* unmanaged[Stdcall]<nint, nint*, int>)Slot(statics, 7))(statics, &list));
+                var names = new List<string>();
+                foreach (var language in Items(list))
+                {
+                    try { names.Add(Text(language, 7)); }
+                    finally { Release(language); }
+                }
+                return names;
+            }
+            catch (Exception ex) when (ex is COMException or InvalidCastException or TypeLoadException)
+            {
+                return []; // no text recognition in this Windows at all
+            }
+            finally
+            {
+                Release(list);
+                Release(statics);
+            }
+        }
+    }
+
     /// <summary>An engine for the user's languages, and the largest side it reads; no engine when none of them can be read.</summary>
     private static (nint Engine, uint MaxSide) CreateEngine()
     {

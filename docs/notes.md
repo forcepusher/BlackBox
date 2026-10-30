@@ -2644,7 +2644,10 @@ place the text is, in screenshot coordinates, with the line it is in; failing th
 closest to it (within a third of its letters, with O/0 and l/I/1 taken as one), since Windows read
 "VY-643" in a table as "w-643". The screen is read twice, enlarged 1.5 and 2.5 times, and both
 readings kept: on six 12 px Segoe UI codes 1.5x read all six, 2x to 5x read "VY" as "w", 1x missed
-two. Each call takes 100 to 300 ms. Where no OCR language is installed the tool says so. On the click
+two. Each call takes 100 to 300 ms. Where no OCR language is installed the tool says so and has the
+model tell the user once; Settings → Advanced → Text recognition lists the languages Windows reads
+(`ITextReader.Languages`, from `OcrEngine.AvailableRecognizerLanguages`), or "Not installed" with
+Add a language, which opens `ms-settings:regionlanguage`: each language added there brings its OCR. On the click
 benchmark (pixels, 3 retries, 30 October 2026) Qwen hit 97 of 114 first and 113 in the end, against
 92/102 and 89/101 in two runs without it (two runs of the same thing differ by about 3 first, and 27
 of 114 trials flip): tables 5/5 (from 2/5), half-covered buttons 5/5 (from 2/5 and 1/5), every

@@ -42,6 +42,25 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
         set => Agent.Approval = (ApprovalMode)Math.Clamp(value, 0, ApprovalModes.Length - 1);
     }
 
+    // ---- Text recognition --------------------------------------------------------------
+
+    /// <summary>The languages Windows reads the screen's text in, for find_text; null where the OS has no text recognition.</summary>
+    public IReadOnlyList<string>? TextLanguages { get; init; }
+
+    public bool ShowsTextRecognition => TextLanguages is not null;
+
+    public bool HasTextRecognition => TextLanguages is { Count: > 0 };
+
+    public string TextRecognition => HasTextRecognition ? string.Join(", ", TextLanguages!) : "Not installed";
+
+    /// <summary>Windows' language settings, where a language's text recognition is added with it.</summary>
+    [RelayCommand]
+    private static void OpenLanguageSettings()
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("ms-settings:regionlanguage") { UseShellExecute = true })?.Dispose(); }
+        catch (System.ComponentModel.Win32Exception) { }
+    }
+
     // ---- Screenshot size ---------------------------------------------------------------
 
     /// <summary>In <see cref="ScreenshotSize"/> order.</summary>

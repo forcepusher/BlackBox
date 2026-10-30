@@ -11,4 +11,7 @@ public interface ITextReader
 {
     /// <summary>The lines of text in <paramref name="image"/>; null when the OS has no language it can read installed.</summary>
     IReadOnlyList<TextLine>? Read(RawImage image);
+
+    /// <summary>The names of the languages it can read, as the OS shows them; empty when none is installed.</summary>
+    IReadOnlyList<string> Languages();
 }

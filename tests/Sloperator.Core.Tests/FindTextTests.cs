@@ -75,6 +75,7 @@ public class FindTextTests
         var platform = new FakePlatform { ScreenBounds = new ScreenRect(0, 0, 900, 200), Text = new Sloperator.Platform.Windows.WindowsTextReader(), Desktop = Draw(900, 200) };
         var probe = platform.Text.Read(platform.Desktop!);
         Assert.SkipWhen(probe is null, "No text recognition language is installed.");
+        Assert.NotEmpty(platform.Text.Languages()); // what Settings shows
         var ctx = new ToolContext { Platform = platform, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
 
         var result = await new FindTextTool().ExecuteAsync(new JsonObject { ["text"] = "VY-643" }, ctx, CancellationToken.None);
