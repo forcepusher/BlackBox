@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using Sloperator.Core.Agent;
 using Sloperator.Core.Chats;
 using Sloperator.Core.Llm;
+using Sloperator.Core.Platform;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -418,6 +419,74 @@ public sealed partial class ToolCallItem(string callId, string name, string summ
     {
         State = ToolItemState.Denied;
         _approval?.TrySetResult(false);
+    }
+}
+
+/// <summary>
+/// The offer of text recognition, on a card on the chat bar above the message box where find_text
+/// found none installed: the model's words offering it were often skipped, and a card in the chat
+/// scrolled away unread (the user, 2026-10-30). Install, Not now (offered again the next time it is
+/// needed), or Turn off (Settings' Use text recognition). Installing, Windows asks whether PowerShell
+/// may make changes, which looks alarming, so the card says so first. Not now closes it at once; after
+/// an install or Turn off, what happened shows for <see cref="Linger"/>, then <paramref name="close"/>.
+/// </summary>
+public sealed partial class TextRecognitionOffer(ITextReader reader, Action turnOff, Action close) : ObservableObject
+{
+    /// <summary>How long the outcome stays on the chat bar before the card goes.</summary>
+    public TimeSpan Linger { get; init; } = TimeSpan.FromSeconds(6);
+
+    /// <summary>What the card says under its title: the offer, then how the install went.</summary>
+    [ObservableProperty]
+    private string _status = "Makes model's clicks more accurate. Part of Windows, a few MB.";
+
+    /// <summary>The buttons show until one is chosen.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsWarning))]
+    private bool _isOpen = true;
+
+    [ObservableProperty]
+    private bool _isInstalling;
+
+    /// <summary>Said before Install is pressed, so Windows' prompt comes as no surprise.</summary>
+    public bool ShowsWarning => IsOpen;
+
+    [RelayCommand]
+    private async Task InstallAsync()
+    {
+        IsOpen = false;
+        IsInstalling = true;
+        Status = "Installing… When Windows asks about PowerShell, click Yes.";
+        var result = await reader.InstallAsync(CancellationToken.None);
+        IsInstalling = false;
+        Status = result switch
+        {
+            TextInstall.Installed => $"Installed: {string.Join(", ", reader.Languages())}.",
+            TextInstall.Declined => "Not installed: Windows' prompt was declined. Offered again next time.",
+            _ => "Not installed: Windows couldn't add it. Try Settings → Advanced.",
+        };
+        await LingerThenCloseAsync();
+    }
+
+    [RelayCommand]
+    private void NotNow()
+    {
+        IsOpen = false;
+        close();
+    }
+
+    [RelayCommand]
+    private async Task TurnOffAsync()
+    {
+        IsOpen = false;
+        turnOff();
+        Status = "Turned off. Back on in Settings → Advanced.";
+        await LingerThenCloseAsync();
+    }
+
+    private async Task LingerThenCloseAsync()
+    {
+        await Task.Delay(Linger);
+        close();
     }
 }
 

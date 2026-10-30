@@ -401,6 +401,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     public string QueuedTitle => Queued.Count == 1 ? "I read this before my next step:" : $"I read these {Queued.Count} before my next step:";
 
+    /// <summary>The offer of text recognition on the chat bar, above the message box; null when none is made.</summary>
+    [ObservableProperty]
+    private TextRecognitionOffer? _textRecognition;
+
     /// <summary>A queued message the model has now, or one that starts the next run: from above the box into the chat.</summary>
     private void MoveIntoChat(UserInput input)
     {

@@ -95,7 +95,7 @@
           </StackPanel>
         </Grid>
         <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding ShowsTextRecognition}"
-                   Text="The agent finds a label or a value on screen in one step. Off, it doesn't, nor offers to install it." />
+                   Text="Makes model's clicks more accurate. Not used or offered when disabled." />
       </StackPanel>
     </ScrollViewer>
   </DockPanel>

@@ -855,6 +855,27 @@
       </StackPanel>
     </Panel>
 
+    <!-- The offer of text recognition, over the message box where it is seen: the model's words
+         offering it went unread, and so did a card in the chat, scrolled away by the run. In the
+         heading's row, which the chat spans, so the chat's bar still runs down to the chat box
+         (the user, 2026-10-30); what scrolls stops at the card's top (MainWindow.FitIntroHeading). -->
+    <Border x:Name="OfferRow" Grid.Row="4" Padding="16,8,16,0" IsVisible="{Binding TextRecognition, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <Border Classes="card" MaxWidth="860" BorderBrush="{StaticResource BbAccent}">
+        <StackPanel Spacing="8" DataContext="{Binding TextRecognition}" x:DataType="vm:TextRecognitionOffer">
+          <TextBlock Text="Text recognition isn't installed" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding ShowsWarning}"
+                     Text="Windows will ask to allow PowerShell: click Yes." />
+          <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsOpen}">
+            <Button Classes="primary" Content="Install" Command="{Binding InstallCommand}" />
+            <Button Classes="ghost" Content="Not now" Command="{Binding NotNowCommand}" />
+            <Button Classes="ghost" Content="Turn off" Command="{Binding TurnOffCommand}" />
+          </StackPanel>
+          <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsInstalling}" HorizontalAlignment="Stretch" />
+        </StackPanel>
+      </Border>
+    </Border>
+
     <!-- Input -->
     <Border x:Name="InputRow" Grid.Row="5" Padding="16,8,16,16">
       <StackPanel MaxWidth="860" Spacing="8">

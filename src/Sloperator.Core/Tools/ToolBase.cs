@@ -95,6 +95,9 @@ public sealed class ToolContext
     /// </summary>
     public Func<bool>? ResetContext { get; set; }
 
+    /// <summary>Shows the user the app's offer to install text recognition (see <see cref="Agent.IAgentObserver.OfferTextRecognition"/>); null where there is no app (the CLI).</summary>
+    public Action? OfferTextRecognition { get; set; }
+
     /// <summary>The latest screenshot taken for the model (screen and frame).</summary>
     public (ScreenRect Screen, RawImage Frame)? LastShot { get; set; }
 

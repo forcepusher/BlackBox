@@ -152,6 +152,24 @@ public sealed partial class MainWindowViewModel
         });
     }
 
+    /// <summary>The offer of text recognition on the chat bar; one at a time, until it is answered.</summary>
+    void IAgentObserver.OfferTextRecognition() => PostTimed(_ =>
+    {
+        if (_runDetached || _platform.Text is not { } reader || TextRecognition is not null)
+            return;
+        TextRecognitionOffer? offer = null;
+        offer = new TextRecognitionOffer(reader, TurnOffTextRecognition, () => { if (TextRecognition == offer) TextRecognition = null; });
+        TextRecognition = offer;
+        NotifyUser("Text recognition isn't installed: install it?");
+    });
+
+    /// <summary>The card's Turn off: Settings' Use text recognition, from the next message on.</summary>
+    private void TurnOffTextRecognition()
+    {
+        _settings.Agent.EnableTextRecognition = false;
+        SaveSettings();
+    }
+
     void IAgentObserver.OnNotice(string text) => ShowNotice(text, null);
 
     void IAgentObserver.OnNotice(string text, Exception error) => ShowNotice(text, error);

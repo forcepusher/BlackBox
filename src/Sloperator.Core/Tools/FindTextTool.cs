@@ -33,6 +33,11 @@ public sealed class FindTextTool : Tool
             return Task.FromResult(ToolResult.Error("Reading the screen's text isn't available here; look with screenshot and zoom instead."));
         var space = ctx.GetScreenSpace();
         var lines = reader.Read(ctx.Platform.Screen.Capture(space.Screen, includeCursor: false));
+        if (lines is null && ctx.OfferTextRecognition is { } offer)
+        {
+            offer();
+            return Task.FromResult(ToolResult.Error(Offered));
+        }
         if (lines is null)
             return Task.FromResult(ToolResult.Error(NoLanguage));
         return Task.FromResult(new ToolResult(Report(query, lines, space)));
@@ -49,6 +54,16 @@ public sealed class FindTextTool : Tool
     /// It runs one command, not a script, which a "running scripts is disabled" execution policy
     /// doesn't stop; -ExecutionPolicy Bypass makes sure of it.
     /// </summary>
+    /// <summary>
+    /// The same in the app, which shows its own card with the offer (the user: "the text is often
+    /// ignored, we need something more visible"), so the model doesn't ask as well.
+    /// </summary>
+    internal const string Offered =
+        "Windows has no text recognition language installed, so the screen's text can't be read; look with screenshot and zoom instead. " +
+        "Sloperator offers it to the user above the message box (install, skip or turn off): don't ask them about it yourself, and don't install it. " +
+        "Once they install it, find_text works again.";
+
+    /// <summary>Where there is no app to show a card (the CLI): the model offers it and installs it on a yes.</summary>
     internal const string NoLanguage =
         "Windows has no text recognition language installed, so the screen's text can't be read; look with screenshot and zoom for now. " +
         "Offer the user to install it: it improves how you use apps on screen, finding and clicking buttons, menus, links and values " +
