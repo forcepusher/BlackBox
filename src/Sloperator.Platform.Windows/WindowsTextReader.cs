@@ -33,18 +33,15 @@ internal sealed unsafe class WindowsTextReader : ITextReader
     private readonly Lock _gate = new();
     private nint _engine;
     private uint _maxSide;
-    private bool _tried;
 
     public IReadOnlyList<TextLine>? Read(RawImage image)
     {
         lock (_gate)
         {
             _ = CoInitializeEx(0, 0); // MTA where nothing else has been set up; an STA thread works too
-            if (!_tried)
-            {
-                _tried = true;
+            // Tried again each time there is none: the agent may have just installed a language's pack.
+            if (_engine == 0)
                 (_engine, _maxSide) = CreateEngine();
-            }
             if (_engine == 0)
                 return null;
             var largest = (_maxSide - 1.0) / Math.Max(image.Width, image.Height);

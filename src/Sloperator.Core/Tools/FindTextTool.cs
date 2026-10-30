@@ -34,10 +34,21 @@ public sealed class FindTextTool : Tool
         var space = ctx.GetScreenSpace();
         var lines = reader.Read(ctx.Platform.Screen.Capture(space.Screen, includeCursor: false));
         if (lines is null)
-            return Task.FromResult(ToolResult.Error("Windows has no text recognition language installed, so the screen's text can't be read; look with screenshot and zoom instead. " +
-                "Tell the user once that finding things on screen goes faster with one: Sloperator's Settings → Advanced → Text recognition → Add a language."));
+            return Task.FromResult(ToolResult.Error(NoLanguage));
         return Task.FromResult(new ToolResult(Report(query, lines, space)));
     }
+
+    /// <summary>
+    /// Where Windows reads no language: the agent offers to install the pack of the user's own (the
+    /// user: "let the agent offer installation of the packs"). Adding a Windows capability needs an
+    /// administrator, so it runs elevated and Windows asks; the reader tries again on the next call.
+    /// </summary>
+    internal const string NoLanguage =
+        "Windows has no text recognition language installed, so the screen's text can't be read; look with screenshot and zoom for now. " +
+        "Offer the user, once, to install it (it makes finding things on screen much quicker, a download of a few MB), and only if they agree, run in the shell: " +
+        "$name = \"Language.OCR~~~$((Get-Culture).Name)~0.0.1.0\"; Start-Process powershell -Verb RunAs -Wait -ArgumentList \"-NoProfile -Command Add-WindowsCapability -Online -Name $name\" " +
+        "(Windows asks the user to allow it; for English use Language.OCR~~~en-US~0.0.1.0). Then use find_text again. " +
+        "They can also add a language in Sloperator's Settings → Advanced → Text recognition.";
 
     /// <summary>What the model is told: each place the text is, or the closest readings when it isn't there as written.</summary>
     internal static string Report(string query, IReadOnlyList<TextLine> lines, ScreenSpace space)

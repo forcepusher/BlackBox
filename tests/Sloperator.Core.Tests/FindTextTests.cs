@@ -67,6 +67,23 @@ public class FindTextTests
         Assert.True(result.IsError);
     }
 
+    private sealed class NoLanguageReader : ITextReader
+    {
+        public IReadOnlyList<TextLine>? Read(RawImage image) => null;
+        public IReadOnlyList<string> Languages() => [];
+    }
+
+    [Fact]
+    public async Task Without_a_language_the_agent_is_told_to_offer_installing_one()
+    {
+        var ctx = new ToolContext { Platform = new FakePlatform { Text = new NoLanguageReader() }, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
+        var result = await new FindTextTool().ExecuteAsync(new JsonObject { ["text"] = "OK" }, ctx, CancellationToken.None);
+        Assert.True(result.IsError);
+        Assert.Contains("only if they agree", result.Text);
+        Assert.Contains("-Verb RunAs", result.Text); // installing a capability needs an administrator
+        Assert.Contains("Add-WindowsCapability -Online -Name", result.Text);
+    }
+
 #if WINDOWS
     [Fact]
     public async Task Windows_reads_interface_text_off_the_screen()
