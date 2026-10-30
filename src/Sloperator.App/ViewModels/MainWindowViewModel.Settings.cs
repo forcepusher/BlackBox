@@ -43,7 +43,7 @@ public sealed partial class MainWindowViewModel
         updated.Window = _settings.Window;
         _settings = updated;
         OnPropertyChanged(nameof(ApprovalNote));
-        OnPropertyChanged(nameof(ScreenNote));
+        OnScreenNoteChanged();
         SaveSettings();
         // Written only when the user changed the list: a dialog left open while the agent added a
         // server would otherwise save the list without it.
@@ -82,7 +82,7 @@ public sealed partial class MainWindowViewModel
         taken.Window = _settings.Window;
         _settings = taken;
         OnPropertyChanged(nameof(ApprovalNote));
-        OnPropertyChanged(nameof(ScreenNote));
+        OnScreenNoteChanged();
         if (mcpChanged)
             RestartMcp();
     }

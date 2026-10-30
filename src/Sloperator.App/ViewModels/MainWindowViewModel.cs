@@ -141,13 +141,24 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     private bool _showIntro = true;
 
     /// <summary>
-    /// The intro's line on why the agent can't see the screen or use the mouse and keyboard: the model
-    /// takes no images, or Settings turned them off. Empty when it can do both.
+    /// The line under the intro's heading: what the agent may do on the screen, after Settings'
+    /// "Enable screenshots" and "Enable keyboard and mouse control" and whether the model takes
+    /// images (the user, 2026-10-30: the line said keyboard and mouse whatever Settings said).
     /// </summary>
     public string ScreenNote =>
-        !_settings.Server.SupportsVision ? "This model can't see images: pick another." :
-        !_settings.Agent.EnableScreenshots ? "Screenshots are turned off in Settings." :
-        !_settings.Agent.EnableControl ? "Keyboard and mouse control is turned off in Settings: I only look." : "";
+        !_settings.Server.SupportsVision ? "This model can't see your screen: pick another one." :
+        !_settings.Agent.EnableScreenshots ? "I can't see your screen or use the keyboard and mouse (see Settings)." :
+        !_settings.Agent.EnableControl ? "I can see your screen but won't touch the keyboard or mouse (see Settings)." :
+        "I may use your keyboard and mouse when needed (see Settings).";
+
+    /// <summary>The model takes no images: the line is in the warning colour, as something to fix.</summary>
+    public bool ScreenNoteWarns => !_settings.Server.SupportsVision;
+
+    private void OnScreenNoteChanged()
+    {
+        OnPropertyChanged(nameof(ScreenNote));
+        OnPropertyChanged(nameof(ScreenNoteWarns));
+    }
 
     /// <summary>The intro's line on what Sloperator asks before it acts, after "Ask me first" in Settings.</summary>
     public string ApprovalNote => _settings.Agent.Approval switch
@@ -531,8 +542,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     /// <summary>The hint in the empty box: how to start a new line (Enter sending goes without saying), that the agent waits while the user types, and that pictures and files can go in too.</summary>
     public string InputHint => IsBusy
-        ? "Tell me something while I work… (I pause while you type)"
-        : "Describe a task, paste a screenshot or drop files… (Shift+Enter for a new line)";
+        ? "Tell me something while I work (I pause while you type)"
+        : "Type a task, paste a screenshot or drop files (Shift+Enter: new line)";
 
     /// <summary>When the run in progress started: from the message that started it, for how long the run took.</summary>
     private DateTime _runStarted;
@@ -685,7 +696,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
                 if (ImagesKey(server) == imagesKey)
                 {
                     server.SupportsVision = false;
-                    OnPropertyChanged(nameof(ScreenNote));
+                    OnScreenNoteChanged();
                 }
             }
         }
