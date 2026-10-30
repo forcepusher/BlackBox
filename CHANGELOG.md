@@ -31,17 +31,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   later line leave the chat and the saved chat, the files the agent wrote or edited from then on go back
   to how they were, and the message goes back into the box. What commands, copies and clicks in other
   programs changed isn't undone; the chat says which of those ran.
-- **Enable screenshots** and **Enable keyboard and mouse control** under Settings → Safety. With
-  screenshots off the agent doesn't look at the screen, and can't use the mouse and keyboard either;
-  with control off it looks but doesn't click or type.
+- **Enable screenshots** and **Enable keyboard and mouse control** under Settings → General →
+  Safety. With screenshots off the agent doesn't look at the screen, and can't use the mouse and
+  keyboard either; with control off it looks but doesn't click or type.
 - **Servers** next to the server address lists every server that answered, with its API key and model:
   pick one to switch to it, or remove it with its trash button.
 - Ask the agent to connect another model ("use my LM Studio", an API address and key, a model's
   name) and it switches Sloperator's server, key and model itself, once the server answers; your next
   message goes to the new model.
-- **Notify me when done** under Settings → Notifications (off by default): a Windows notification
-  with the chat's title when a task is done, stops on an error or waits for your OK, unless you are
-  looking at its window. Click it to bring that window to the front.
+- **Notify me when done** under Settings → General → Notifications (off by default): a Windows
+  notification with the chat's title when a task is done, stops on an error or waits for your OK,
+  unless you are looking at its window. Click it to bring that window to the front.
 
 ### Changed
 - New lines on the start screen's cards: "I can see screen, use keyboard and mouse." (Use any

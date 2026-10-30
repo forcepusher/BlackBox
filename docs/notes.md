@@ -1898,7 +1898,7 @@ all along. The process stayed at 340-510 MB (up and down with the screenshots it
 940 handles and 107 threads from the fourth minute to the end, and nothing went to the crash log.
 
 ## Notify me when done
-Settings → Notifications → **Notify me when done** (off by default) shows a Windows notification
+Settings → General → Notifications → **Notify me when done** (off by default) shows a Windows notification
 when a window's run ends or waits: done (the chat's title over the first line of the last reply, its
 Markdown marks taken out, cut at a word past 140 characters), stopped by an error ("Stopped by an
 error: " and the chat's red line), or waiting for the user's OK under "Ask me first" ("Waiting for
@@ -2610,7 +2610,7 @@ prints the traceback and exits with 0.
 | `model_server` | The model Sloperator itself runs on: `show` says the server, model and the models it offers; `connect` switches the top bar to another server, key and model, after checking the server answers (see Connecting to a model) |
 | `<server>__<tool>` | Any tool of the MCP servers you or the agent added (see below) |
 
-Settings → Safety has **Enable screenshots** and **Enable keyboard and mouse control**, both on by
+Settings → General → Safety has **Enable screenshots** and **Enable keyboard and mouse control**, both on by
 default (`agent.enableScreenshots`, `agent.enableControl`). Screenshots off takes away `screenshot`,
 `zoom` and `wait`, and with them the mouse and keyboard tools, whatever the second box says: the
 user's rule is no clicking blind, so that box is greyed out then. Control off keeps the three that
