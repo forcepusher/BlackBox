@@ -72,6 +72,8 @@ public sealed partial class MainWindowViewModel
         // They are Sloperator's settings, not this window's: "Ask me first" turned on here holds the
         // other windows' agents too.
         _windows.SettingsApplied(this, updated, mcpSaved);
+        if (dialog.Opened.Notify.WhenDone && !updated.Notify.WhenDone)
+            _windows.NotificationsOff();
         await CheckServerAsync();
     }
 

@@ -21,6 +21,8 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
 
     public PanelSettings Panels => Settings.Panels;
 
+    public NotifySettings Notify => Settings.Notify;
+
     public string[] ApprovalModes { get; } =
     [
         "Ask before every action",

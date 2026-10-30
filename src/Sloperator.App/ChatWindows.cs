@@ -81,6 +81,9 @@ public sealed class ChatWindows
         var window = new MainWindow { DataContext = vm };
         window.Restore(settings.Window, Front()?.Window);
         _open = [.. _open, (vm, window)];
+        _notifyTags[vm] = $"window-{++_opened}";
+        // In front, the window says what its notification said: that one has nothing more to tell.
+        window.Activated += (_, _) => HideNotification(vm);
         window.Closed += (_, _) => Closed(vm);
         window.Show();
         window.Activate();
@@ -109,6 +112,70 @@ public sealed class ChatWindows
         window.Activate();
     }
 
+    // ---- Notify me when done ------------------------------------------------------------
+
+    /// <summary>The tag each window's notification goes under, so its next one replaces it. On the windows' thread.</summary>
+    private readonly Dictionary<MainWindowViewModel, string> _notifyTags = [];
+
+    private int _opened;
+
+    /// <summary>The notifications shown and taken down, one after another, off the windows' thread.</summary>
+    private Task _notifying = Task.CompletedTask;
+
+    private string? _notifyIcon;
+
+    /// <summary>
+    /// <paramref name="vm"/>'s run ended or waits for the user's OK: a Windows notification says so,
+    /// with <paramref name="title"/> (the chat's) over <paramref name="line"/>, unless the user is
+    /// looking at that window already. A click on it brings the window forward. One per window: its
+    /// next one replaces it, and it goes once the window is in front.
+    /// </summary>
+    public void Notify(MainWindowViewModel vm, string title, string line)
+    {
+        if (!_notifyTags.TryGetValue(vm, out var tag) || _open.FirstOrDefault(o => o.Vm == vm).Window is not { } window)
+            return;
+        if (window.IsActive && window.IsVisible && window.WindowState != WindowState.Minimized)
+            return;
+        var icon = NotifyIcon();
+        Notifications(n => n.Show(tag, title, line, icon, () => Avalonia.Threading.Dispatcher.UIThread.Post(() => BringForward(vm))));
+    }
+
+    private void HideNotification(MainWindowViewModel vm)
+    {
+        if (_notifyTags.TryGetValue(vm, out var tag))
+            Notifications(n => n.Hide(tag));
+    }
+
+    /// <summary>"Notify me when done" turned off: the notifications still up go, and what they left in the registry.</summary>
+    public void NotificationsOff() => Notifications(n => n.Forget());
+
+    private void Notifications(Action<INotifications> act)
+    {
+        if (Platform.Notifications is { } notifications)
+            _notifying = _notifying.ContinueWith(_ => act(notifications), TaskScheduler.Default);
+    }
+
+    /// <summary>Sloperator's picture for the notifications, as a file Windows can read: Data\sloperator.png, written once a start.</summary>
+    private string? NotifyIcon()
+    {
+        if (_notifyIcon is not null)
+            return _notifyIcon;
+        var file = Path.Combine(_paths.DataDir, "sloperator.png");
+        try
+        {
+            using var asset = Avalonia.Platform.AssetLoader.Open(new Uri("avares://Sloperator/Assets/sloperator.png"));
+            using var bytes = new MemoryStream();
+            asset.CopyTo(bytes);
+            if (!File.Exists(file) || !File.ReadAllBytes(file).AsSpan().SequenceEqual(bytes.GetBuffer().AsSpan(0, (int)bytes.Length)))
+                File.WriteAllBytes(file, bytes.ToArray());
+            return _notifyIcon = file;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null; // Windows' blank picture then
+        }
+    }
+
     /// <summary>Settings saved in <paramref name="from"/>'s Settings dialog: the other windows take them too.</summary>
     public void SettingsApplied(MainWindowViewModel from, AppSettings settings, bool mcpChanged)
     {
@@ -135,6 +202,9 @@ public sealed class ChatWindows
         if (open.All(o => o.Vm != vm))
             return; // shut down with Sloperator already
         _open = [.. open.Where(o => o.Vm != vm)];
+        // A click on it would find no window to bring forward.
+        HideNotification(vm);
+        _notifyTags.Remove(vm);
         _ending.Add(vm.Shutdown());
         if (_open.Length == 0)
         {
@@ -150,7 +220,11 @@ public sealed class ChatWindows
         var open = _open;
         _open = [];
         foreach (var (vm, _) in open)
+        {
+            HideNotification(vm);
             _ending.Add(vm.Shutdown());
+        }
+        _ending.Add(_notifying);
         Saver.Flush(TimeSpan.FromSeconds(10));
         // A server that would not stop doesn't keep the process; it ends anyway.
         try { Task.WaitAll([.. _ending], TimeSpan.FromSeconds(5)); }
