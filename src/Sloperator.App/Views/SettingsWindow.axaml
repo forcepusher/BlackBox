@@ -25,6 +25,7 @@
   </Window.Styles>
 
   <DockPanel>
+    <views:TitleBar DockPanel.Dock="Top" />
     <Border DockPanel.Dock="Bottom" Classes="bar foot">
       <!-- The buttons first: a long folder path is cut short instead of pushing them out of the window. -->
       <DockPanel>

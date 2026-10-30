@@ -275,6 +275,9 @@
     </DataTemplate>
   </Window.DataTemplates>
 
+  <!-- The title bar over all of it (TitleBar), the toolkit's column too. -->
+  <DockPanel x:Name="Root">
+  <views:TitleBar DockPanel.Dock="Top" />
   <!-- A tool of the toolkit (Video generator) in a column of its own on the left, the chat on the right.
        Shown and hidden by the window as it makes room for it (MainWindow.Dock). -->
   <Grid x:Name="Columns" ColumnDefinitions="0,0,*">
@@ -1006,4 +1009,5 @@
     </Panel>
   </Grid>
   </Grid>
+  </DockPanel>
 </Window>

@@ -1499,7 +1499,7 @@ with SkiaSharp's `SKCodec`, as chat previews of animations are (no GIF package),
 while it dances and is in a window.
 
 ## App icon
-`Assets/sloperator.ico` (the exe, the taskbar, every window's title bar) is drawn by
+`Assets/sloperator.ico` (the exe, the taskbar, Alt+Tab; the title bar draws `sloperator.png`, see Title bar) is drawn by
 `scripts/make-icon.ps1` from `docs/logo/blob.svg`, each size on its own, 4x oversampled and shrunk
 by averaging each 4x4 block, so an edge pixel holds just how much of it the shape covers (a
 bicubic shrink, until 2026-10-30, left a pale ring inside every edge and a soft grey one outside).
@@ -1678,8 +1678,7 @@ as big as it was (UI Automation boxes compared before and after at 125%: the sam
 the scrollbar's thumb), the text in them where it was, except Thoughts (below). The greys are
 `App.axaml`'s brushes, and Fluent's own control brushes are pointed at them there, so a control
 takes its look from its kind:
-- **Surfaces**, darkest first: the frame #101010 (`BbFrame`: the title bar where Windows takes a
-  colour, the splitters), a field #111111 (`BbField`: text boxes, a dropdown that holds a value),
+- **Surfaces**, darkest first: the frame #101010 (`BbFrame`: the title bar, the splitters), a field #111111 (`BbField`: text boxes, a dropdown that holds a value),
   the background #161616 (`BbBackground`: the window, every bar, Output's well, a scrollbar), the
   chat's server rows #191919 (`BbBar`), a notice #1B1B1B, a card #1E1E1E (`BbSurface`: tool cards,
   the message box, a code block, a file's header in the diff), what sits on a card #262626
@@ -1700,10 +1699,7 @@ takes its look from its kind:
 - **Corners**: 8 for every control (Fluent's `ControlCornerRadius`), a notice, a well, a code block
   and the files over the message box; 12 a card and the user's bubble; 16 the message box; 6 a tool's
   name; 4 a check box and a scrollbar's thumb. No shadows.
-- **The title bar** is dark in every window (`App.Initialize`, on each window's template, before it
-  is first shown: `WindowsPlatform.DarkTitleBar`, DWM's immersive dark mode, then #101010 under
-  #BBBBBB text). Windows 10 takes only the dark mode (its own dark grey and white text); the colours
-  are Windows 11's. Avalonia makes the bar dark by itself only on Windows 11.
+- **The title bar** is the app's own, #101010 under #BBBBBB text (see Title bar).
 - **Lines added without moving anything** are inset box shadows: a notice's border and a
   scrollbar's line (1 px and sharp at 125%). A border of 1 with a padding 1 less made a notice 2 px
   shorter at 125% (the border rounds to 1 px, the padding to 6 rather than 8), and a margin of -1 to
@@ -1717,6 +1713,56 @@ takes its look from its kind:
 - Left as they were: popups and menus (Fluent's #2B2B2B, already neutral), the Video generator's
   sound blocks (#2A3A4A, a colour, not a grey) and the waveform on them. The Video generator's own
   greys, the timeline's and the 3D view's are the neutral ones nearest them.
+
+## Title bar
+The chat windows and Settings draw their own title bar (`Views/TitleBar`, docked on top; its look is
+App.axaml's "The title bar" styles): a strip 32 high in the frame's #101010 with a #232323 line under
+it, the blob 16x16 at 12 from the left, the title 8 after it in Inter 12 #BBBBBB (cut with "…"), and
+minimize, maximize (restore when maximized) and close 46 x 32 on the right, a sign of 1-pixel lines
+in a 16 box (`CaptionGlyph`, drawn on whole screen pixels: a path's 1 px stroke is 1.25 px at 125%
+and blurs). Under the pointer #2C2C2C, pressed #333333, close #C42B1C with a white sign; text and
+signs #808080 while the window isn't active. Windows 10 drew its own grey bar whatever DWM was asked
+(the caption colours are Windows 11's). The full-screen viewer has no title bar, as before.
+
+**Native behaviour.** Windows is told the window has no caption, and the strip is its caption: the
+TitleBar's window hook (`Win32Properties.AddWndProcHookCallback`) answers `WM_NCCALCSIZE` with
+Windows' own frame on the sides and the bottom and none over the top (`WindowsPlatform.CaptionlessFrame`;
+maximized, the client starts the frame's width down, so nothing is off the screen), and `WM_NCHITTEST`
+with Windows' own answer on the frame, a top edge as thick as the side frame (not when maximized),
+`HTCAPTION` on the strip but its buttons, and `HTMAXBUTTON` on maximize, which is how Windows 11 knows to
+show snap layouts there. So dragging, Aero snap (dragging to an edge, Win+arrows), dragging down from
+maximized, double-click to maximize and restore and shake are Windows' own. Over maximize the window
+gets only non-client messages, so its hover and pressed look and its click come from `WM_NCMOUSEMOVE`,
+`WM_NCMOUSELEAVE` (asked for with `TrackMouseEvent`) and `WM_NCLBUTTON*`; a press let go elsewhere does
+nothing, as on a native button. Without a caption of its own Windows shows the system menu neither
+for a right-click on the strip nor for Alt+Space: the hook shows it (`WindowsPlatform.ShowSystemMenu`,
+its items on or greyed out for the window's state, Close in bold, as Windows does).
+DWM's immersive dark mode stays (`WindowsPlatform.DarkFrame`): it still sets the line Windows draws
+around the window (Windows 10, over the same background: #313131 with it, #242424 without). The
+caption and text colours (Windows 11's) went with the bar.
+
+Avalonia's own way (`ExtendClientAreaToDecorationsHint`, no chrome) was tried first and left: it makes
+the whole window the client, so the resize borders moved 8 px inside the window (over the chat's
+scrollbar), Windows' line and shadow went, and the window, sized before the change, grew by the frame:
+closed as 900 x 760 it was saved as 914.4 x 797.6, more at each start. `WindowsPlatform.RefreshFrame`
+now lays the frame out again before the window is first shown, the client as big as it was, so
+Width and Height are the client with the bar in it, as they were the client under Windows' bar:
+the window's content is 33 shorter (32 strip and the line), and the window 38 px shorter at 125%
+(Windows' bar, its top line included). The window is as wide as before and its sides and
+bottom are Windows' frame as before. MainWindow's picture for docking the toolkit (`Shot`) is of the
+whole content, the bar too, as it is in the client area the cover goes over.
+
+Checked on Windows 10 at 125%, with the real mouse and keyboard (`.dev/title-bar-test`, scenario.ps1),
+the native bar run the same way as the reference: drag on the strip, title and icon, double-click,
+maximize/restore/minimize/close, a press slid off maximize, drag down from maximized, dragging to the
+screen's left edge, Win+Left/Right/Up/Down, the system menu both ways, resizing from the top edge,
+the top-left corner, the left and the bottom edge (outside the window, as before), Settings' close.
+Pixels at 125% (and 100%, a DPI-unaware build): strip 40 (32) rows, line 1 row, the title's capitals
+and the maximize and close signs centred to the pixel, minimize's line half a pixel under the middle
+(a 1-pixel line has no middle row in an even box). Differs from Windows' bar: no 1-pixel frame line
+over the top (Windows draws it on the sides and bottom only, there being no frame over the top); the
+icon is part of the caption (Windows' opens the system menu, and closes on a double-click); no
+tooltips on the buttons; shake wasn't tried (it would minimize every other window).
 
 ## Several windows
 **New window** in the top bar opens another chat window, with its own chat, agent

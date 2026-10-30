@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:Sloperator.App.Views"
+             x:Class="Sloperator.App.Views.TitleBar">
+  <!-- The window's title bar, drawn by the app (App.axaml, "The title bar"). Only the buttons are hit:
+       everywhere else Windows takes the strip for its own caption, to drag, snap, double-click and
+       right-click. -->
+  <Panel>
+    <Border Classes="titleStrip" IsHitTestVisible="False" />
+    <!-- The buttons docked from the right edge in, so Close ends on it at every scale (in a row of
+         their own, three widths rounded at 125% left a pixel between Close and the screen's corner). -->
+    <DockPanel Classes="titleStrip">
+      <Button x:Name="CloseButton" DockPanel.Dock="Right" Classes="caption close" Click="OnClose" AutomationProperties.Name="Close">
+        <views:CaptionGlyph Kind="Close" />
+      </Button>
+      <Button x:Name="MaximizeButton" DockPanel.Dock="Right" Classes="caption" Click="OnMaximize" AutomationProperties.Name="Maximize">
+        <Panel>
+          <views:CaptionGlyph Classes="maximize" Kind="Maximize" />
+          <views:CaptionGlyph Classes="restore" Kind="Restore" />
+        </Panel>
+      </Button>
+      <Button x:Name="MinimizeButton" DockPanel.Dock="Right" Classes="caption" Click="OnMinimize" AutomationProperties.Name="Minimize">
+        <views:CaptionGlyph Kind="Minimize" />
+      </Button>
+      <Image Classes="titleIcon" Source="/Assets/sloperator.png" RenderOptions.BitmapInterpolationMode="HighQuality" IsHitTestVisible="False" />
+      <TextBlock x:Name="TitleText" Classes="title" IsHitTestVisible="False" />
+    </DockPanel>
+  </Panel>
+</UserControl>

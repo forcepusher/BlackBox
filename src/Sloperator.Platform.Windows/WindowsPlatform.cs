@@ -41,20 +41,96 @@ public sealed class WindowsPlatform : IPlatformServices
     public static void AllowToFront(int processId) => AllowSetForegroundWindow((uint)processId);
 
     /// <summary>
-    /// Draws <paramref name="hwnd"/>'s title bar dark, as the window under it: Windows' dark one on
-    /// Windows 10, in <paramref name="caption"/> with <paramref name="text"/> (0xRRGGBB) on Windows 11,
-    /// which alone takes colours. Called before the window is first shown, so its frame is drawn dark
-    /// from the start. What Windows doesn't take is left as it is.
+    /// Draws <paramref name="hwnd"/>'s frame dark, as the window in it: Windows' dark mode, which still
+    /// sets the line Windows draws around the window (on Windows 10, 2026-10-30, over the same dark
+    /// background: #313131 with it, #242424 without). The title bar is the app's own (TitleBar).
+    /// Called before the window is first shown, so its frame is drawn dark from the start.
     /// </summary>
-    public static void DarkTitleBar(nint hwnd, uint caption, uint text)
+    public static void DarkFrame(nint hwnd)
     {
         if (DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, 1, sizeof(int)) != 0)
             DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, 1, sizeof(int));
-        DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, (int)ColorRef(caption), sizeof(int));
-        DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, (int)ColorRef(text), sizeof(int));
     }
 
-    private static uint ColorRef(uint rgb) => (rgb >> 16 & 0xFF) | (rgb & 0xFF00) | (rgb & 0xFF) << 16;
+    // ---- a title bar the app draws (TitleBar) -------------------------------------------------------
+
+    /// <summary>
+    /// Has Windows lay <paramref name="hwnd"/>'s frame out again (<see cref="CaptionlessFrame"/>), before
+    /// it is first shown, the client area as big as it was: the window loses the caption's height.
+    /// </summary>
+    public static void RefreshFrame(nint hwnd)
+    {
+        GetClientRect(hwnd, out var before);
+        SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        if (!GetWindowRect(hwnd, out var window) || !GetClientRect(hwnd, out var after))
+            return;
+        SetWindowPos(hwnd, 0, 0, 0, window.Right - window.Left + before.Right - after.Right, window.Bottom - window.Top + before.Bottom - after.Bottom,
+            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
+    /// <summary>
+    /// WM_NCCALCSIZE (wParam true, lParam its NCCALCSIZE_PARAMS) for a window whose title bar the app
+    /// draws in its client area: Windows' frame stays on the sides and at the bottom, its resize
+    /// borders outside the window, its line and its shadow, and there is none over the top. Maximized,
+    /// the window reaches past the screen by its frame, so the client starts that far down.
+    /// </summary>
+    public static void CaptionlessFrame(nint hwnd, nint wParam, nint lParam)
+    {
+        var window = System.Runtime.InteropServices.Marshal.PtrToStructure<RECT>(lParam);
+        DefWindowProc(hwnd, WM_NCCALCSIZE, wParam, lParam);
+        var client = System.Runtime.InteropServices.Marshal.PtrToStructure<RECT>(lParam);
+        client.Top = window.Top + (IsZoomed(hwnd) ? client.Left - window.Left : 0);
+        System.Runtime.InteropServices.Marshal.StructureToPtr(client, lParam, false);
+    }
+
+    /// <summary>
+    /// WM_NCHITTEST for a window with a <see cref="CaptionlessFrame"/>: Windows' answer on its frame
+    /// (a side, the bottom, a bottom corner); a top edge as thick as the side frame inside the client
+    /// unless maximized, as on a native title bar; HTCLIENT for the rest, for the app to sort out.
+    /// </summary>
+    public static int FrameHitTest(nint hwnd, nint lParam)
+    {
+        var hit = (int)DefWindowProc(hwnd, WM_NCHITTEST, 0, lParam);
+        if (hit != HTCLIENT || IsZoomed(hwnd) || !GetWindowRect(hwnd, out var window) || !ClientOnScreen(hwnd, out var client))
+            return hit;
+        int x = (short)(lParam & 0xFFFF), y = (short)((lParam >> 16) & 0xFFFF);
+        var frame = client.Left - window.Left;
+        if (y >= window.Top + frame)
+            return HTCLIENT;
+        return x < client.Left + frame ? HTTOPLEFT : x >= client.Right - frame ? HTTOPRIGHT : HTTOP;
+    }
+
+    /// <summary>
+    /// The window's system menu at <paramref name="x"/>,<paramref name="y"/> (screen pixels), its
+    /// items on or greyed out for the window's state, Close in bold, as Windows shows it on a right-click
+    /// on a title bar or Alt+Space: with no caption of Windows' own, it shows it for neither.
+    /// </summary>
+    public static void ShowSystemMenu(nint hwnd, int x, int y)
+    {
+        var menu = GetSystemMenu(hwnd, false);
+        if (menu == 0)
+            return;
+        var zoomed = IsZoomed(hwnd);
+        EnableMenuItem(menu, SC_RESTORE, zoomed ? MF_ENABLED : MF_GRAYED);
+        EnableMenuItem(menu, SC_MOVE, zoomed ? MF_GRAYED : MF_ENABLED);
+        EnableMenuItem(menu, SC_SIZE, zoomed ? MF_GRAYED : MF_ENABLED);
+        EnableMenuItem(menu, SC_MINIMIZE, MF_ENABLED);
+        EnableMenuItem(menu, SC_MAXIMIZE, zoomed ? MF_GRAYED : MF_ENABLED);
+        SetMenuDefaultItem(menu, SC_CLOSE, 0);
+        var command = TrackPopupMenu(menu, TPM_RETURNCMD, x, y, 0, hwnd, 0);
+        if (command != 0)
+            PostMessage(hwnd, WM_SYSCOMMAND, command, 0);
+    }
+
+    /// <summary>
+    /// Asks Windows for a WM_NCMOUSELEAVE when the pointer leaves <paramref name="hwnd"/>'s non-client
+    /// part (its title bar's maximize button, which the app draws): the window gets no other word of it.
+    /// </summary>
+    public static void TrackNonClientLeave(nint hwnd)
+    {
+        var track = new TRACKMOUSEEVENT { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<TRACKMOUSEEVENT>(), dwFlags = TME_LEAVE | TME_NONCLIENT, hwndTrack = hwnd };
+        TrackMouseEvent(ref track);
+    }
 
     /// <summary>
     /// Moves <paramref name="hwnd"/> sideways by <paramref name="dx"/> pixels and makes it
