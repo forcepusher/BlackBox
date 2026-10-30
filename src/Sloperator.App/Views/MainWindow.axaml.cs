@@ -55,6 +55,9 @@ public partial class MainWindow : Window
         // pin the offset to the true end. Doing it per layout pass rather than per scroll event
         // is what keeps the last line from being clipped while text is still arriving.
         ChatScroll.LayoutUpdated += (_, _) => PinToBottom();
+        ChatScroll.SizeChanged += (_, _) => FitIntroHeading();
+        IntroHeading.SizeChanged += (_, _) => FitIntroHeading();
+        InputRow.SizeChanged += (_, _) => FitIntroHeading();
         ChatScroll.AddHandler(PointerWheelChangedEvent, (_, e) =>
         {
             if (e.Delta.Y > 0) _stickToBottom = false; // wheel up: the user wants to read back
@@ -107,6 +110,26 @@ public partial class MainWindow : Window
         _pinning = true;
         try { ChatScroll.Offset = new Vector(ChatScroll.Offset.X, MaxOffset); }
         finally { _pinning = false; }
+    }
+
+    /// <summary>How tall the intro's heading is, last seen on screen.</summary>
+    private double _headingHeight;
+
+    /// <summary>
+    /// The intro's heading over the chat box gives the cards its room when they would be left less
+    /// than a card's: in the smallest window with a banner up, or with a long message typed (the box
+    /// grows to 200), the heading took what was left and the cards were scrolled into a strip.
+    /// Whether it shows is worked out from the room the two share, from the top of the chat to the
+    /// top of the box, so showing or hiding it doesn't change the answer. (Counted as the chat's
+    /// height plus the heading's, a heading just shown and not yet laid out counted 0, hid itself
+    /// again, and the two went back and forth until the layout gave up, leaving a blank strip.)
+    /// </summary>
+    private void FitIntroHeading()
+    {
+        if (IntroHeading.IsVisible && IntroHeading.Bounds.Height > 0)
+            _headingHeight = IntroHeading.Bounds.Height;
+        var room = InputRow.Bounds.Top - ChatScroll.Bounds.Top;
+        IntroHeading.IsVisible = room - _headingHeight >= 64;
     }
 
     private MainWindowViewModel Vm => (MainWindowViewModel)DataContext!;

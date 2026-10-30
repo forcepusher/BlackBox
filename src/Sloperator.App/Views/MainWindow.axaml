@@ -10,9 +10,10 @@
         WindowStartupLocation="CenterScreen">
 
   <Window.Styles>
-    <!-- The intro in an unused chat: the cards on what Sloperator can do, and Pause/Break drawn as a key. -->
+    <!-- The intro in an unused chat: the cards on what Sloperator can do, and Pause/Break drawn as a key.
+         At the foot of the scroll, so they stay by the heading under them in a tall window. -->
     <Style Selector="StackPanel.conversation.unused">
-      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Bottom" />
     </Style>
     <Style Selector="PathIcon.capability">
       <Setter Property="Width" Value="18" />
@@ -262,7 +263,7 @@
     </Border>
     <GridSplitter x:Name="ToolkitSplitter" Grid.Column="1" IsVisible="False" ResizeDirection="Columns" />
 
-  <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*,Auto">
+  <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto">
 
     <!-- Header -->
     <Border Grid.Row="0" Classes="bar">
@@ -451,9 +452,9 @@
       </Grid>
     </Border>
 
-    <!-- Conversation. Until the chat is used, the intro sits under whatever notices came up (an MCP
-         server that failed to start), the two in the middle of the window, or read from the top
-         when they don't fit. Spacing lives on the content as a margin, not as ScrollViewer padding:
+    <!-- Conversation. Until the chat is used, the intro's cards sit under whatever notices came up (an
+         MCP server that failed to start), the two at the foot of the scroll over the intro's heading,
+         or read from the top when they don't fit. Spacing lives on the content as a margin, not as ScrollViewer padding:
          padding is not part of the scroll extent, so the last lines ended up clipped. -->
     <!-- Focus brings an item into view only from the keyboard (see MainWindow): a click on a picture
          partly out of view focused its button and scrolled the whole picture in, a jump under the mouse. -->
@@ -655,16 +656,9 @@
 
         <!-- What Sloperator can do and how to stop or correct it, until the chat is used. Short enough
              to take in at a glance: down to the window's MinWidth every sentence of the two notes
-             keeps to one line and every card's text to two. -->
+             keeps to one line and every card's text to two. Its heading is over the chat box, out of
+             the scroll (see the row under it). -->
         <StackPanel IsVisible="{Binding ShowIntro}" MaxWidth="640" Spacing="12">
-          <StackPanel Spacing="6">
-            <Image Source="/Assets/sloperator.png" Width="40" Height="40" RenderOptions.BitmapInterpolationMode="HighQuality"
-                   views:CopyMenu.Image="{Binding Source, RelativeSource={RelativeSource Self}}" />
-            <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
-            <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460"
-                       Text="I work on it until it's done." />
-          </StackPanel>
-
           <!-- How to stop it comes first: it is what someone needs once Sloperator has the mouse. Next to
                it, how to set it straight without stopping it, which the user counts among the things
                that make Sloperator special: in plain text, not grey. It is a sentence, not a key cap,
@@ -808,8 +802,21 @@
       </StackPanel>
     </ScrollViewer>
 
+    <!-- The intro's heading, right over the chat box and always in view, the cards scrolling above it;
+         it goes with them once the chat is used. In a window too short to show the cards beside it
+         (a long message typed, a banner up) it gives them its room (MainWindow.FitIntroHeading).
+         The logo is drawn at whole pixels (LogoBlob). -->
+    <Panel x:Name="IntroHeading" Grid.Row="4">
+      <StackPanel IsVisible="{Binding ShowIntro}" Margin="16,12,16,8" Spacing="4">
+        <views:LogoBlob Width="40" Height="40" Margin="0,0,0,4" />
+        <TextBlock Text="What should I do on your computer?" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460"
+                   Text="I work on it until it's done." />
+      </StackPanel>
+    </Panel>
+
     <!-- Input -->
-    <Border Grid.Row="4" Padding="16,8,16,16">
+    <Border x:Name="InputRow" Grid.Row="5" Padding="16,8,16,16">
       <StackPanel MaxWidth="860" Spacing="8">
         <!-- Messages sent during the run that the model hasn't read yet, as their bubbles will be: each
              joins the chat when it is read; × takes one back, "Interrupt the model" has them read now. -->
@@ -924,7 +931,7 @@
     </Border>
 
     <!-- Files dragged over the chat: where they go. The drop itself lands on the window. -->
-    <Panel Grid.Row="0" Grid.RowSpan="5" IsVisible="{Binding IsDropping}" IsHitTestVisible="False" Background="#EC161616">
+    <Panel Grid.Row="0" Grid.RowSpan="6" IsVisible="{Binding IsDropping}" IsHitTestVisible="False" Background="#EC161616">
       <Rectangle Margin="14" RadiusX="12" RadiusY="12" Stroke="{StaticResource BbAccent}" StrokeThickness="2" StrokeDashArray="6,4" />
       <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
         <PathIcon Width="36" Height="36" Foreground="{StaticResource BbAccent}" HorizontalAlignment="Center"
