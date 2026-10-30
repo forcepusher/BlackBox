@@ -90,7 +90,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
             OnPropertyChanged(nameof(QueuedTitle));
             InterruptCommand.NotifyCanExecuteChanged();
         };
-        _selectedToolkit = ToolkitOptions[0];
+        _selectedSidePanel = SidePanelOptions[0];
         UseChanges(new Core.Diffs.FileChanges());
     }
 
@@ -265,8 +265,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         }
         _runCts?.Cancel();
         _tick.Stop();
-        // The toolkit's panel goes with the window: its players, the watch on its folder.
-        Toolkit?.Dispose();
+        // The side panel goes with the window: its players, the watch on its folder.
+        SidePanel?.Dispose();
         // A sound playing in the chat stops with it.
         foreach (var item in Items)
             item.DisposePreviews();
@@ -360,9 +360,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     [RelayCommand(CanExecute = nameof(CanSend), AllowConcurrentExecutions = true)]
     private async Task SendAsync()
     {
-        // A piece picked in the toolkit's panel that isn't made yet has no file: the tool says what it is.
+        // A piece picked in the side panel that isn't made yet has no file: the tool says what it is.
         var files = Attachments.Where(a => !a.Picked || File.Exists(a.Path) || Directory.Exists(a.Path)).Select(a => a.Path).ToList();
-        var input = WithToolkit(new UserInput(UserInput.Tidy(Input), files), Picked);
+        var input = WithSidePanel(new UserInput(UserInput.Tidy(Input), files), Picked);
         Input = "";
         ClearAttachments();
         await SendAsync(input);

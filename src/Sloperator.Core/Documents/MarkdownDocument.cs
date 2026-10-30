@@ -274,8 +274,8 @@ internal static partial class MarkdownDocument
 
     private static TableBlock Table(List<string> lines)
     {
-        var cells = lines.Select(Cells).ToList();
-        var separator = cells.FindIndex(r => r.Count > 0 && r.All(c => Separator().IsMatch(c)));
+        var cells = lines.Select(l => Cells(l, keepEscapes: true)).ToList();
+        var separator = SeparatorRow(cells);
         var align = separator >= 0
             ? cells[separator].Select(c => c.EndsWith(':') ? (c.StartsWith(':') ? 'c' : 'r') : 'l').ToList()
             : [];
@@ -283,25 +283,6 @@ internal static partial class MarkdownDocument
             .Select(r => (IReadOnlyList<IReadOnlyList<Span>>)r.Select(c => (IReadOnlyList<Span>)Inline(c.Replace("<br>", "\n").Replace("<br/>", "\n"))).ToList())
             .ToList();
         return new TableBlock(rows, separator == 1, align);
-    }
-
-    private static List<string> Cells(string row)
-    {
-        var t = row.Trim();
-        if (t.StartsWith('|')) t = t[1..];
-        if (t.EndsWith('|') && !t.EndsWith("\\|")) t = t[..^1];
-        var cells = new List<string>();
-        var cell = new StringBuilder();
-        var inCode = false;
-        for (var i = 0; i < t.Length; i++)
-        {
-            if (t[i] == '\\' && i + 1 < t.Length && t[i + 1] == '|') { cell.Append("\\|"); i++; continue; }
-            if (t[i] == '`') inCode = !inCode;
-            if (t[i] == '|' && !inCode) { cells.Add(cell.ToString().Trim()); cell.Clear(); continue; }
-            cell.Append(t[i]);
-        }
-        cells.Add(cell.ToString().Trim());
-        return cells;
     }
 
     [GeneratedRegex(@"^\s{0,3}(`{3,}|~{3,})")]
@@ -327,10 +308,6 @@ internal static partial class MarkdownDocument
 
     [GeneratedRegex(@"^!\[([^\]]*)\]\(\s*(<[^>]+>|[^)""]+?)\s*(?:""[^""]*"")?\s*\)$")]
     private static partial Regex Image();
-
-    // A |---| line's cell: dashes, a colon at either end for the alignment (":-:" is one too); a lone "-" is a cell.
-    [GeneratedRegex(@"^(:-+:?|-+:|-{2,})$")]
-    private static partial Regex Separator();
 
     [GeneratedRegex(@"\[([^\]\n]+)\]\(([^)\s]+)\)")]
     private static partial Regex Link();

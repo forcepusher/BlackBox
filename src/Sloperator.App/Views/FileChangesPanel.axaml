@@ -161,7 +161,7 @@
          × to close the panel. A bar as the chat's top bar beside it. -->
     <Border DockPanel.Dock="Top" Classes="bar">
       <DockPanel MinHeight="32">
-        <views:ToolkitClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
+        <views:SidePanelClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
         <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding Watch}" IsVisible="{Binding HasFiles}" Margin="8,0,0,0"
                       ToolTip.Tip="Follow the agent's changes as they happen" AutomationProperties.Name="Watch">
           <StackPanel Orientation="Horizontal" Spacing="8">

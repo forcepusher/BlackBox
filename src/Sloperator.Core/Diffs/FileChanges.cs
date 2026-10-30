@@ -307,7 +307,7 @@ public sealed class FileChanges
             int read;
             using (var stream = TextFiles.OpenRead(path))
                 read = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
-            if (FolderDiff.IsBinary(head.AsSpan(0, read)))
+            if (TextFiles.IsBinary(head.AsSpan(0, read)))
                 return new Content(true, null);
             using var reader = TextFiles.OpenText(path);
             return new Content(true, reader.ReadToEnd());
@@ -432,7 +432,7 @@ public sealed class FileChanges
         // What git has of the file, as read_file would read it: absent, not text, or its text.
         static Content FromGit(byte[]? bytes, string path) =>
             bytes is null ? Content.Absent
-            : FolderDiff.IsBinary(bytes.AsSpan(0, Math.Min(bytes.Length, 8000))) || DocumentText.Handles(path) ? new Content(true, null)
+            : TextFiles.IsBinary(bytes.AsSpan(0, Math.Min(bytes.Length, 8000))) || DocumentText.Handles(path) ? new Content(true, null)
             : new Content(true, Decode(bytes));
     }
 
@@ -465,7 +465,7 @@ public sealed class FileChanges
                 return "This file isn't in a git repository.";
             if (lines is null && read.Index is not null)
                 return await GitChanges.RestoreAsync(read.Root, read.Path, ct).ConfigureAwait(false);
-            (existed, before) = (read.Index is not null, read.Index is null || FolderDiff.IsBinary(read.Index.AsSpan(0, Math.Min(read.Index.Length, 8000))) ? null : Decode(read.Index));
+            (existed, before) = (read.Index is not null, read.Index is null || TextFiles.IsBinary(read.Index.AsSpan(0, Math.Min(read.Index.Length, 8000))) ? null : Decode(read.Index));
         }
         try
         {

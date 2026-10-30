@@ -491,7 +491,6 @@ internal static partial class Native
 
     public const byte AC_SRC_ALPHA = 1;
     public const uint ULW_ALPHA = 2;
-    public const int SW_SHOWNOACTIVATE = 4;
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

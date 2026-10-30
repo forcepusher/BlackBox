@@ -150,4 +150,22 @@ internal static class TextFiles
     /// database): Windows refuses a plain read then, whatever the writer allows.
     /// </summary>
     public static FileStream OpenRead(string path) => new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+    /// <summary>A zero byte in the first 8 KB, outside UTF-16 text: an image, an exe, an archive.</summary>
+    public static bool IsBinary(ReadOnlySpan<byte> head)
+    {
+        if (head.Length > 8000)
+            head = head[..8000];
+        return !head.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xFE]) && !head.StartsWith((ReadOnlySpan<byte>)[0xFE, 0xFF]) && head.Contains((byte)0);
+    }
+
+    /// <summary>Whether the file at <paramref name="path"/> is binary, from its first 8 KB (see <see cref="IsBinary(ReadOnlySpan{byte})"/>).</summary>
+    public static bool IsBinary(string path)
+    {
+        Span<byte> head = stackalloc byte[8000];
+        int read;
+        using (var stream = OpenRead(path))
+            read = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
+        return IsBinary(head[..read]);
+    }
 }

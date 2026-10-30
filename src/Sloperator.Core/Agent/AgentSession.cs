@@ -54,7 +54,7 @@ public interface IAgentObserver
     /// <summary>
     /// The run is ending on an exception that is no server's answer: a bug, whose message alone
     /// ("Object reference not set to an instance of an object.") tells nobody where. Called before
-    /// <see cref="OnFinished"/>, with the whole exception for a log.
+    /// <see cref="OnFinished(AgentStopReason, string?, Exception)"/>, with the whole exception for a log.
     /// </summary>
     void OnFailed(Exception error) { }
 

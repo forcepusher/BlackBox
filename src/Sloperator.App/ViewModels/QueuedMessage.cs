@@ -20,7 +20,7 @@ public sealed partial class QueuedMessageItem(UserInput input, Action<QueuedMess
     public string Text => Input.Text;
     public bool HasText => Input.Text.Length > 0;
 
-    /// <summary>What it was about, when a tool of the toolkit was open (Video generator: the video, and what was picked in it).</summary>
+    /// <summary>What it was about, when a side panel was open (Video generator: the video, and what was picked in it).</summary>
     public string? Via => Input.Via;
 
     public bool HasVia => Input.Via is not null;

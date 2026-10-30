@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Sloperator.App;
 using Sloperator.App.ViewModels;
 using Sloperator.App.Views;
 using Xunit;
@@ -61,24 +60,24 @@ public sealed class ChatLayoutTests
     [Theory]
     [MemberData(nameof(Texts))]
     public void A_user_message_shows_all_its_lines(string text) =>
-        AssertAllShown(new UserMessageItem(text), text);
+        AssertAllShown(new UserMessageItem(text));
 
     [Theory]
     [MemberData(nameof(Texts))]
     public void A_user_message_with_files_shows_all_its_lines(string text) =>
-        AssertAllShown(new UserMessageItem(text, [@"E:\Repos\HoC-Web-Server", @"E:\Repos\Heroes-of-the-Chests"]), text);
+        AssertAllShown(new UserMessageItem(text, [@"E:\Repos\HoC-Web-Server", @"E:\Repos\Heroes-of-the-Chests"]));
 
     [Theory]
     [MemberData(nameof(Texts))]
     public void A_notice_shows_all_its_lines(string text) =>
-        AssertAllShown(new NoticeItem(text, isError: true), text);
+        AssertAllShown(new NoticeItem(text, isError: true));
 
     [Theory]
     [MemberData(nameof(Texts))]
     public void A_notice_with_continue_shows_all_its_lines(string text) =>
-        AssertAllShown(new NoticeItem(text, isError: false, carryOn: () => { }), text);
+        AssertAllShown(new NoticeItem(text, isError: false, carryOn: () => { }));
 
-    private static void AssertAllShown(ChatItemViewModel item, string text)
+    private static void AssertAllShown(ChatItemViewModel item)
     {
         foreach (var width in new[] { 1000, 760, 520 })
         {

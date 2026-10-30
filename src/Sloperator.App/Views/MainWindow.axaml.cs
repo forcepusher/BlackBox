@@ -103,10 +103,10 @@ public partial class MainWindow : Window
             if (e.WidthChanged)
                 FitColumns(e.NewSize.Width);
         };
-        ToolkitSplitter.DragCompleted += (_, _) =>
+        SidePanelSplitter.DragCompleted += (_, _) =>
         {
             if (_docked > 0)
-                _docked = ToolkitWidth;
+                _docked = SidePanelWidth;
         };
     }
 
@@ -246,7 +246,7 @@ public partial class MainWindow : Window
         Height = Math.Max(MinHeight, Math.Min(Height, area.Height - 40));
     }
 
-    /// <summary>The chat's place and size: without the toolkit's column on its left, which isn't open the next time.</summary>
+    /// <summary>The chat's place and size: without the side panel's column on its left, which isn't open the next time.</summary>
     private void Remember()
     {
         if (WindowState != WindowState.Normal || !IsVisible)
@@ -294,7 +294,7 @@ public partial class MainWindow : Window
         var data = e.DataTransfer;
         // Files and pictures are attached; text (a link dragged from a browser) goes into the box.
         e.DragEffects = CarriesFiles(data) || data.Contains(DataFormat.Text) ? DragDropEffects.Copy : DragDropEffects.None;
-        Vm.IsDropping = CarriesFiles(data) && !OverToolkit(e);
+        Vm.IsDropping = CarriesFiles(data) && !OverSidePanel(e);
         e.Handled = true;
     }
 
@@ -314,7 +314,7 @@ public partial class MainWindow : Window
         if (data.TryGetFiles() is { Length: > 0 } files)
         {
             var paths = files.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
-            if (!OverToolkit(e) || !Vm.DropOnToolkit(paths))
+            if (!OverSidePanel(e) || !Vm.DropOnSidePanel(paths))
                 Vm.Attach(paths);
         }
         else if (data.TryGetBitmap() is { } bitmap)
@@ -479,12 +479,12 @@ public partial class MainWindow : Window
         if (DataContext is not MainWindowViewModel vm)
             return;
         // Once the chat is used it follows its end, however far the intro was scrolled. A tool
-        // picked in the Toolkit dropdown opens on the left of the chat.
+        // picked in the Side panel dropdown opens on the left of the chat.
         vm.PropertyChanged += (_, change) =>
         {
             if (change.PropertyName == nameof(MainWindowViewModel.ShowIntro) && !vm.ShowIntro)
                 _stickToBottom = true;
-            if (change.PropertyName == nameof(MainWindowViewModel.Toolkit))
+            if (change.PropertyName == nameof(MainWindowViewModel.SidePanel))
                 Dock();
         };
         // The click marker is drawn outside Avalonia, so it is handed the accent colour.
@@ -561,11 +561,7 @@ public partial class MainWindow : Window
         if (index < 0 || (Screens.ScreenFromWindow(this) ?? Screens.Primary) is not { } screen)
             return false;
         _viewer?.Close();
-        var viewer = _viewer = new MediaViewer { DataContext = new MediaViewerViewModel(entries, index, Vm.Previews, screen.Bounds.Width) };
-        // Placed on the chat's screen, where it then goes full screen.
-        viewer.Position = screen.Bounds.Position;
-        viewer.Width = screen.Bounds.Width / screen.Scaling;
-        viewer.Height = screen.Bounds.Height / screen.Scaling;
+        var viewer = _viewer = MediaViewer.On(screen, entries, index, Vm.Previews); // the chat's screen
         viewer.Closed += (_, _) =>
         {
             if (ReferenceEquals(_viewer, viewer))
@@ -590,38 +586,38 @@ public partial class MainWindow : Window
             HoldVideos();
     }
 
-    // ---- the toolkit: a tool's panel on the left of the chat --------------------------------------
+    // ---- the side panel: a tool's panel on the left of the chat --------------------------------------
 
-    /// <summary>How wide the toolkit's column is to be, splitter included, as it opened or was dragged to; 0 with none.</summary>
+    /// <summary>How wide the side panel's column is to be, splitter included, as it opened or was dragged to; 0 with none.</summary>
     private double _docked;
 
-    /// <summary>How narrow the open tool's panel may get, splitter included (<see cref="ToolkitOption.MinWidth"/>).</summary>
+    /// <summary>How narrow the open tool's panel may get, splitter included (<see cref="SidePanelOption.MinWidth"/>).</summary>
     private double _least;
 
-    /// <summary>Where the window was and how wide before the toolkit opened, and after: closed with the window as it was left, it goes back there.</summary>
+    /// <summary>Where the window was and how wide before the side panel opened, and after: closed with the window as it was left, it goes back there.</summary>
     private (PixelPoint Position, double Width)? _beforeDock, _afterDock;
 
     /// <summary>
-    /// A tool picked in the Toolkit dropdown opens on the left of the chat: the window grows to the
+    /// A tool picked in the Side panel dropdown opens on the left of the chat: the window grows to the
     /// left by the tool's width, so the chat stays where it was on the screen (as far as the screen
     /// has room; else the window takes the screen's width, the tool and the chat sharing it). None
     /// gives the room back. A maximized window keeps its size, and the two share it. Made narrower,
-    /// the panel gives way down to its least before the chat does (<see cref="ToolkitColumns"/>).
+    /// the panel gives way down to its least before the chat does (<see cref="SidePanelColumns"/>).
     /// </summary>
     private void Dock()
     {
-        var option = Vm.HasToolkit ? Vm.SelectedToolkit : null;
+        var option = Vm.HasSidePanel ? Vm.SelectedSidePanel : null;
         var width = option?.Width ?? 0;
         var least = Math.Min(width, option?.MinWidth ?? 0);
         var tall = Math.Max(ChatMinHeight, option?.MinHeight ?? 0);
         // Set here, not bound: a binding could take it after this lays the window out, which then
         // showed the panel's place empty for a frame and drew the panel in the next.
-        ToolkitContent.Content = Vm.Toolkit;
+        SidePanelContent.Content = Vm.SidePanel;
         if (width <= 0 && _docked <= 0)
             return;
         // Picked, the dropdown's list goes before the window changes: left to the dropdown, it went
         // after, over the resized window for a frame.
-        ToolkitBox.IsDropDownOpen = false;
+        SidePanelBox.IsDropDownOpen = false;
         var columns = Columns.ColumnDefinitions;
         var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
         var scaling = screen?.Scaling ?? 1;
@@ -644,7 +640,7 @@ public partial class MainWindow : Window
                 }
                 var most = area.Width / scaling - 16;
                 var wide = Math.Min(most, chat.Width + width);
-                var add = ToolkitColumns.Panel(wide, width, least);
+                var add = SidePanelColumns.Panel(wide, width, least);
                 var outer = (int)((wide + 16) * scaling);
                 var x = Math.Max(area.X, Math.Min(chat.Position.X - (int)(add * scaling), area.Right - outer));
                 place = (new PixelPoint(x, chat.Position.Y), wide);
@@ -653,14 +649,14 @@ public partial class MainWindow : Window
             _afterDock = null;
             // As narrow as the panel and the chat may both get, if the screen is as wide: lowered
             // before the window is resized, which it couldn't be below the least of the tool before.
-            MinWidth = screen is null ? ToolkitColumns.WindowMin(least) : Math.Min(ToolkitColumns.WindowMin(least), screen.WorkingArea.Width / scaling - 16);
+            MinWidth = screen is null ? SidePanelColumns.WindowMin(least) : Math.Min(SidePanelColumns.WindowMin(least), screen.WorkingArea.Width / scaling - 16);
             MinHeight = screen is null ? tall : Math.Min(tall, screen.WorkingArea.Height / scaling - 40);
             // The tool and its column first, laid out at the window's new size before the window
             // grows: the panel took a tenth of a second to lay out the first time, and laid out
             // after, the screen showed the window's new part black meanwhile.
-            ToolkitHost.IsVisible = ToolkitSplitter.IsVisible = true;
-            columns[0].MinWidth = least - ToolkitColumns.Splitter;
-            columns[1].Width = new GridLength(ToolkitColumns.Splitter);
+            SidePanelHost.IsVisible = SidePanelSplitter.IsVisible = true;
+            columns[0].MinWidth = least - SidePanelColumns.Splitter;
+            columns[1].Width = new GridLength(SidePanelColumns.Splitter);
             _docked = width;
             _least = least;
             var size = place?.Width ?? Columns.Bounds.Width;
@@ -674,7 +670,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            ToolkitHost.IsVisible = ToolkitSplitter.IsVisible = false;
+            SidePanelHost.IsVisible = SidePanelSplitter.IsVisible = false;
             // Before the window is resized: FitColumns would give the column back its width.
             _docked = 0;
             columns[0].MinWidth = columns[2].MinWidth = 0;
@@ -697,7 +693,7 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Lays the window's content out <paramref name="width"/> across, as it is about to be, before
-    /// the window is: all of it, the new panel and the Toolkit dropdown's new name too. Measure skips
+    /// the window is: all of it, the new panel and the Side panel dropdown's new name too. Measure skips
     /// what was laid out before at the same size, so the new panel was laid out (and drawn) only at
     /// the window's next layout, a frame later, and the dropdown was cut to its old name's width.
     /// </summary>
@@ -713,16 +709,16 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Where the chat alone is on the screen and how wide: where it was before the toolkit opened if
-    /// the window is as the toolkit left it, else the window without the toolkit's column.
+    /// Where the chat alone is on the screen and how wide: where it was before the side panel opened if
+    /// the window is as the side panel left it, else the window without the side panel's column.
     /// </summary>
     private (PixelPoint Position, double Width) ChatAlone()
     {
         if (_beforeDock is { } before && _afterDock is { } after && Position == after.Position && Math.Abs(Width - after.Width) < 1)
             return before;
-        var toolkit = ToolkitWidth;
+        var sidePanel = SidePanelWidth;
         var scaling = (Screens.ScreenFromWindow(this) ?? Screens.Primary)?.Scaling ?? 1;
-        return (new PixelPoint(Position.X + (int)(toolkit * scaling), Position.Y), Math.Max(ChatMinWidth, Width - toolkit));
+        return (new PixelPoint(Position.X + (int)(sidePanel * scaling), Position.Y), Math.Max(ChatMinWidth, Width - sidePanel));
     }
 
     /// <summary>
@@ -816,22 +812,22 @@ public partial class MainWindow : Window
             return;
         var columns = Columns.ColumnDefinitions;
         columns[2].MinWidth = Math.Clamp(width - _least, 0, ChatMinWidth);
-        var panel = ToolkitColumns.Panel(width, _docked, _least) - ToolkitColumns.Splitter;
+        var panel = SidePanelColumns.Panel(width, _docked, _least) - SidePanelColumns.Splitter;
         if (Math.Abs(columns[0].Width.Value - panel) > 0.5)
             columns[0].Width = new GridLength(panel);
     }
 
-    private const double ChatMinWidth = ToolkitColumns.ChatMin;
+    private const double ChatMinWidth = SidePanelColumns.ChatMin;
 
     /// <summary>How short the chat may get: the window's own least height, as set in its markup.</summary>
     private const double ChatMinHeight = 513;
 
-    /// <summary>The part of the window the toolkit takes now, in pixels across; 0 with none.</summary>
-    private double ToolkitWidth => _docked > 0 ? Columns.ColumnDefinitions[0].ActualWidth + Columns.ColumnDefinitions[1].ActualWidth : 0;
+    /// <summary>The part of the window the side panel takes now, in pixels across; 0 with none.</summary>
+    private double SidePanelWidth => _docked > 0 ? Columns.ColumnDefinitions[0].ActualWidth + Columns.ColumnDefinitions[1].ActualWidth : 0;
 
-    /// <summary>Whether a drag or a drop is over the toolkit's panel.</summary>
-    private bool OverToolkit(DragEventArgs e) =>
-        Vm.HasToolkit && e.GetPosition(this).X < ToolkitWidth;
+    /// <summary>Whether a drag or a drop is over the side panel.</summary>
+    private bool OverSidePanel(DragEventArgs e) =>
+        Vm.HasSidePanel && e.GetPosition(this).X < SidePanelWidth;
 
     private async void OnSettingsClick(object? sender, RoutedEventArgs e)
     {

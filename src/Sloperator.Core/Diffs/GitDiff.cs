@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
+using Sloperator.Core.Tools;
 
 namespace Sloperator.Core.Diffs;
 
@@ -213,7 +214,7 @@ public static partial class GitDiff
             if (!info.Exists || info.Length > 2_000_000)
                 return null;
             var bytes = File.ReadAllBytes(path);
-            if (FolderDiff.IsBinary(bytes))
+            if (TextFiles.IsBinary(bytes))
                 return null;
             long lines = bytes.Count(b => b == (byte)'\n');
             return bytes.Length > 0 && bytes[^1] != (byte)'\n' ? lines + 1 : lines;

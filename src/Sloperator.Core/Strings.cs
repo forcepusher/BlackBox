@@ -8,6 +8,15 @@ public static class Strings
     /// <summary>The text with its first letter a capital: "lines 12-18" as "Lines 12-18".</summary>
     public static string Capital(string s) => s.Length == 0 ? s : char.ToUpperInvariant(s[0]) + s[1..];
 
+    /// <summary>How many times <paramref name="part"/> is in the text, side by side and not overlapping.</summary>
+    internal static int Occurrences(string text, string part)
+    {
+        var count = 0;
+        for (var i = text.IndexOf(part, StringComparison.Ordinal); i >= 0; i = text.IndexOf(part, i + part.Length, StringComparison.Ordinal))
+            count++;
+        return count;
+    }
+
     /// <summary>A size in bytes as people read it: "512 bytes", "40 KB", "3.4 MB", "40 MB", "4.8 GB".</summary>
     public static string Bytes(long bytes) =>
         bytes < 1024 ? $"{bytes} bytes"

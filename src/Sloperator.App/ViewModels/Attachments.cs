@@ -18,7 +18,7 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
     private readonly Action<AttachmentItem>? _remove;
 
     /// <param name="remove">Takes it off the message being written; null in a sent message's bubble.</param>
-    /// <param name="picked">Picked in the toolkit's panel (a piece of the video): what it is there, "Clip 2 · s2.mp4".</param>
+    /// <param name="picked">Picked in the side panel (a piece of the video): what it is there, "Clip 2 · s2.mp4".</param>
     public AttachmentItem(string path, Action<AttachmentItem>? remove = null, string? picked = null)
     {
         Path = path;
@@ -58,10 +58,10 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
     public string Path { get; }
     public string FileName { get; }
 
-    /// <summary>What it is in the toolkit's panel it was picked in ("Clip 2 · s2.mp4"); null for a file of the user's.</summary>
+    /// <summary>What it is in the side panel it was picked in ("Clip 2 · s2.mp4"); null for a file of the user's.</summary>
     public string? Caption { get; }
 
-    /// <summary>Picked in the toolkit's panel, which says what it is to the model with the message.</summary>
+    /// <summary>Picked in the side panel, which says what it is to the model with the message.</summary>
     public bool Picked => Caption is not null;
 
     /// <summary>The name it shows by: what it is in the panel it was picked in, or its file's name.</summary>

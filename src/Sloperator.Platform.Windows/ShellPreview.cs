@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using static Sloperator.Platform.Windows.ComAbi;
 
 namespace Sloperator.Platform.Windows;
 
@@ -173,14 +174,6 @@ public sealed unsafe class ShellPreview : IDisposable
     }
 
     private static nint* Vtbl(nint unknown) => *(nint**)unknown;
-
-    private static void Release(nint unknown) => _ = ((delegate* unmanaged<nint, uint>)Vtbl(unknown)[2])(unknown);
-
-    private static void Check(int hr)
-    {
-        if (hr < 0)
-            Marshal.ThrowExceptionForHR(hr);
-    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT

@@ -1,7 +1,6 @@
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Sloperator.Core.Video;
-using static Sloperator.Core.Strings;
 
 namespace Sloperator.App.ViewModels;
 

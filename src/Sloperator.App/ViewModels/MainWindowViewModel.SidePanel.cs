@@ -9,11 +9,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 namespace Sloperator.App.ViewModels;
 
 /// <summary>
-/// A tool that opens on the left of the chat window, picked in the Toolkit dropdown at the top of
+/// A tool that opens on the left of the chat window, picked in the Side panel dropdown at the top of
 /// it (Video generator, File changes). It works through the chat: what is picked in it goes into the
 /// chat's box, and what the user sends from there is done by the agent in the chat, in view.
 /// </summary>
-public interface IToolkit : IDisposable
+public interface ISidePanel : IDisposable
 {
     /// <summary>
     /// What a message sent while the tool is open carries: the line over its bubble, and what the
@@ -30,14 +30,14 @@ public interface IToolkit : IDisposable
 }
 
 /// <summary>
-/// An entry of the Toolkit dropdown: None, or a tool with how narrow its panel may get with its top
+/// An entry of the Side panel dropdown: None, or a tool with how narrow its panel may get with its top
 /// bar still in one row, splitter included, and how short the window may get with it open (0: as
-/// short as the chat may). Every tool's panel opens as wide (<see cref="ToolkitColumns.PanelWidth"/>).
+/// short as the chat may). Every tool's panel opens as wide (<see cref="SidePanelColumns.PanelWidth"/>).
 /// </summary>
-public sealed record ToolkitOption(string Name, string Description, double MinWidth, double MinHeight, Func<MainWindowViewModel, IToolkit>? Open)
+public sealed record SidePanelOption(string Name, string Description, double MinWidth, double MinHeight, Func<MainWindowViewModel, ISidePanel>? Open)
 {
     /// <summary>How wide the panel opens, splitter included; 0 for None.</summary>
-    public double Width => Open is null ? 0 : ToolkitColumns.PanelWidth;
+    public double Width => Open is null ? 0 : SidePanelColumns.PanelWidth;
 
     /// <summary>What the dropdown says while it is picked: "Side panel" with none, else the tool's name.</summary>
     public string Label => Open is null ? "Side panel" : Name;
@@ -47,10 +47,10 @@ public sealed record ToolkitOption(string Name, string Description, double MinWi
 
 public sealed partial class MainWindowViewModel
 {
-    // ---- the toolkit: a tool's panel on the left of the chat --------------------------------
+    // ---- the side panel: a tool's panel on the left of the chat --------------------------------
 
-    /// <summary>What the Toolkit dropdown offers: nothing, or a tool whose panel opens on the left of the chat.</summary>
-    public IReadOnlyList<ToolkitOption> ToolkitOptions { get; } =
+    /// <summary>What the Side panel dropdown offers: nothing, or a tool whose panel opens on the left of the chat.</summary>
+    public IReadOnlyList<SidePanelOption> SidePanelOptions { get; } =
     [
         new("None", "", 0, 0, null),
         new(FileChangesName, "Files the agent changed", 560, 0,
@@ -66,38 +66,38 @@ public sealed partial class MainWindowViewModel
     /// <summary>A card's Inspect: the file in the File inspector panel, which opens in place of the tool open (if another).</summary>
     internal void Inspect(string path)
     {
-        if (Toolkit is not FileInspectorViewModel)
-            SelectedToolkit = ToolkitOptions.First(o => o.Name == FileInspectorName);
-        (Toolkit as FileInspectorViewModel)?.Show(path);
+        if (SidePanel is not FileInspectorViewModel)
+            SelectedSidePanel = SidePanelOptions.First(o => o.Name == FileInspectorName);
+        (SidePanel as FileInspectorViewModel)?.Show(path);
     }
 
     /// <summary>The × on the open tool's panel: None in the dropdown.</summary>
-    internal void CloseToolkit() => SelectedToolkit = ToolkitOptions[0];
+    internal void CloseSidePanel() => SelectedSidePanel = SidePanelOptions[0];
 
     [ObservableProperty]
-    private ToolkitOption? _selectedToolkit;
+    private SidePanelOption? _selectedSidePanel;
 
     /// <summary>The open tool's panel, on the left of the chat; null with none.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasToolkit))]
-    private IToolkit? _toolkit;
+    [NotifyPropertyChangedFor(nameof(HasSidePanel))]
+    private ISidePanel? _sidePanel;
 
-    public bool HasToolkit => Toolkit is not null;
+    public bool HasSidePanel => SidePanel is not null;
 
-    partial void OnSelectedToolkitChanged(ToolkitOption? value)
+    partial void OnSelectedSidePanelChanged(SidePanelOption? value)
     {
-        var old = Toolkit;
+        var old = SidePanel;
         // What it put in the box goes with it: about a video no longer open, it would be sent bare.
         foreach (var picked in Attachments.Where(a => a.Picked).ToList())
             RemoveAttachment(picked);
         // One tool for another in one change, so the window goes from the one's panel to the other's
         // without closing between.
-        Toolkit = value?.Open is { } open && !_closed ? open(this) : null;
+        SidePanel = value?.Open is { } open && !_closed ? open(this) : null;
         old?.Dispose();
     }
 
     /// <summary>
-    /// What is picked in the toolkit's panel, into the box (one picked there before taken out): the
+    /// What is picked in the side panel, into the box (one picked there before taken out): the
     /// user then says what to do with it. A piece not made yet has no file: it goes as its place.
     /// One picked again under another caption (more lines of a file in the File changes panel) is put back with it.
     /// </summary>
@@ -118,26 +118,26 @@ public sealed partial class MainWindowViewModel
         }
     }
 
-    /// <summary>The paths picked in the toolkit's panel that are in the box now.</summary>
+    /// <summary>The paths picked in the side panel that are in the box now.</summary>
     internal IReadOnlyList<string> Picked => Attachments.Where(a => a.Picked).Select(a => a.Path).ToList();
 
     /// <summary>
-    /// A message from the toolkit's panel (Make the video): into this chat as if typed in the box, with
+    /// A message from the side panel (Make the video): into this chat as if typed in the box, with
     /// what the tool says about it. With <paramref name="withPicks"/> (Generate on a piece), about
     /// what is picked in the box, which goes with it as when the user sends: "Make it." sent bare was
     /// about the whole video, and the model was asked to make all of it.
     /// </summary>
-    internal void SendFromToolkit(string text, bool withPicks = false)
+    internal void SendFromSidePanel(string text, bool withPicks = false)
     {
         if (_closed)
             return;
         if (!withPicks)
         {
-            _ = SendAsync(WithToolkit(new UserInput(text), [], fromTool: true));
+            _ = SendAsync(WithSidePanel(new UserInput(text), [], fromTool: true));
             return;
         }
         var picked = Attachments.Where(a => a.Picked).ToList();
-        var input = WithToolkit(new UserInput(text, picked.Where(a => File.Exists(a.Path) || Directory.Exists(a.Path)).Select(a => a.Path).ToList()), Picked, fromTool: true);
+        var input = WithSidePanel(new UserInput(text, picked.Where(a => File.Exists(a.Path) || Directory.Exists(a.Path)).Select(a => a.Path).ToList()), Picked, fromTool: true);
         foreach (var pick in picked)
             RemoveAttachment(pick);
         _ = SendAsync(input);
@@ -151,22 +151,22 @@ public sealed partial class MainWindowViewModel
     /// 2026-10-28: a card of what they never picked, with no × to take it off, was context they
     /// didn't choose). The tool's own messages (Make the video) always say what the tool shows.
     /// </summary>
-    private UserInput WithToolkit(UserInput input, IReadOnlyList<string> picked, bool fromTool = false)
+    private UserInput WithSidePanel(UserInput input, IReadOnlyList<string> picked, bool fromTool = false)
     {
-        if (Toolkit is not { } toolkit || picked.Count == 0 && !fromTool)
+        if (SidePanel is not { } sidePanel || picked.Count == 0 && !fromTool)
             return input;
         var cards = Attachments.Where(a => a.Picked && picked.Contains(a.Path, StringComparer.OrdinalIgnoreCase))
             .Select(a => new ToolCard(a.Title, Path: a.Path)).ToList();
-        var name = SelectedToolkit?.Name ?? "Side panel";
-        var about = toolkit.About(picked) ?? (name, $"[The {name} panel is open beside the chat, with nothing in it yet.]");
+        var name = SelectedSidePanel?.Name ?? "Side panel";
+        var about = sidePanel.About(picked) ?? (name, $"[The {name} panel is open beside the chat, with nothing in it yet.]");
         if (picked.Count > 0)
-            toolkit.Sent();
+            sidePanel.Sent();
         return input with { Via = about.Via, Context = about.Context, Cards = cards };
     }
 
     /// <summary>
     /// A file about to be written over (a shot made again): the chat's players of it, and the
-    /// toolkit's, stop; their playbacks, still holding it, are handed back to be ended.
+    /// side panel's, stop; their playbacks, still holding it, are handed back to be ended.
     /// </summary>
     internal List<IDisposable> LetGo(string path)
     {
@@ -175,7 +175,7 @@ public sealed partial class MainWindowViewModel
                      .Where(p => string.Equals(Path.GetFullPath(p.Path), path, StringComparison.OrdinalIgnoreCase)))
             if (preview.LetGo() is { } playback)
                 playing.Add(playback);
-        if (Toolkit is VideoGeneratorViewModel video && video.LetGo(path) is { } shown)
+        if (SidePanel is VideoGeneratorViewModel video && video.LetGo(path) is { } shown)
             playing.Add(shown);
         return playing;
     }
@@ -185,7 +185,7 @@ public sealed partial class MainWindowViewModel
     /// <summary>The files the agent changed in the chat on screen, each with what it held before.</summary>
     internal FileChanges Changes { get; private set; } = null!;
 
-    /// <summary>How the toolkit panels show things (File changes' Wrap and Watch), saved as the user leaves them.</summary>
+    /// <summary>How the side panels show things (File changes' Wrap and Watch), saved as the user leaves them.</summary>
     internal PanelSettings Panels => _settings.Panels;
 
     internal void SavePanels() => SaveSettings();
@@ -228,10 +228,10 @@ public sealed partial class MainWindowViewModel
     private void OpenOnFirstChange()
     {
         _changesNotShown = false;
-        if (!_settings.Panels.OpenFileChanges || Toolkit is not null || _closed)
+        if (!_settings.Panels.OpenFileChanges || SidePanel is not null || _closed)
             return;
         OpeningOnFirstChange = true;
-        try { SelectedToolkit = ToolkitOptions.First(o => o.Name == FileChangesName); }
+        try { SelectedSidePanel = SidePanelOptions.First(o => o.Name == FileChangesName); }
         finally { OpeningOnFirstChange = false; }
     }
 
@@ -241,8 +241,8 @@ public sealed partial class MainWindowViewModel
     /// <summary>Where a chat's list is kept: Data/chats/changes/id.json.</summary>
     private string ChangesFile(string chatId) => Path.Combine(_chats.Folder, "changes", Path.GetFileName(chatId) + ".json");
 
-    /// <summary>Files dropped on the toolkit's panel: the tool takes them, or they go with the next message.</summary>
-    internal bool DropOnToolkit(IReadOnlyList<string> paths) => Toolkit?.Drop(paths) == true;
+    /// <summary>Files dropped on the side panel: the tool takes them, or they go with the next message.</summary>
+    internal bool DropOnSidePanel(IReadOnlyList<string> paths) => SidePanel?.Drop(paths) == true;
 
     /// <summary>The video tool's call running in this chat now: what it was given, and how it is getting on; null when none runs.</summary>
     internal (JsonObject Args, string Status)? VideoCall()

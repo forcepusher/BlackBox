@@ -820,15 +820,15 @@ window to the left side instead of opening a new separate window... Use the main
 making... Put filmmaking button under Toolkit dropdown menu with None and Filmmaking options. There
 will be more tools extending to the left side of the screen later."). The **Side panel** dropdown
 ("Toolkit" until 2026-10-29: the user found it said nothing of what it does, and the agent's own
-tools are something else; code names such as `IToolkit` stay)
+tools are something else; the code's names followed in 1.3.0: `ISidePanel`, `SidePanelOption`)
 takes the place of the second Sloperator logo and name under the title bar, an arrow pointing
-left beside it (outside the button since 2026-10-29, at the user's word), where its tools open: None or Video generator (`ToolkitOption`, `IToolkit`, more to come); it
+left beside it (outside the button since 2026-10-29, at the user's word), where its tools open: None or Video generator (`SidePanelOption`, `ISidePanel`, more to come); it
 now reads None, File changes, File inspector, Video generator (the user, 2026-10-26), each with a grey line of what it is. The list is as wide as its longest line, 12 from its border on both sides as every dropdown row (`ComboBoxItem` Padding 12,6): rows were a fixed 300 wide, wrapping, until 2026-10-30, and left about 110 px empty right of the longest line. A muted "in
 development" beside it (the user, 2026-10-24) went on 2026-10-29, at the user's word. Its
 arrows are solid triangles, the left one and the dropdown's, as History's and every dropdown's are
 (the user: "Arrows need consistency"; Fluent's thin chevron is replaced in App.axaml by a style
 that depends on a state, as a plain one loses to what the template sets). Picked,
-the window grows to the left by the tool's width (880 for every tool, `ToolkitColumns.PanelWidth`; the user, 2026-10-28: until then each had its own, 880, 760 and 960), so the chat stays where it was on the
+the window grows to the left by the tool's width (880 for every tool, `SidePanelColumns.PanelWidth`; the user, 2026-10-28: until then each had its own, 880, 760 and 960), so the chat stays where it was on the
 screen, as far as the screen has room; None gives the room back, and a window neither moved nor
 resized since goes back where it was. It moves and resizes in one step (`MainWindow.Place`, one
 SetWindowPos on Windows), with the panel laid out at the new size before: moved by Position and
@@ -850,15 +850,15 @@ one's width to the other's: the view model sets the new tool in one change (it w
 and the window shrank to the chat and grew back), the window sets the panel's content itself (a
 binding took it after the layout), and the dropdown's list is closed first (it lingered a frame over
 the resized window). Measured after: popup closed, then one frame with all of the switch, for every
-pick of None, Video generator and File changes either way. The window's place is saved without the panel. **What a tool gives a message is a card of what was picked in it** over the box (the user, 2026-10-25, after a message sent with File changes open showed only a grey "File changes" over its words): a pick (`MainWindowViewModel.Pick`, an `AttachmentItem` with a caption). With nothing picked there is no card, and a message the user types goes as it is, with no word of the tool (`WithToolkit`; the user, 2026-10-28: until then a card of the whole item, `IToolkit.Whole`, stood there, and File changes selected its first file by itself, so a card of what they never picked went with every message, with no × to take it off). The tool's own messages (Make the video) still say what it shows. A pick has no × as the user's own files have (`AttachmentItem.CanRemove` is false for a pick; the user's call: a pick is unpicked in its panel, a click away or Esc, so box and panel can't disagree). Every panel puts what it picks in the box through `Pick`, so a new one gets this as is; `ToolCardTests` fails if a × in the box is shown for anything but `CanRemove`. Sent, the cards go with the message (`UserInput.Cards`, kept in the chat as `ChatEntry.Cards`) and show in its bubble as its files do, a pick by its caption; a chat saved before shows its grey line as it was. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`ToolkitClose`, 32 square as the Side panel dropdown, 8 right of the button beside it), so it looks and sits the same in each. Every tool's top bar is the chat's (`Border.bar`, see One look for every control), its fields 32 high as everywhere. **Made narrower, the panel gives way first** (`ToolkitColumns`,
-`MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`ToolkitOption.MinWidth`,
+pick of None, Video generator and File changes either way. The window's place is saved without the panel. **What a tool gives a message is a card of what was picked in it** over the box (the user, 2026-10-25, after a message sent with File changes open showed only a grey "File changes" over its words): a pick (`MainWindowViewModel.Pick`, an `AttachmentItem` with a caption). With nothing picked there is no card, and a message the user types goes as it is, with no word of the tool (`WithSidePanel`; the user, 2026-10-28: until then a card of the whole item, `ISidePanel.Whole`, stood there, and File changes selected its first file by itself, so a card of what they never picked went with every message, with no × to take it off). The tool's own messages (Make the video) still say what it shows. A pick has no × as the user's own files have (`AttachmentItem.CanRemove` is false for a pick; the user's call: a pick is unpicked in its panel, a click away or Esc, so box and panel can't disagree). Every panel puts what it picks in the box through `Pick`, so a new one gets this as is; `ToolCardTests` fails if a × in the box is shown for anything but `CanRemove`. Sent, the cards go with the message (`UserInput.Cards`, kept in the chat as `ChatEntry.Cards`) and show in its bubble as its files do, a pick by its caption; a chat saved before shows its grey line as it was. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`SidePanelClose`, 32 square as the Side panel dropdown, 8 right of the button beside it), so it looks and sits the same in each. Every tool's top bar is the chat's (`Border.bar`, see One look for every control), its fields 32 high as everywhere. **Made narrower, the panel gives way first** (`SidePanelColumns`,
+`MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`SidePanelOption.MinWidth`,
 splitter included: Video generator 770, where its top bar still fits in one row with the video's name cut
 short; File changes 560), then the window stops, at the panel's least plus the chat's 660 (no more than
 the screen is wide). It goes back to the width it opened at, or was dragged to, as the window widens
 again; the splitter stops at both leasts. Before (bug of 2026-10-24) the window's least counted any
 panel as 480 while Video generator kept its 960, so the chat was squeezed to a few letters across, and
 opening on a narrow screen left the chat only 330. Video generator also needs the window 633 tall
-(`ToolkitOption.MinHeight`; the chat alone 513; both with the title bar, see Title bar), else its viewer is squeezed to nothing over the
+(`SidePanelOption.MinHeight`; the chat alone 513; both with the title bar, see Title bar), else its viewer is squeezed to nothing over the
 timeline; a shorter window grows to it as the panel opens. The video's name was in a StackPanel across,
 which gives a TextBlock all the room it wants: it was never cut short and pushed the fields over the
 buttons. The panel has a viewer with how the piece shown was made under it, and the
@@ -960,7 +960,7 @@ its block shows nothing between its frames until something is said, as the line 
 says "Say what happens in it"). Foley turns it
 into `"source": "foley"` and sends "Make it." at once (there is nothing to say first); Music keeps it a
 song and sends "Make it." once its style is said, else the status line asks for it. Either sends with
-the pick in the box, as a message the user sends does: `SendFromToolkit("Make it.")` used to go with
+the pick in the box, as a message the user sends does: `SendFromSidePanel("Make it.")` used to go with
 nothing picked, which the model is told means the whole video, so Generate on a clip or card asked
 for all of it to be made.
 
@@ -998,12 +998,12 @@ timeline, is a chip under the box ("The start of shot 1 · Moon start.png", "not
 piece planned), a click away or Esc takes it off, another pick takes its place, and sent, it goes with the message
 (a piece not made yet as its place, with no file). With nothing picked there is no chip, and a typed
 message goes without the video (the user, 2026-10-28; from 2026-10-25 a chip of the whole video stood
-there, `IToolkit.Whole`, and the model was told the message was about it). A tool's cards, this one or the picks, come before the user's own files, over
+there, `ISidePanel.Whole`, and the model was told the message was about it). A tool's cards, this one or the picks, come before the user's own files, over
 the box and in the sent bubble, and each has a small muted ◀ at its left, pointing at the panel it
 comes from (the user, 2026-10-26; style `PathIcon.toolArrow`, 8 px, 4 px from the icon). Checked in
 the app on 2026-10-26 with File inspector and Video generator open and a pasted file of the user's.
 A message sent while Video generator is open carries
-the video (`IToolkit.About`): over its bubble (`UserInput.Via`, "Video generator · The Fox and the Moon ·
+the video (`ISidePanel.About`): over its bubble (`UserInput.Via`, "Video generator · The Fox and the Moon ·
 shot 2"), and for the model before the words (`UserInput.Context`) the video's folder, what each
 pick is in it (shot s2, the 2nd of 3, from 5 to 9 s, its clip or its folder; frame f1, the start of
 shot 1; the reference "Fox"; a reference's folder, with its pictures and how to name them; a
@@ -1653,7 +1653,7 @@ Servers' lists unlike the dropdowns'):
   composer (8 round the box; was 6). The space between lines of text (1 to 6) and the nudges that
   centre text (File changes' code, the tool's name on a card) are left as they are.
 - Scrollbars are the full one everywhere (see Scrollbars); Settings' sits on the window's edge, as
-  the chat's does, rather than 16 in. Every side panel opens 880 wide (`ToolkitColumns.PanelWidth`).
+  the chat's does, rather than 16 in. Every side panel opens 880 wide (`SidePanelColumns.PanelWidth`).
   The Video generator's menu says Show in folder, as the chat's cards and File changes do (it said
   Show in Explorer).
 Measured on the laptop at 125% with the real app off the screen (PrintWindow, UI Automation; the
@@ -1773,7 +1773,7 @@ every height grew by the bar's 33 (`TitleBar.Room`: 32 strip and the line): the 
 tall as before (950 px at 125%; the window 3 px taller than with Windows' bar, whose 38 were 30.4).
 A saved height without `WithTitleBar` (from before) grows by 33 once as the window opens, and is
 saved with it: 760 opened as 793, was saved as 792.8 (991 px) and stayed there. The window is as
-wide as before and its sides and bottom are Windows' frame as before. MainWindow's picture for docking the toolkit (`Shot`) is of the
+wide as before and its sides and bottom are Windows' frame as before. MainWindow's picture for docking the side panel (`Shot`) is of the
 whole content, the bar too, as it is in the client area the cover goes over.
 
 Checked on Windows 10 at 125%, with the real mouse and keyboard (`.dev/title-bar-test`, scenario.ps1),
@@ -1898,7 +1898,7 @@ all along. The process stayed at 340-510 MB (up and down with the screenshots it
 940 handles and 107 threads from the fourth minute to the end, and nothing went to the crash log.
 
 ## Notify me when done
-Settings → Notifications → **Notify me when done** (off by default) shows a Windows notification
+Settings → General → Notifications → **Notify me when done** (off by default) shows a Windows notification
 when a window's run ends or waits: done (the chat's title over the first line of the last reply, its
 Markdown marks taken out, cut at a word past 140 characters), stopped by an error ("Stopped by an
 error: " and the chat's red line), or waiting for the user's OK under "Ask me first" ("Waiting for
@@ -2610,7 +2610,7 @@ prints the traceback and exits with 0.
 | `model_server` | The model Sloperator itself runs on: `show` says the server, model and the models it offers; `connect` switches the top bar to another server, key and model, after checking the server answers (see Connecting to a model) |
 | `<server>__<tool>` | Any tool of the MCP servers you or the agent added (see below) |
 
-Settings → Safety has **Enable screenshots** and **Enable keyboard and mouse control**, both on by
+Settings → General → Safety has **Enable screenshots** and **Enable keyboard and mouse control**, both on by
 default (`agent.enableScreenshots`, `agent.enableControl`). Screenshots off takes away `screenshot`,
 `zoom` and `wait`, and with them the mouse and keyboard tools, whatever the second box says: the
 user's rule is no clicking blind, so that box is greyed out then. Control off keeps the three that
@@ -3044,17 +3044,17 @@ share; a file back as it was, or made and deleted again, drops out. The list is 
 in `Data/chats/changes/<id>.json` (written after each call, deleted with the chat), so a chat opened
 again from History shows it again; a new chat starts empty.
 
-**The panel** (Toolkit, File changes; "Diff", then "Code diff", then "Code changes", until the user renamed it on
+**The panel** (Side panel, File changes; "Diff", then "Code diff", then "Code changes", until the user renamed it on
 2026-10-24 and 2026-10-25) opens on the left of the chat as Video generator does, with the changed files listed on the
 left and their diff beside them. **It opens by itself** on the agent's first file change in a chat (the user,
 2026-10-27): once per chat, so closed it stays closed. A chat whose list already has files (one opened again from
 History) had its turn; a call that changed nothing to show (a failed write) doesn't count, as `Diff()` is read on the
 agent's thread while no change was shown yet. With another tool open (File inspector, Video generator) it doesn't take
-its place, and the chat's turn is spent. Settings, Toolkit, "Open File changes when the agent first changes a file in a
-chat" turns it off (`panels.openFileChanges`, on by default). It reads them again 250 ms after a call that may have changed files (a file written in
+its place, and the chat's turn is spent. Settings → General → Side panel, "Open File changes when the agent changes a file"
+turns it off (`panels.openFileChanges`, on by default). It reads them again 250 ms after a call that may have changed files (a file written in
 parts is read once), keeping the picked lines picked. Lines are picked with a click,
 Shift+click and Ctrl+click (a hunk's divider picks its lines, a file's name all of it; the rows themselves are never picked) and go into the chat's box as their
-file, captioned "Lines 48-49 · MainWindowViewModel.Toolkit.cs" (the lines first: a long name is
+file, captioned "Lines 48-49 · MainWindowViewModel.SidePanel.cs" (the lines first: a long name is
 cut there). A message sent then carries, for the model, the files changed (up to 30 named) and each
 picked line with its number and +/-, at most 300 lines; nothing while no file has changed. It
 says only that these are the lines the user refers to, not that they are to be changed: the user
@@ -3214,7 +3214,7 @@ commit showed no hint. In the app, two lines picked in the panel and "What do th
 do?" got an answer about exactly those lines, with no tool call.
 
 ### File inspector
-**File inspector** in the Toolkit dropdown (`FileInspectorViewModel`, `FileInspectorPanel`; least
+**File inspector** in the Side panel dropdown (`FileInspectorViewModel`, `FileInspectorPanel`; least
 420) shows one file whole on the left of the chat. A card's **Inspect** opens it on that file
 (`MainWindowViewModel.Inspect`: the dropdown switches to it through the same path as a pick, so
 the window lays the panel out before it grows); picked from the dropdown it waits for an Inspect, a
@@ -3308,7 +3308,7 @@ under the panel's bar here and in the full-screen viewer for a card's peek, see 
 
 **Selected text into the message** (the user's request, 2026-10-25, as Video generator and File changes
 do). With a file shown and nothing selected, the file is a card over the chat's box ("notes.md ·
-whole document", `IToolkit.Whole`, which now also gives the card's tooltip and icon). Text selected
+whole document", `ISidePanel.Whole`, which now also gives the card's tooltip and icon). Text selected
 in what Sloperator draws (Markdown, a table, text) goes into the box as a pick (`MainWindowViewModel.Pick`)
 captioned with where it is: "Lines 8-9 · notes.md", "Cells B4:C4 · sales.csv", "Rows 6-8", "Row 4";
 for a Word or PowerPoint file shown as its text only, "Selected text" (those lines aren't the file's).
@@ -4014,14 +4014,16 @@ versions (EV certificates no longer skip it, Microsoft, 2026).
 - `src/Sloperator.Core`: OpenAI-compatible streaming client, server probe, agent loop, tools,
   settings. Platform-neutral.
 - `src/Sloperator.Platform.Windows` (net10.0-windows): screen capture (GDI), input (SendInput),
-  host-window handling, Pause/Break.
-  Only referenced when building on Windows.
+  host-window handling, Pause/Break, and what Windows itself has in place of a library: video and
+  sound (Media Foundation), PDF pages, text recognition, notifications, file previews and signature
+  checks (COM and WinRT called through their vtables, `ComAbi`). Only referenced when building on Windows.
 - `src/Sloperator.Cli`: headless runner for trying tasks and models.
 - `src/Sloperator.App`: Avalonia 11 UI with CommunityToolkit.Mvvm.
 - `tests/Sloperator.Core.Tests`: xUnit tests (unit tests plus opt-in server integration tests).
+- `tests/Sloperator.App.Tests`: the app's windows laid out headless (the chat, lists, players, Settings).
 - `tests/Sloperator.McpTestServer`: a small MCP server the tests run in-process and as a child process.
 - `tests/Sloperator.ChatLab`: the chat lab for `chat-test.ps1`: the look-alike sites, the scripted people, the scenarios and their checks.
-- `scripts/`: `publish.ps1` (portable build), `agent-tasks.ps1` (real desktop task suite), `game2048-test.ps1` (long self-testing run, judged by `game2048-check.mjs`), `sysadmin-vm.ps1` / `sysadmin-test.ps1` with the tickets in `sysadmin/tasks/` (the sysadmin benchmark), and `chat-test.ps1` (the chat stand-in benchmark).
+- `scripts/`: `publish.ps1` (portable build), `agent-tasks.ps1` (real desktop task suite), `game2048-test.ps1` (long self-testing run, judged by `game2048-check.mjs`) and `unity2048-test.ps1` (the same game in Unity), `comfy-test.ps1` (pictures, video, sound and music with ComfyUI), `index-bench.ps1` (the folder index benchmark), `make-icon.ps1` (the app icon), `sysadmin-vm.ps1` / `sysadmin-test.ps1` with the tickets in `sysadmin/tasks/` (the sysadmin benchmark), and `chat-test.ps1` (the chat stand-in benchmark).
 
 Linux and macOS ports need an `IPlatformServices` implementation (screen, input, windows); the rest
 of the code is already cross-platform.

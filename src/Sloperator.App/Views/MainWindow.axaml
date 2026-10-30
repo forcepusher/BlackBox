@@ -233,7 +233,7 @@
       </Border>
     </DataTemplate>
 
-    <!-- The toolkit's panel, on the left of the chat. -->
+    <!-- The side panel, on the left of the chat. -->
     <DataTemplate DataType="vm:VideoGeneratorViewModel">
       <views:VideoGeneratorPanel />
     </DataTemplate>
@@ -275,16 +275,16 @@
     </DataTemplate>
   </Window.DataTemplates>
 
-  <!-- The title bar over all of it (TitleBar), the toolkit's column too. -->
+  <!-- The title bar over all of it (TitleBar), the side panel's column too. -->
   <DockPanel x:Name="Root">
   <views:TitleBar DockPanel.Dock="Top" />
-  <!-- A tool of the toolkit (Video generator) in a column of its own on the left, the chat on the right.
+  <!-- A side panel (Video generator) in a column of its own on the left, the chat on the right.
        Shown and hidden by the window as it makes room for it (MainWindow.Dock). -->
   <Grid x:Name="Columns" ColumnDefinitions="0,0,*">
-    <Border x:Name="ToolkitHost" Grid.Column="0" IsVisible="False">
-      <ContentControl x:Name="ToolkitContent" />
+    <Border x:Name="SidePanelHost" Grid.Column="0" IsVisible="False">
+      <ContentControl x:Name="SidePanelContent" />
     </Border>
-    <GridSplitter x:Name="ToolkitSplitter" Grid.Column="1" IsVisible="False" ResizeDirection="Columns" />
+    <GridSplitter x:Name="SidePanelSplitter" Grid.Column="1" IsVisible="False" ResizeDirection="Columns" />
 
   <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto">
 
@@ -297,15 +297,15 @@
              pixel at 125%, where it sat a pixel under the dropdown's word (docs/notes.md, Text in the
              middle of its box). -->
         <PathIcon DockPanel.Dock="Left" Width="10" Height="10" Margin="0,0,8,0.5" VerticalAlignment="Center" Foreground="{StaticResource BbAccent}" Data="M14 7l-5 5 5 5z" />
-        <ComboBox x:Name="ToolkitBox" DockPanel.Dock="Left" Classes="ghost" ItemsSource="{Binding ToolkitOptions}" SelectedItem="{Binding SelectedToolkit}"
+        <ComboBox x:Name="SidePanelBox" DockPanel.Dock="Left" Classes="ghost" ItemsSource="{Binding SidePanelOptions}" SelectedItem="{Binding SelectedSidePanel}"
                   VerticalAlignment="Center" AutomationProperties.Name="Side panel">
           <ComboBox.SelectionBoxItemTemplate>
-            <DataTemplate x:DataType="vm:ToolkitOption">
+            <DataTemplate x:DataType="vm:SidePanelOption">
               <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
             </DataTemplate>
           </ComboBox.SelectionBoxItemTemplate>
           <ComboBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:ToolkitOption">
+            <DataTemplate x:DataType="vm:SidePanelOption">
               <StackPanel Spacing="1">
                 <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
                 <TextBlock Classes="muted" Text="{Binding Description}"

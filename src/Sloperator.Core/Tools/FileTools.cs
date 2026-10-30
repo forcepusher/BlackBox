@@ -88,7 +88,7 @@ public sealed class ReadFileTool : Tool
             using var lines = new StringReader(text);
             return await NumberedAsync(lines, offset, limit, ct).ConfigureAwait(false);
         }
-        if (IsBinary(path))
+        if (TextFiles.IsBinary(path))
             return ToolResult.Error($"{path} is not a text file ({new FileInfo(path).Length:N0} bytes); read_file reads text, PDF and Office documents, and pictures.");
 
         // Line by line, so a log of gigabytes doesn't have to fit in memory to read a part of it.
@@ -190,17 +190,6 @@ public sealed class ReadFileTool : Tool
         {
             return false;
         }
-    }
-
-    /// <summary>A zero byte near the start, outside UTF-16 text: an image, an exe, an archive.</summary>
-    private static bool IsBinary(string path)
-    {
-        Span<byte> head = stackalloc byte[8000];
-        int read;
-        using (var stream = TextFiles.OpenRead(path))
-            read = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
-        head = head[..read];
-        return !head.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xFE]) && !head.StartsWith((ReadOnlySpan<byte>)[0xFE, 0xFF]) && head.Contains((byte)0);
     }
 }
 
@@ -318,13 +307,13 @@ public sealed class EditFileTool : Tool
         // code page stays, and so does every character the edit doesn't touch.
         var (text, encoding) = await TextFiles.ReadAllAsync(path, ct).ConfigureAwait(false);
 
-        var count = Count(text, oldText);
+        var count = Strings.Occurrences(text, oldText);
         var crlf = text.Contains("\r\n");
         // The model writes \n; in a file saved with Windows line endings that never matches.
         if (count == 0 && crlf && oldText.Contains('\n') && !oldText.Contains('\r'))
         {
             oldText = oldText.Replace("\n", "\r\n");
-            count = Count(text, oldText);
+            count = Strings.Occurrences(text, oldText);
         }
         // New lines get the file's line endings, also where old_text had none to change.
         if (crlf && newText.Contains('\n') && !newText.Contains('\r'))
@@ -340,14 +329,6 @@ public sealed class EditFileTool : Tool
             encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
         await TextFiles.WriteAllAsync(path, edited, encoding, ct).ConfigureAwait(false);
         return new ToolResult(count > 1 ? $"Edited {path}: replaced {count} occurrences." : $"Edited {path}.");
-    }
-
-    private static int Count(string text, string part)
-    {
-        var count = 0;
-        for (var i = text.IndexOf(part, StringComparison.Ordinal); i >= 0; i = text.IndexOf(part, i + part.Length, StringComparison.Ordinal))
-            count++;
-        return count;
     }
 }
 

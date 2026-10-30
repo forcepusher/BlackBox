@@ -364,7 +364,7 @@ public sealed class WindowPlacement
     public bool WithTitleBar { get; set; }
 }
 
-/// <summary>How the window's toolkit panels show what they show, as the user last left it.</summary>
+/// <summary>How the window's side panels show what they show, as the user last left it.</summary>
 public sealed class PanelSettings
 {
     /// <summary>File changes: long lines wrap inside the panel rather than run off its right edge.</summary>

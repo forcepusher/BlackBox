@@ -70,7 +70,7 @@ public sealed partial class InspectorSoundViewModel : ObservableObject, IDisposa
         (Samples, Rate, Blocks) = (mono, Math.Max(1, rate), blocks);
         Gain = loudest > 0 ? Math.Min(10f, 0.95f / loudest) : 1f;
         Length = Math.Max(0.001, Math.Max(mono.Length / (double)Rate, reader.Duration.TotalSeconds));
-        var channels = reader.Channels == 1 ? "mono" : reader.Channels == 2 ? "stereo" : $"{reader.Channels} channels";
+        var channels = Core.Media.MediaPreview.Channels(reader.Channels);
         Details = $"{Length:0.0##} s, {rate / 1000.0:0.#} kHz {channels}";
         Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(LongestTimeText)));
         return true;
@@ -176,10 +176,7 @@ public sealed partial class InspectorSoundViewModel : ObservableObject, IDisposa
     [NotifyPropertyChangedFor(nameof(PlayIcon))]
     private bool _isPlaying;
 
-    private static readonly Avalonia.Media.Geometry PlayShape = Avalonia.Media.StreamGeometry.Parse("M8 5v14l11-7z");
-    private static readonly Avalonia.Media.Geometry PauseShape = Avalonia.Media.StreamGeometry.Parse("M6 4h4v16H6zM14 4h4v16h-4z");
-
-    public Avalonia.Media.Geometry PlayIcon => IsPlaying ? PauseShape : PlayShape;
+    public Avalonia.Media.Geometry PlayIcon => PlayerIcons.Play(IsPlaying);
 
     private Playback? _playback;
 

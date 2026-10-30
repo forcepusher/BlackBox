@@ -2,13 +2,13 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Sloperator.Core.Platform;
 using SkiaSharp;
+using static Sloperator.Platform.Windows.ComAbi;
 
 namespace Sloperator.Platform.Windows;
 
 /// <summary>
 /// Windows' own text recognition (Windows.Media.Ocr, in every Windows 10 and 11, reading the
-/// languages whose OCR pack is installed), called through WinRT's ABI as <see cref="WindowsPdf"/> is,
-/// without the .NET projection. The picture is read twice, enlarged 1.5 and 2.5 times, and both
+/// languages whose OCR pack is installed), called through WinRT's ABI (<see cref="ComAbi"/>). The picture is read twice, enlarged 1.5 and 2.5 times, and both
 /// readings are kept: 12 px Segoe UI codes were all read right at 1.5x, but "VY-643" came back as
 /// "w-643" at 2x to 5x, and at 1x two of six codes were missed (2026-10-30).
 /// </summary>
@@ -20,8 +20,6 @@ internal sealed unsafe class WindowsTextReader : ITextReader
     private static readonly Guid ISoftwareBitmapFactory = new("C99FEB69-2D62-4D47-A6B3-4FDB6A07FDF8");
     private static readonly Guid IMemoryBuffer = new("FBC4DD2A-245B-11E4-AF98-689423260CF8");
     private static readonly Guid IMemoryBufferByteAccess = new("5B0D3235-4DBA-4D44-865E-8F1D0E4FD04D");
-    private static readonly Guid IClosable = new("30D5A829-7FA4-4026-83BB-D75BAE4EA99E");
-    private static readonly Guid IAsyncInfo = new("00000036-0000-0000-C000-000000000046");
 
     private const int Bgra8 = 87, Premultiplied = 0, WriteAccess = 2;
 
@@ -38,7 +36,7 @@ internal sealed unsafe class WindowsTextReader : ITextReader
     {
         lock (_gate)
         {
-            _ = CoInitializeEx(0, 0); // MTA where nothing else has been set up; an STA thread works too
+            Start();
             // Tried again each time there is none: the agent may have just installed a language's pack.
             if (_engine == 0)
                 (_engine, _maxSide) = CreateEngine();
@@ -105,7 +103,7 @@ internal sealed unsafe class WindowsTextReader : ITextReader
     {
         lock (_gate)
         {
-            _ = CoInitializeEx(0, 0);
+            Start();
             nint statics = 0, list = 0;
             try
             {
@@ -211,115 +209,11 @@ internal sealed unsafe class WindowsTextReader : ITextReader
         finally { handle.Free(); }
     }
 
-    /// <summary>The items of an IVectorView (GetAt 6, get_Size 7), each to be released by the caller.</summary>
-    private static List<nint> Items(nint vector)
-    {
-        uint count;
-        Check(((delegate* unmanaged[Stdcall]<nint, uint*, int>)Slot(vector, 7))(vector, &count));
-        var items = new List<nint>((int)count);
-        for (uint i = 0; i < count; i++)
-        {
-            nint item;
-            Check(((delegate* unmanaged[Stdcall]<nint, uint, nint*, int>)Slot(vector, 6))(vector, i, &item));
-            items.Add(item);
-        }
-        return items;
-    }
-
-    /// <summary>A string property (an HSTRING getter at <paramref name="slot"/>).</summary>
-    private static string Text(nint obj, int slot)
-    {
-        nint hstring;
-        Check(((delegate* unmanaged[Stdcall]<nint, nint*, int>)Slot(obj, slot))(obj, &hstring));
-        try
-        {
-            uint length;
-            var chars = WindowsGetStringRawBuffer(hstring, &length);
-            return chars == null ? "" : new string(chars, 0, (int)length);
-        }
-        finally { _ = WindowsDeleteString(hstring); }
-    }
-
-    /// <summary>Waits for a WinRT async operation to end; throws what it failed with (see <see cref="WindowsPdf"/>).</summary>
-    private static void Wait(nint async)
-    {
-        var info = Query(async, IAsyncInfo);
-        try
-        {
-            // IAsyncInfo: get_Status 7 (0 started, 1 completed, 2 canceled, 3 error), get_ErrorCode 8.
-            for (var spins = 0; ; spins++)
-            {
-                int status;
-                Check(((delegate* unmanaged[Stdcall]<nint, int*, int>)Slot(info, 7))(info, &status));
-                if (status == 1)
-                    return;
-                if (status == 2)
-                    throw new OperationCanceledException();
-                if (status == 3)
-                {
-                    int error;
-                    Check(((delegate* unmanaged[Stdcall]<nint, int*, int>)Slot(info, 8))(info, &error));
-                    Marshal.ThrowExceptionForHR(error);
-                }
-                if (spins < 20) Thread.Yield();
-                else Thread.Sleep(1);
-            }
-        }
-        finally { Release(info); }
-    }
-
-    /// <summary>IClosable.Close (6), through the object's own IClosable.</summary>
-    private static void Close(nint obj)
-    {
-        var closable = Query(obj, IClosable);
-        try { Check(((delegate* unmanaged[Stdcall]<nint, int>)Slot(closable, 6))(closable)); }
-        finally { Release(closable); }
-    }
-
-    private static nint Factory(string runtimeClass, Guid iid)
-    {
-        nint name;
-        fixed (char* chars = runtimeClass)
-            Check(WindowsCreateString(chars, (uint)runtimeClass.Length, &name));
-        try
-        {
-            nint factory;
-            Check(RoGetActivationFactory(name, &iid, &factory));
-            return factory;
-        }
-        finally { _ = WindowsDeleteString(name); }
-    }
-
-    private static nint Query(nint obj, Guid iid)
-    {
-        nint result;
-        Check(((delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int>)Slot(obj, 0))(obj, &iid, &result));
-        return result;
-    }
-
-    private static void Check(int hr)
-    {
-        if (hr < 0) Marshal.ThrowExceptionForHR(hr);
-    }
-
-    private static void* Slot(nint obj, int index) => (*(void***)obj)[index];
-
-    private static void Release(nint obj)
-    {
-        if (obj != 0) ((delegate* unmanaged[Stdcall]<nint, uint>)Slot(obj, 2))(obj);
-    }
-
     [StructLayout(LayoutKind.Sequential)]
     private struct Rect { public float X, Y, Width, Height; }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Plane { public int StartIndex, Width, Height, Stride; }
-
-    [DllImport("ole32.dll")] private static extern int CoInitializeEx(nint reserved, uint coInit);
-    [DllImport("combase.dll")] private static extern int RoGetActivationFactory(nint activatableClassId, Guid* iid, nint* factory);
-    [DllImport("combase.dll")] private static extern int WindowsCreateString(char* source, uint length, nint* hstring);
-    [DllImport("combase.dll")] private static extern int WindowsDeleteString(nint hstring);
-    [DllImport("combase.dll")] private static extern char* WindowsGetStringRawBuffer(nint hstring, uint* length);
 }
 
 /// <summary>

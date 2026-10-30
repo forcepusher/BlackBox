@@ -8,7 +8,7 @@ namespace Sloperator.Core.Settings;
 /// it: the window's least counted the panel as 480, so the chat was squeezed to a few letters across
 /// with the fields of its top bar over each other.
 /// </summary>
-public static class ToolkitColumns
+public static class SidePanelColumns
 {
     /// <summary>How narrow the chat may get: the window's own least width, as set in its markup.</summary>
     public const double ChatMin = 660;
