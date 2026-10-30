@@ -1,4 +1,5 @@
 using Sloperator.Core.Agent;
+using Sloperator.Core.Platform;
 using SkiaSharp;
 using Xunit;
 
@@ -35,5 +36,32 @@ public class PointingCalibrationTests
         var red = image.GetPixel((int)(0.18 * 2560), (int)(0.27 * 1088));
         Assert.True(red.Red > 180 && red.Green < 90, red.ToString());
         Assert.Equal(SKColors.White, image.GetPixel(5, 5));
+    }
+
+    private static TextLine Line(params (string Text, double X, double Y)[] words) =>
+        new(string.Join(" ", words.Select(w => w.Text)), [.. words.Select(w => new TextWord(w.Text, w.X, w.Y, 40, 16))]);
+
+    [Fact]
+    public void Words_on_a_screenshot_are_picked_once_each_spread_out_and_away_from_the_middle()
+    {
+        var lines = new[]
+        {
+            Line(("File", 10, 10), ("Edit", 60, 10), ("Hierarchy", 1300, 80)),
+            Line(("Inspector", 2400, 900), ("OK", 1280, 540), ("12.5", 600, 600)),
+            Line(("Edit", 1200, 500), ("Project", 100, 1000)),
+        };
+        var marks = PointingCalibration.Words(lines, 2560, 1080);
+        // "Edit" is there twice, "OK" too short, "12.5" not a word.
+        Assert.Equal(["File", "Inspector", "Project"], marks.Select(m => m.Name));
+        Assert.Equal(0.9453, marks[1].X, 3); // (2400 + 20) / 2560
+    }
+
+    [Fact]
+    public void Answers_about_words_are_read_as_pixels_or_the_grid()
+    {
+        PointingCalibration.Mark[] marks = [new("Inspector", 0.9453, 0.8407), new("File", 0.0117, 0.0167), new("Project", 0.0469, 0.9333)];
+        Assert.Null(PointingCalibration.Read("""{"Inspector": [2420, 908], "File": [30, 18], "Project": [120, 1008]}""", 2560, 1080, marks));
+        Assert.Equal(1000, PointingCalibration.Read("""{"Inspector": [945, 841], "File": [12, 17], "Project": [47, 933]}""", 2560, 1080, marks));
+        Assert.Contains("\"Inspector\": [x, y]", PointingCalibration.Question(2560, 1080, marks));
     }
 }
