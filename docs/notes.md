@@ -1419,6 +1419,12 @@ they don't fit. The heading (the logo, "What should I do on your computer?" and 
 a row of its own right over the chat box, out of the scroll and always in view (the user's sketch,
 2026-10-30; until then it was over the cards and scrolled with them). It is centred on the chat box,
 so it sits half the scroll bar's width right of the cards' middle. Both go with the first message.
+The chat's `ScrollViewer` spans the heading's row too, so its bar runs from under the settings bar
+down to the chat box on the start screen as in a chat (the user, 2026-10-30: stopping at the heading
+it was "a pure OCD trigger"); `FitIntroHeading` gives its content presenter a bottom margin as tall
+as the heading while the heading shows, so what scrolls still stops at the heading's top and the
+cards never go under it. Measured at 100% and 125%: the bar's box is the same on the start screen and
+in a chat, and the cards and heading are where they were to the pixel.
 In a window too short for both (`MainWindow.FitIntroHeading`) the heading gives the cards its room
 when they would get less than 64: the smallest window with nine lines typed (the box grows to 200),
 or with a banner up; it comes back as the box shrinks. Whether it shows is worked out from the room

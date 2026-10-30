@@ -41,6 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   looking at its window. Click it to bring that window to the front.
 
 ### Changed
+- On the start screen the scrollbar runs down to the chat box, as it does in a chat, instead of
+  stopping above "What should I do on your computer?".
+- The chat box's hints end without "…".
 - **Screenshot size** under Settings → Advanced replaces the width × height box: **Up to 720p tall**,
   **Up to 1080p tall** (the default) or **Native**. Screenshots keep your screen's width and shape and are
   only scaled down when the screen is taller, so ultrawide screens keep their detail.

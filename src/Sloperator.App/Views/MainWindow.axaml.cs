@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
@@ -55,6 +56,11 @@ public partial class MainWindow : Window
         // pin the offset to the true end. Doing it per layout pass rather than per scroll event
         // is what keeps the last line from being clipped while text is still arriving.
         ChatScroll.LayoutUpdated += (_, _) => PinToBottom();
+        ChatScroll.TemplateApplied += (_, e) =>
+        {
+            _chatPresenter = e.NameScope.Find<ScrollContentPresenter>("PART_ContentPresenter");
+            FitIntroHeading();
+        };
         ChatScroll.SizeChanged += (_, _) => FitIntroHeading();
         IntroHeading.SizeChanged += (_, _) => FitIntroHeading();
         InputRow.SizeChanged += (_, _) => FitIntroHeading();
@@ -130,7 +136,15 @@ public partial class MainWindow : Window
             _headingHeight = IntroHeading.Bounds.Height;
         var room = InputRow.Bounds.Top - ChatScroll.Bounds.Top;
         IntroHeading.IsVisible = room - _headingHeight >= 64;
+        // The chat runs over the heading's row, so its bar goes down to the chat box on the start
+        // screen as in a chat (the user, 2026-10-30: it stopped at the heading); what scrolls stops
+        // at the heading's top, the cards never going under it.
+        if (_chatPresenter is not null)
+            _chatPresenter.Margin = new Thickness(0, 0, 0, IntroHeading.IsVisible ? IntroHeading.Bounds.Height : 0);
     }
+
+    /// <summary>What scrolls in the chat, inside its bar (see FitIntroHeading).</summary>
+    private ScrollContentPresenter? _chatPresenter;
 
     private MainWindowViewModel Vm => (MainWindowViewModel)DataContext!;
 

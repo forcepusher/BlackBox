@@ -492,7 +492,9 @@
          partly out of view focused its button and scrolled the whole picture in, a jump under the mouse. -->
     <!-- Its bar always shows (the user, 2026-10-24: waiting for it to show up to grab it was annoying), as every one does (see App.Initialize). -->
     <!-- Transparent, so a right-click between messages opens the chat's menu too (see MainWindow.OnChatMenu). -->
-    <ScrollViewer x:Name="ChatScroll" Grid.Row="3" HorizontalScrollBarVisibility="Disabled" BringIntoViewOnFocusChange="False"
+    <!-- Over the intro's heading's row too, so its bar runs down to the chat box on the start screen
+         as in a chat; what scrolls stops at the heading (MainWindow.FitIntroHeading). -->
+    <ScrollViewer x:Name="ChatScroll" Grid.Row="3" Grid.RowSpan="2" HorizontalScrollBarVisibility="Disabled" BringIntoViewOnFocusChange="False"
                   Background="Transparent">
       <StackPanel Classes="conversation" Classes.unused="{Binding ShowIntro}" MaxWidth="860" Margin="16,12,16,16" Spacing="12">
         <!-- Unclipped (an ItemsControl and a ContentControl clip to their bounds by default), so a
