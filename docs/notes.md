@@ -2051,7 +2051,15 @@ the videos menu, a right-click menu opened from a click, sat where the pointer w
 the button's edge, over "Frame size"), and History and Servers hung from their right edge (334 and
 297 px left of the button); after, all six lists are 0 px off the button's left and bottom edges.
 History's 340-wide list still ends inside the window at its narrowest (about 15 px to spare at its 660 DIPs),
-Servers' with more. `MenuButton` builds a new `MenuFlyout` each time it opens: items added in
+Servers' with more. History and Servers then (the user, 2026-10-30, "Same with Servers") hang flush with their
+button's right edge instead and grow leftwards (`Dropdown.FromRight`, `BottomEdgeAlignedRight`):
+both sit at the right of their row, and their 340-wide lists are far wider than the button. Measured
+on the real app at 125% and 100% (a DPI-unaware build), empty and with three rows: the list's last
+column of border ink is the button's last column, its top row the one under the button, its width
+unchanged (427 px at 125%, 342 at 100%). By a window pushed past the screen's left edge the list
+flips to the button's left edge, or slides to the screen's edge, rather than going off the screen
+(Avalonia's popup positioner; `ListPlacementTests` checks this, a narrower and a wider list, and that
+the dropdowns still hang from the left). `MenuButton` builds a new `MenuFlyout` each time it opens: items added in
 `Opening` to one shown before stayed out of it (an empty 2-px popup), and as a `ContextMenu` opened
 from Click a second click on the button opened it again rather than closing it. The box Rename puts
 up (a video's name, a card, a sound) covers the thing renamed from its top left corner; centred above

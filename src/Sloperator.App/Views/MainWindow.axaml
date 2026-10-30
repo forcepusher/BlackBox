@@ -324,7 +324,7 @@
               <TextBlock Text="History" VerticalAlignment="Center" />
             </DockPanel>
             <Button.Flyout>
-              <Flyout Placement="{x:Static views:Dropdown.Placement}" FlyoutPresenterClasses="list">
+              <Flyout Placement="{x:Static views:Dropdown.FromRight}" FlyoutPresenterClasses="list">
                 <Panel Width="340">
                   <TextBlock Classes="muted" IsVisible="{Binding !HasPastChats}" TextWrapping="Wrap" Margin="12,6"
                              Text="No chats yet." />
@@ -391,7 +391,7 @@
               <TextBlock Text="Servers" VerticalAlignment="Center" />
             </DockPanel>
             <Button.Flyout>
-              <Flyout Placement="{x:Static views:Dropdown.Placement}" FlyoutPresenterClasses="list">
+              <Flyout Placement="{x:Static views:Dropdown.FromRight}" FlyoutPresenterClasses="list">
                 <Panel Width="340">
                   <TextBlock Classes="muted" IsVisible="{Binding !HasSavedServers}" TextWrapping="Wrap" Margin="12,6"
                              Text="No servers yet." />

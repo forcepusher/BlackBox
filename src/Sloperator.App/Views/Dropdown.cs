@@ -4,12 +4,16 @@ namespace Sloperator.App.Views;
 
 /// <summary>
 /// Where every list opened by a click hangs: under its button, flush with the button's left edge.
-/// The dropdowns (App.axaml), History, Servers (<c>{x:Static views:Dropdown.Placement}</c>) and
-/// <see cref="MenuButton"/>'s menu all take it from here. A right-click's menu opens at the pointer instead.
+/// The dropdowns (App.axaml) and <see cref="MenuButton"/>'s menu take it from here. History and
+/// Servers (<c>{x:Static views:Dropdown.FromRight}</c>) hang flush with their button's right edge
+/// instead, growing leftwards. A right-click's menu opens at the pointer.
 /// </summary>
 public static class Dropdown
 {
     public const PlacementMode Placement = PlacementMode.BottomEdgeAlignedLeft;
+
+    /// <summary>Under the button, the list's right edge on the button's right edge.</summary>
+    public const PlacementMode FromRight = PlacementMode.BottomEdgeAlignedRight;
 }
 
 /// <summary>

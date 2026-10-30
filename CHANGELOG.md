@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   looking at its window. Click it to bring that window to the front.
 
 ### Changed
+- The History and Servers lists open under their button's right edge and grow to the left.
 - The File inspector in the Side panel menu says "Look inside any file" (it said "Any file from the
   chat", but it opens any file).
 - In the Video generator, a clip nothing is said of yet says "Say in the chat what happens in it.",
