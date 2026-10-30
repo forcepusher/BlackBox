@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Releases are built by GitHub Actions and signed through SignPath, so Windows shows Sloperator's publisher instead of an unknown app once the signature has built up trust.
 - Right-click any picture in Sloperator for **Copy image**, and any other file (a video, a sound, a
   document) for **Copy file**: in the chat, the full-screen viewer, the File inspector, the Video
   generator and File changes.

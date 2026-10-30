@@ -3713,6 +3713,22 @@ rather than per trial, draws the mouse pointer on screenshots as the real screen
 count a click the tool refused (bad coordinates) as a try. Those numbers aren't comparable with the
 ones above.
 
+### Releases
+`.github/workflows/release.yml` builds `Sloperator.exe` with `publish.ps1` on GitHub's
+`windows-latest`. A published GitHub release (tag and notes, no exe) starts it: the unsigned exe is
+uploaded as an artifact, sent to SignPath (free signing for open source from SignPath Foundation,
+whose certificate signs it), the run waits up to an hour for the approver to accept the request on
+signpath.io, checks the returned exe's Authenticode signature, and attaches it to the release.
+Settings it reads: secret `SIGNPATH_API_TOKEN` (no token: nothing is signed, the unsigned exe is
+attached), variables `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG` (default `Sloperator`) and
+`SIGNPATH_SIGNING_POLICY_SLUG` (default `release-signing`). The SignPath project's artifact
+configuration is a zip (upload-artifact's) holding one PE file, `Sloperator.exe`. A push that
+changes the build (the workflow, publish.ps1, pack-runtime.cs, the project files) builds without
+signing. SignPath Foundation asks for the code signing policy in the README.
+Why: unsigned, every new version starts with no SmartScreen reputation, so every download shows
+"Windows protected your PC"; signed, reputation builds on the certificate and carries to later
+versions (EV certificates no longer skip it, Microsoft, 2026).
+
 ## Project structure
 - `src/Sloperator.Core`: OpenAI-compatible streaming client, server probe, agent loop, tools,
   settings. Platform-neutral.
