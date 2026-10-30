@@ -2539,7 +2539,7 @@ on the grid and 3/28 in pixels (31B through OpenRouter: 1/28 and 0/28). The user
 model, no forks by model name. Zoom's rulers, `mouse_drag` and pictures are all in pixels.
 
 Screenshots are scaled down to Settings → Advanced → Screenshot size, keeping their shape and never
-scaled up (`AgentSettings.ScreenshotSize`: Up to 720p, Up to 1080p, Native). Only the height counts;
+scaled up (`AgentSettings.ScreenshotSize`: Up to 720p tall, Up to 1080p tall, Native). Only the height counts;
 width is left alone entirely. A width × height box before it was dropped on 2026-10-16 for
 always-native, and came back because a 4K screen at full resolution takes four times the context of
 Full HD; on 30 October 2026 the user replaced the box, which they found misleading, with these three

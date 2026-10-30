@@ -26,8 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   looking at its window. Click it to bring that window to the front.
 
 ### Changed
-- **Screenshot size** under Settings → Advanced replaces the width × height box: **Up to 720p**,
-  **Up to 1080p** (the default) or **Native**. Screenshots keep your screen's width and shape and are
+- **Screenshot size** under Settings → Advanced replaces the width × height box: **Up to 720p tall**,
+  **Up to 1080p tall** (the default) or **Native**. Screenshots keep your screen's width and shape and are
   only scaled down when the screen is taller, so ultrawide screens keep their detail.
 - Shorter texts throughout: the start screen, tooltips, server status lines, Settings, the Video
   generator and the File inspector say the same in fewer words, and tooltips that only repeated a

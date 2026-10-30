@@ -36,7 +36,7 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
     // ---- Screenshot size ---------------------------------------------------------------
 
     /// <summary>In <see cref="ScreenshotSize"/> order.</summary>
-    public string[] ScreenshotSizes { get; } = ["Up to 720p", "Up to 1080p", "Native"];
+    public string[] ScreenshotSizes { get; } = ["Up to 720p tall", "Up to 1080p tall", "Native"];
 
     public int ScreenshotSizeIndex
     {
