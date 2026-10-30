@@ -2621,6 +2621,20 @@ in and check; a second end stands. It is the one end-of-answer nudge kept after 
 27 October, and only for this case. Same base and bench: 94 first and 107 in the end (13 of 18 misses
 fixed), against 96 and 104 without it; no trial ended as done after a miss, against four.
 
+What was left was finding, not aiming: one code among some 200 cells of a table, a word among
+paragraphs, which Qwen looked for zoom by zoom and often gave up on. `find_text` reads the screen
+with Windows' own text recognition (`WindowsTextReader`: Windows.Media.Ocr through WinRT's ABI, like
+`WindowsPdf`, so no projection, no new DLL and the same target framework) and gives the x/y of each
+place the text is, in screenshot coordinates, with the line it is in; failing that, the readings
+closest to it (within a third of its letters, with O/0 and l/I/1 taken as one), since Windows read
+"VY-643" in a table as "w-643". The screen is read twice, enlarged 1.5 and 2.5 times, and both
+readings kept: on six 12 px Segoe UI codes 1.5x read all six, 2x to 5x read "VY" as "w", 1x missed
+two. Each call takes 100 to 300 ms. Where no OCR language is installed the tool says so. On the click
+benchmark (pixels, 3 retries, 30 October 2026) Qwen hit 97 of 114 first and 113 in the end, against
+92/102 and 89/101 in two runs without it (two runs of the same thing differ by about 3 first, and 27
+of 114 trials flip): tables 5/5 (from 2/5), half-covered buttons 5/5 (from 2/5 and 1/5), every
+scene but one 5/5 in the end, all 16 first-click misses fixed. It called find_text 40 times.
+
 Pixel coordinates are described with the image's size ("pixels of the screenshot, which is
 2560x1088"). Told only "pixels of the screenshot", DeepSeek V4.1 Flash answered on a 0-1000 grid, the
 way it was trained to point: on a 2560x1080 Unity screenshot it put the Hierarchy tab, at x 1368, at

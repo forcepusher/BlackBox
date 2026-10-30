@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- The agent can find text on the screen with Windows' own text recognition, so it finds a label, a
+  link or a value in a big table or a page of text in one step instead of zooming around for it.
 - Right-click any picture in Sloperator for **Copy image**, and any other file (a video, a sound, a
   document) for **Copy file**: in the chat, the full-screen viewer, the File inspector, the Video
   generator and File changes.
