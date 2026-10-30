@@ -73,7 +73,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
     /// <summary>Said in the middle of the panel: how to open a file in it, that it is loading, or why it can't be shown.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMessage))]
-    private string? _message = "Press Inspect on a file in the chat, open one with the folder above, or drop one here.";
+    private string? _message = "Inspect a file from the chat, or drop one here.";
 
     public bool HasMessage => Message is not null;
 
@@ -360,7 +360,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IToolkit
         }
         if (!FileInspector.LooksLikeText(path))
         {
-            Post(load, () => (Details, Message) = (size, "Nothing on this PC previews this kind of file. Its card in the chat has Show in folder."));
+            Post(load, () => (Details, Message) = (size, "No preview for this kind of file."));
             return;
         }
         var (source, _) = FileInspector.ReadText(path);

@@ -362,8 +362,7 @@ public partial class MainWindow : Window
             items.Add(undo);
         }
         var compact = new MenuItem { Header = "Compact context", IsEnabled = Vm.CanCompactContext };
-        ToolTip.SetTip(compact, "The model writes a handoff note on the conversation so far, and its context starts afresh from it: " +
-                                  "your messages, the note and the latest screenshot. During a task it happens before the model's next step.");
+        ToolTip.SetTip(compact, "Start a fresh context from a handoff note");
         compact.Click += (_, _) => Vm.CompactContext();
         items.Add(new Separator());
         items.Add(compact);

@@ -138,7 +138,7 @@ public sealed partial class VideoGeneratorViewModel
         // show as being made, and the frame it finished wrote over the version put back.
         if (_chat.VideoCall() is { } call && IsThisVideo(call.Args))
         {
-            Status = "Sloperator is making a piece of this video in the chat: put a version back once it is done.";
+            Status = "Wait until it's made to put a version back.";
             return;
         }
         SaveNow(force: true);

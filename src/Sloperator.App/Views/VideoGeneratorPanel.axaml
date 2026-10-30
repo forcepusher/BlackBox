@@ -174,7 +174,7 @@
       <DockPanel MinHeight="32">
         <views:ToolkitClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
         <Button DockPanel.Dock="Right" Classes="primary" Content="Make the video" Command="{Binding MakeVideoCommand}"
-                ToolTip.Tip="Sloperator makes in the chat what isn't made yet or has changed, looks at each piece and fixes what it finds, then joins the video and looks at it" />
+                ToolTip.Tip="Makes what's missing or changed, checks it and joins the video" />
         <!-- Short of room (the window made narrower), the video's name is cut short rather than the
              fields going over the buttons: its column is the one that gives way. -->
         <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left" Margin="0,0,12,0">
@@ -226,10 +226,9 @@
               <Border Height="92">
                 <TextBlock Text="References" Margin="10,10,6,0" />
               </Border>
-              <StackPanel Height="112" Spacing="4">
+              <Border Height="112">
                 <TextBlock Text="Video clips" Margin="10,10,6,0" />
-                <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="11" Margin="10,0,6,0" Text="Drag a clip's right edge to change its length" />
-              </StackPanel>
+              </Border>
               <ItemsControl ItemsSource="{Binding SoundLines}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:SoundLineItem">
@@ -298,7 +297,7 @@
                   <Canvas>
                     <Button Classes="bare" Canvas.Left="{Binding AddReferenceX}" Canvas.Top="4" Width="56" Height="84" Click="OnCreateReference"
                             HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
-                            ToolTip.Tip="A new reference: a picture or video of yours, or a picture Sloperator generates" AutomationProperties.Name="New reference">
+                            ToolTip.Tip="Add a reference" AutomationProperties.Name="New reference">
                       <Panel>
                         <Rectangle Stroke="{StaticResource BbBorder}" StrokeThickness="1.5" StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
                         <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" />
@@ -356,7 +355,7 @@
                   <Canvas>
                     <Button Classes="bare" Canvas.Left="{Binding AddShotX}" Canvas.Top="4" Width="56" Height="104" Command="{Binding AddShotCommand}"
                             HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
-                            ToolTip.Tip="A clip after the last one; then say in the chat what happens in it" AutomationProperties.Name="New clip">
+                            ToolTip.Tip="Add a clip" AutomationProperties.Name="New clip">
                       <Panel>
                         <Rectangle Stroke="{StaticResource BbBorder}" StrokeThickness="1.5" StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
                         <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" />
@@ -376,7 +375,7 @@
                           <Canvas>
                             <Button Classes="bare" Canvas.Left="{Binding AddX}" Canvas.Top="4" Width="56" Height="40" Click="OnCreateSound"
                                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Cursor="Hand"
-                                    ToolTip.Tip="A new sound: a file of yours, foley for the clips under it, or music" AutomationProperties.Name="New sound">
+                                    ToolTip.Tip="Add a sound" AutomationProperties.Name="New sound">
                               <Panel>
                                 <Rectangle Stroke="{StaticResource BbBorder}" StrokeThickness="1.5" StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
                                 <PathIcon Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" Width="16" Height="16" Foreground="{StaticResource BbMuted}" />
@@ -443,7 +442,7 @@
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
           <StackPanel Spacing="8" Margin="16,8">
             <Button Classes="primary" Content="Use this version" Command="{Binding UseVersionCommand}" IsVisible="{Binding IsVersionShown}" HorizontalAlignment="Left"
-                    ToolTip.Tip="Put this version back in the video; the one in it now is kept as a version" />
+                    ToolTip.Tip="Use this version (the current one is kept)" />
             <SelectableTextBlock Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" FontSize="12" />
             <TextBlock Classes="muted" Text="{Binding MadeWith}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding MadeWith, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             <SelectableTextBlock Text="{Binding Look}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding HasLook}"
