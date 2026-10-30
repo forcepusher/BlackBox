@@ -76,7 +76,7 @@
                     AutomationProperties.Name="Screenshot size" />
         </Grid>
         <TextBlock Classes="muted" TextWrapping="Wrap"
-                   Text="Screenshots keep your screen's shape and are only scaled down, never up. Bigger ones show more detail and use more context." />
+                   Text="Never scaled up. Bigger shows more detail but uses more context." />
       </StackPanel>
     </ScrollViewer>
   </DockPanel>
