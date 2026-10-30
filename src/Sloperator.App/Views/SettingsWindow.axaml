@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Sloperator.App.ViewModels"
+        xmlns:views="using:Sloperator.App.Views"
         x:Class="Sloperator.App.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Sloperator settings"
@@ -11,6 +12,11 @@
   <Window.Styles>
     <Style Selector="Grid.form > ComboBox">
       <Setter Property="Margin" Value="0,4" />
+    </Style>
+    <!-- A label sat a pixel under the words of the field beside it at 125%, where every label of the
+         chat's bars is level with its field's: 0.8 more under it lifts it that pixel. -->
+    <Style Selector="Grid.form > TextBlock.label">
+      <Setter Property="Margin" Value="0,0,0,0.8" />
     </Style>
     <!-- NumericUpDown isn't in the UI Automation tree, only its text box: give that the field's name. -->
     <Style Selector="NumericUpDown /template/ TextBox#PART_TextBox">
@@ -34,7 +40,11 @@
     <ScrollViewer>
       <StackPanel Spacing="4" Margin="16,8,28,24">
         <TextBlock Classes="h2" Text="Side panel" />
-        <CheckBox IsChecked="{Binding Panels.OpenFileChanges}" Content="Open File changes when the agent first changes a file in a chat" />
+        <CheckBox IsChecked="{Binding Panels.OpenFileChanges}" Content="Open File changes when the agent changes a file" />
+
+        <TextBlock Classes="h2" Text="Notifications" />
+        <CheckBox IsChecked="{Binding Notify.WhenDone}" Content="Notify me when done"
+                  ToolTip.Tip="A Windows notification when a task is done, stops on an error or waits for your OK, unless you are looking at its window." />
 
         <TextBlock Classes="h2" Text="Safety" />
         <Grid Classes="form" ColumnDefinitions="160,*">
@@ -50,15 +60,14 @@
                  Watermark="For example: my documents are in D:\Docs. Use Firefox for browsing. Answer in German." />
 
         <TextBlock Classes="h2" Text="MCP servers" />
-        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Tools from other programs, like Blender. Sloperator adds what a task needs here by itself." />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Tools from other programs, like Blender. Sloperator adds them as needed."
+                   ToolTip.Tip="{Binding Paths.McpConfigFile, StringFormat='Kept in {0}'}" />
         <TextBox x:Name="McpBox" Text="{Binding McpConfigText}" Watermark="{Binding McpExample}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
                  FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12" MinHeight="200" Margin="0,8,0,0"
                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                 ToolTip.Tip="You can paste a server's &quot;mcpServers&quot; block from its instructions here too: Claude Desktop, LM Studio and Cursor use the same format." />
-        <SelectableTextBlock Classes="muted error" TextWrapping="Wrap" Text="{Binding McpError}" IsVisible="{Binding HasMcpError}" />
-        <SelectableTextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
-        <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="Sloperator starts these when you click Save and each time it opens."
-                   ToolTip.Tip="{Binding Paths.McpConfigFile, StringFormat='Kept in {0}'}" />
+                 ToolTip.Tip="Same format as Claude Desktop, LM Studio and Cursor" />
+        <views:SelectableText Classes="muted error" TextWrapping="Wrap" Text="{Binding McpError}" IsVisible="{Binding HasMcpError}" />
+        <views:SelectableText Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
 
         <TextBlock Classes="h2" Text="Advanced" />
         <Grid Classes="form" ColumnDefinitions="160,*">
@@ -67,7 +76,7 @@
                     AutomationProperties.Name="Screenshot size" />
         </Grid>
         <TextBlock Classes="muted" TextWrapping="Wrap"
-                   Text="How tall screenshots may be; taller screens are scaled down, keeping their shape. Smaller ones use less context, but clicks miss more." />
+                   Text="Taller screens are scaled down, never up. Smaller uses less context, but clicks miss more." />
       </StackPanel>
     </ScrollViewer>
   </DockPanel>

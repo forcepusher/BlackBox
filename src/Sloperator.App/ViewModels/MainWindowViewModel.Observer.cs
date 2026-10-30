@@ -98,8 +98,7 @@ public sealed partial class MainWindowViewModel
     {
         if (usage.Size <= 0) return;
         ContextUsage = $"{usage.Used / 1000.0:0}k of {ContextSizes.Format(usage.Size)} used";
-        ContextUsageTip = $"The conversation fills about {usage.Used:N0} of the model's {usage.Size:N0} tokens of context. " +
-                          $"At {usage.Reset:N0} the model writes a handoff note and Sloperator starts a fresh context with it.";
+        ContextUsageTip = $"Starts a fresh context from a handoff note at {usage.Reset:N0} tokens.";
     }
 
     /// <summary>
@@ -147,7 +146,9 @@ public sealed partial class MainWindowViewModel
         {
             if (_runDetached) return Task.FromResult(false);
             var item = FindOrAddTool(call, summary);
-            return item.WaitForApprovalAsync(ct);
+            var waiting = item.WaitForApprovalAsync(ct);
+            NotifyUser(FirstLine($"Waiting for your OK: {summary}"));
+            return waiting;
         });
     }
 
@@ -297,7 +298,56 @@ public sealed partial class MainWindowViewModel
             // stopped with. A message of the user's that came too late for it is the next run's.
             if (Items.LastOrDefault(i => i is not UserMessageItem && i.At >= started) is { } end)
                 end.RunTook = at - started;
+
+            // Not for a stop: the user stopped it. Nor for a task that goes on with what they sent
+            // too late for this run, nor for a context compacted, which the user waits for.
+            if (reason == AgentStopReason.Error)
+                NotifyUser(FirstLine($"Stopped by an error: {detail ?? "Something went wrong."}"));
+            else if (reason == AgentStopReason.Completed && !compacting && !HasQueued)
+                NotifyUser(Items.OfType<AssistantMessageItem>().LastOrDefault(m => m.At >= started && m.HasText) is { } reply ? FirstLine(reply.ShownText) : "Done.");
         });
+    }
+
+    /// <summary>
+    /// The run ended or waits for the user: said in a Windows notification, when they asked for one
+    /// in Settings and aren't looking at this window (see <see cref="ChatWindows.Notify"/>).
+    /// </summary>
+    private void NotifyUser(string line)
+    {
+        if (_settings.Notify.WhenDone && !_closed)
+            _windows.Notify(this, _chatTitle ?? "Sloperator", line);
+    }
+
+    /// <summary>
+    /// A reply's first line, for a notification: its first paragraph without the Markdown marks,
+    /// cut short past <paramref name="max"/> characters, about two lines of a notification.
+    /// </summary>
+    public static string FirstLine(string markdown, int max = 140)
+    {
+        // The first line of text, not of a code block.
+        var (line, inCode) = ("", false);
+        foreach (var text in markdown.Split('\n').Select(l => l.Trim()))
+        {
+            if (text.StartsWith("```", StringComparison.Ordinal))
+                inCode = !inCode;
+            else if (!inCode && text.Length > 0)
+            {
+                line = text;
+                break;
+            }
+        }
+        // Headings, quotes and list marks at its start; emphasis and code marks anywhere.
+        line = System.Text.RegularExpressions.Regex.Replace(line, @"^(#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)", "");
+        line = line.Replace("**", "").Replace("__", "").Replace("`", "");
+        line = System.Text.RegularExpressions.Regex.Replace(line, @"\[([^\]]*)\]\([^)]*\)", "$1");
+        line = System.Text.RegularExpressions.Regex.Replace(line, @"\s+", " ").Trim();
+        if (line.Length > max)
+        {
+            // At the last word that fits.
+            var cut = line.LastIndexOf(' ', max - 1);
+            line = line[..(cut > 0 ? cut : max - 1)].TrimEnd(',', ';', ':', ' ') + "…";
+        }
+        return line.Length > 0 ? line : "Done.";
     }
 
     private ToolCallItem FindOrAddTool(ToolCall call, string summary)

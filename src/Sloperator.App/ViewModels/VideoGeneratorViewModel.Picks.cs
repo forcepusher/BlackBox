@@ -271,16 +271,16 @@ public sealed partial class VideoGeneratorViewModel
         {
             { Piece: ShotItem shot } => new PictureView(shot.First?.Thumbnail, $"{shot.Title} is not made yet", shot.Summary),
             { Piece: FrameItem { Frame.Reference: true, Frame.Prompt.Length: 0 } reference } => new PictureView(null, reference.Title,
-                "A new image: pick a file of yours for it (File… on its card, or drop one there), or say in the chat what to generate."),
+                "Pick a file, or say in the chat what to make."),
             { Piece: SoundItem { IsNew: true } sound } => new PictureView(null, sound.Title,
-                "A new sound: File… copies a sound of yours in (or drop one there), Foley makes the sounds of what the clips under it show, Music makes a song. Or say in the chat what it should be."),
+                "Pick File…, Foley or Music, or say in the chat what it should be."),
             { Piece: SoundItem { Sound.Source: VideoSound.Foley } foley } => new PictureView(null, $"{foley.Title} is not made yet",
-                "Foley: Sloperator makes the sounds of what the clips under it show. Say in the chat to make it, or what should be heard."),
+                "Say in the chat to make it, or what should be heard."),
             { Piece: { } piece } => new PictureView(null, $"{piece.Title} is not made yet", "Say in the chat what it should be, or to make it."),
             // The video's name: what is said with nothing picked is about all of it.
             null => new PictureView(null, VideoName is { Length: > 0 } name ? name : "The video", _board.Shots.All(s => s.Prompt.Trim().Length == 0)
-                ? "The whole video is selected. Say in the chat what video you want: Sloperator lays out its references, clips and sounds on the timeline. Nothing is made until you ask for it."
-                : "The whole video is selected. Click a card, clip or sound on the timeline to work on it instead, or press Make the video."),
+                ? "Say in the chat what video you want."
+                : "The whole video is selected."),
             _ => new PictureView(null, pick.Caption, "It isn't there."),
         };
     }

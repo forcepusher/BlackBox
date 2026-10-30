@@ -226,7 +226,7 @@ public class MarkdownView : StackPanel
         // Its margin is its padding turned inside out: the text sits where it did, and a drag that
         // starts up to 12 pixels left or right of it, or 4 over or under it, selects from its first
         // or last letter, so the user needn't land on the letter itself.
-        var text = keep ? new KeptSelectionTextBlock() : new SelectableTextBlock();
+        var text = keep ? new KeptSelectionTextBlock() : new SelectableText();
         text.TextWrapping = TextWrapping.Wrap;
         text.LineHeight = 21;
         text.Margin = new Thickness(-12, -4);
@@ -250,7 +250,7 @@ public class MarkdownView : StackPanel
 
         public CodeBox(MdBlock block, bool keep)
         {
-            _code = keep ? new KeptSelectionTextBlock() : new SelectableTextBlock();
+            _code = keep ? new KeptSelectionTextBlock() : new SelectableText();
             _code.FontFamily = Mono;
             _code.TextWrapping = TextWrapping.Wrap;
             Classes.Add("code");

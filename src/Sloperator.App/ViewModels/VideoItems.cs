@@ -118,7 +118,7 @@ public sealed partial class ShotItem(VideoGeneratorViewModel video, VideoShot sh
     public string Name => Shot.Camera.Trim() is { Length: > 0 } camera ? camera : Shot.Prompt.Trim() is { Length: > 0 } p ? p : "a new clip";
 
     /// <summary>What happens in it, as Sloperator asked for it.</summary>
-    public string Summary => Shot.Prompt.Trim() is { Length: > 0 } p ? p : "Nothing said yet: click it and say in the chat what happens in it.";
+    public string Summary => Shot.Prompt.Trim() is { Length: > 0 } p ? p : "Nothing said yet.";
 
     public string LengthText => $"{Shot.Seconds:0.#} s";
 
@@ -235,7 +235,7 @@ public sealed partial class SoundItem(VideoSound sound) : ObservableObject, IVid
     public bool IsNew => Sound.Source == VideoSound.Song && !IsMade && Sound.Tags.Trim().Length == 0;
 
     /// <summary>What it is, for its tooltip: a new one, what to do with it.</summary>
-    public string Summary => IsNew ? "Nothing said yet: click it and say in the chat what it should be, or pick File…, Foley or Music."
+    public string Summary => IsNew ? "Nothing said yet."
         : Sound.Source == VideoSound.Foley ? "Foley: the sounds of what the clips under it show" + (Sound.Tags.Trim() is { Length: > 0 } heard ? $" ({heard})" : "")
         : Sound.Source == VideoSound.Song ? $"Music: {Sound.Tags.Trim()}" : Kind;
 

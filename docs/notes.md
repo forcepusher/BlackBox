@@ -11,7 +11,8 @@ done. The model runs on any OpenAI-compatible server: LM Studio (on this PC or a
 your network), llama.cpp's llama-server, vLLM, or a hosted API.
 
 ## Portable layout
-No installer, no registry, nothing in AppData or %TEMP%. Ship just `Sloperator.exe`: on first run it
+No installer, no registry (but for one key while Notify me when done is on, see there), nothing in
+AppData or %TEMP%. Ship just `Sloperator.exe`: on first run it
 unpacks its native UI libraries into `Data/runtime` next to itself. They are embedded as a zip of
 the files stored as they are, packed whole with Brotli (`scripts/pack-runtime.cs`, quality 11, 16 MB
 window): 7.6 MB where the zip's own Deflate made 10.0 (Skia, PDFium, ANGLE and HarfBuzz, 23 MB
@@ -35,7 +36,8 @@ Sloperator/
                pasted/ (pictures pasted into the chat, see Files in a message),
                videos/ (a folder per video: storyboard, frames, shots, song and the video, see Videos),
                index/ (the indexes of the folders the agent indexed, a file each, see Folder index),
-               crash.log (errors no code caught, see below), errors.log (every error shown, see below)
+               crash.log (errors no code caught, see below), errors.log (every error shown, see below),
+               sloperator.png (the notifications' icon, see Notify me when done)
 ```
 
 Set `SLOPERATOR_HOME` to use a different root. Debug builds use `.dev/` in the repository.
@@ -947,7 +949,7 @@ a song, in a Sound folder, with lip sync to its part under a shot) went with it.
 place to start one): each sound line has the dashed + after its last sound (`SoundLineItem.AddX`), and
 right-click on the line still has Create. The new sound offers **File…** (copies a sound in, as
 dropping one there does), **Foley** and **Music**, as buttons on it while it is new and first on its
-right-click menu after; its tooltip says "Nothing said yet: …" as a new clip's does. Foley turns it
+right-click menu after; its tooltip says "Nothing said yet." as a new clip's does. Foley turns it
 into `"source": "foley"` and sends "Make it." at once (there is nothing to say first); Music keeps it a
 song and sends "Make it." once its style is said, else the status line asks for it. Either sends with
 the pick in the box, as a message the user sends does: `SendFromToolkit("Make it.")` used to go with
@@ -1406,6 +1408,26 @@ With nothing focused, keys go to the window. Popups (flyouts, menus) are their o
 covered; the rename box in a flyout closes with a click outside it anyway. `TextBoxFocusTests` checks
 it headless.
 
+## Start screen
+Until the chat is used (`ShowIntro`), the cards on what Sloperator can do scroll in the chat's place,
+at the foot of the scroll so they stay by the heading in a tall window, and read from the top when
+they don't fit. The heading (the logo, "What should I do on your computer?" and the line under it) is
+a row of its own right over the chat box, out of the scroll and always in view (the user's sketch,
+2026-10-30; until then it was over the cards and scrolled with them). It is centred on the chat box,
+so it sits half the scroll bar's width right of the cards' middle. Both go with the first message.
+In a window too short for both (`MainWindow.FitIntroHeading`) the heading gives the cards its room
+when they would get less than 64: the smallest window with nine lines typed (the box grows to 200),
+or with a banner up; it comes back as the box shrinks. Whether it shows is worked out from the room
+from the top of the chat to the top of the box, which showing it doesn't change: counted as the
+chat's height plus the heading's, a heading just shown and not laid out yet counted 0 and hid itself
+again, and the window was left with a blank strip where it had been.
+
+The logo there is `LogoBlob`, drawn from docs/logo/blob.svg's shapes at the size it is shown, the
+body's top, bottom and sides on whole pixels of the screen. It was Assets/sloperator.png (256 px) in
+an `Image` 40 across, which the user found "a tad blurry" at 100% (2026-10-30): shrunk that far its
+edges smeared over two or three pixels, and its crown and base fell partway into a row (3.4 and 36.9
+of 40). Copy image on it still gives the PNG.
+
 ## Party blob
 Left of Send and Stop, 32 px like the buttons and 8 px from Send, `PartyBlob` (Views/PartyBlob.cs)
 shows the logo (Assets/sloperator.png) still, and the blobs.gg party blob (Assets/partyblob.gif: 128 px,
@@ -1427,16 +1449,22 @@ while it dances and is in a window.
 
 ## App icon
 `Assets/sloperator.ico` (the exe, the taskbar, every window's title bar) is drawn by
-`scripts/make-icon.ps1` from `docs/logo/blob.svg`, each size on its own (16, 20, 24, 32, 40, 48, 64,
-128, 256), 4x oversampled. Its blob has a soft drop shadow: rings of 9% black, eight of them from
-the edge out to size/24 (one pixel at 16 and 24 px, 11 at 256), so it fades out, set half that
+`scripts/make-icon.ps1` from `docs/logo/blob.svg`, each size on its own, 4x oversampled and shrunk
+by averaging each 4x4 block, so an edge pixel holds just how much of it the shape covers (a
+bicubic shrink, until 2026-10-30, left a pale ring inside every edge and a soft grey one outside).
+It has every size Windows asks for at 100 to 200%: 16, 20, 24, 28, 30, 32, 36, 40, 42, 48, 60, 64,
+72, 80, 96, 128 and 256. Avalonia hands the title bar 16 x scale and the taskbar 24 x scale, the
+nearest entry (`IconImpl.LoadBigIcon`); at 125% that was 32 for a 30 px button, which Windows shrank
+and blurred. Checked on the taskbar at 125% on 2026-10-30: the window's icon is 30 x 30 and the
+button shows it pixel for pixel; before, it was the 32 resampled.
+Its blob has a soft drop shadow: rings of 9% black, eight of them from the edge out to size/24 (one pixel at 16 and 24 px, 11 at 256), so it fades out, set half that
 lower than the blob. The bare yellow had no edge on a light taskbar and looked fuzzy there (the
 user's screenshot, 2026-10-30). Blob and shadow together fill the square side to side, and their
 top and bottom land on whole pixels. On a dark taskbar the shadow melts into the background. A
 #2F2F2F outline, the colour of the eyes (`-Edge outline`: one pixel up to 64 px, 3 at 256), was
 set beside it on white, #E8E8E8 and #202020; the user found the shadow "way better".
-`Assets/sloperator.png` (the start screen, the still party blob) is the SVG as it is, with no
-shadow: the app is always dark, and the still blob must line up with the party blob GIF.
+`Assets/sloperator.png` (the still party blob; the start screen draws the SVG itself, see Start
+screen) is the SVG as it is, with no shadow: the app is always dark, and the still blob must line up with the party blob GIF.
 
 ## Text in the middle of its box
 The font is Inter (bundled; Segoe UI was tried on 2026-10-29 and the user wanted Inter back). Fluent's
@@ -1453,6 +1481,55 @@ logical; rows as tall as with 1 each, which other values made 22 px and 21 by tu
 name on a card 2 over and none under. Measured with `.dev/chat-menu-test/text-centering.ps1` (rows
 with ink, each control's capitals from their top to the baseline) and `text-layout.ps1` (each
 control's text block against its middle), on the laptop at 125%: everything within 0.5 px.
+
+Windows hints Inter's capitals to whole pixels (sharp at top and bottom) and puts the baseline on a
+whole row. At 100%, where the user works every day (a 2560x1080 screen; the laptop is at 125%), 14's
+capitals are 10 or 11 rows in a 32-px control and can sit exactly in its middle; at 125% they are 13
+rows in 40, so 13 over and 14 under is as close as it gets, and what matters there is that things side
+by side agree. A sweep after the restyle (the user, 2026-10-30: "Side panel text vertical centering
+looks off", a screenshot at 100%) measured both scales with `.dev/centre-test/` (`texts.ps1` finds
+every word UI Automation knows, the box it sits in and where its capitals' line is, to a tenth of a
+pixel; `check100.ps1` and friends measure 100% on the 125% laptop with a DPI-unaware build, never
+committed). Found and fixed:
+- Every dropdown's word (Side panel, the model, the effort, Settings' "Ask me first") was a pixel
+  under the buttons' at 100%: Fluent's dropdown lays its content over its whole height, border and
+  all, a button inside its border. `ComboBoxPadding` (and `ComboBox.ghost`) 1 over and under stands
+  for the border; with 6 and 6 the word rounded a pixel low.
+- The context size's box (5 over and under) was a pixel low at 100%; 0 now, centred as a button.
+- The message box's words and hint were a pixel under Send's at both scales (Fluent's text box has 6
+  over and 5 under); `TextBox.composer` sits 0.6 higher, a pixel at both, its height the same.
+- The arrow left of Side panel, 12.5 px at 125%, rounded a pixel under the dropdown's word there:
+  0.5 under it rounds to nothing at 100% and a pixel at 125%. A nudge that is a pixel at one scale and
+  none at the other has to round that way (Avalonia rounds each margin to whole pixels, half to even).
+- File… and Generate on the Video generator's cards were a pixel high at 125%: they have a height of
+  their own (17.6) and half a pixel over the word; paddings that lowered them at 125% lowered them at
+  100% too, or made them a pixel taller.
+- Settings' labels sat a pixel under their dropdowns' words at 125% (`Grid.form > TextBlock.label`,
+  0.8 under; nothing at 100%). A label's smaller capitals are in the middle of the field's, as in the
+  chat's bars, its baseline a pixel higher.
+Everything else (buttons, fields, list and menu rows, chips, notices, the Thoughts header, table
+cells, History, Servers and Side panel rows, Copy, Discard) was centred at 100% and within half a
+pixel, level with its neighbours, at 125%.
+
+## Code in a reply's lines
+Code in a line of a reply (`MarkdownText`: a run in Cascadia Mono, or Consolas where Windows has no
+Cascadia, as on Windows 10) is the size of the words around it. It was meant to be a size under, but
+a block made in code (`MarkdownView.TextPart`, a table's cell) gets its text before it is in the
+window, at Avalonia's 12 rather than the reply's 14, so code came out 11 beside 14 (the user,
+2026-10-30: "code is much smaller"). Now a code run takes its block's size as it changes, and a
+block's runs are laid out again whenever its size changes (a heading run is two sizes over it).
+Compared at 100% and 125% (`.dev/centre-test/shots/code-size-*.png`): Consolas at 13 still read
+smaller than Inter at 14; at 14 its small letters are about as tall as Inter's. Code blocks stay 13
+and a tool's output and command 12.
+
+## Selected text
+Avalonia (11.3.22, and its master) draws a selection in a text block made of runs (a reply: bold,
+code, headings, links) with properties of its own for the selected part, built from the block's size
+and one run's font: the whole selection turned into the code font a size up and the rest of the line
+moved along (the user's recording, 2026-10-30). `SelectableText` (Views) builds the selected part
+from each run's own properties with only the colour changed; every selectable text in the app is one
+(`KeptSelectionTextBlock` too), styled as a `SelectableTextBlock`. A text box has one font, so its
+selection was right.
 
 ## One look for every control
 Every window and side panel draws its controls from the styles in App.axaml, one a kind, not
@@ -1635,7 +1712,7 @@ What they share, and how they keep out of each other's way:
   window's program), and an agent that never looked is held back once another acted. Its own actions and plain looks don't count. One that waited
   5 minutes says so and suggests work that doesn't need them. Typing in any window's box pauses
   every window's clicks and keys, as typing in its own does ("Paused while you type in another
-  Sloperator window", without Resume, which only ends its own pause). One keyboard hook watches
+  window", without Resume, which only ends its own pause). One keyboard hook watches
   Pause/Break for all of them, and one press stops every window's run; with a hook each, the first
   that stopped its run swallowed the press, and the others never saw it.
 - **ComfyUI and the headless browser** are the process's: the server Sloperator started is closed by
@@ -1668,6 +1745,51 @@ A soak of 20 minutes on the stand-in (2026-10-23): two windows each sending "key
 as soon as the last one ended, 45 tasks each and 91 chats saved, taking turns with the keyboard
 all along. The process stayed at 340-510 MB (up and down with the screenshots it collects), about
 940 handles and 107 threads from the fourth minute to the end, and nothing went to the crash log.
+
+## Notify me when done
+Settings → Notifications → **Notify me when done** (off by default) shows a Windows notification
+when a window's run ends or waits: done (the chat's title over the first line of the last reply, its
+Markdown marks taken out, cut at a word past 140 characters), stopped by an error ("Stopped by an
+error: " and the chat's red line), or waiting for the user's OK under "Ask me first" ("Waiting for
+your OK: " and the call's summary). None for a run the user stopped, for one whose messages sent
+too late start the next run at once, or for a Compact context; none while that window is the active
+one and not minimized, as the user is looking at it. The research behind it: done or needs-input
+notifications were among the most asked-for features in comparable agents.
+
+Each window has a tag of its own (`window-N`), so its next notification replaces the last one in
+the action centre too, and two windows' notifications stand side by side. A click on one brings its
+window forward (`ChatWindows.BringForward`); Windows lets the clicked app take the foreground, so the
+window comes to the front rather than flashing on the taskbar. A window's notification goes when the
+window is activated (it says what the notification said), when it closes, and when Sloperator ends:
+no COM activator is registered, so a click after the process ended would do nothing. The setting is
+Sloperator's, not the window's: saved in one window's Settings, it holds for every window.
+
+How (`WindowsToasts`): Windows' own toasts through WinRT (`ToastNotificationManager`), called
+through the interfaces' vtables, as Media Foundation is (see Pictures, video and sound), with the
+Activated event's handler a hand-made COM object of four slots (its IID, that of
+`TypedEventHandler<ToastNotification, Object>`, computed from WinRT's parameterized-interface
+rule: ab54de2d-…). No package: the Windows SDK projection (`net10.0-windows10.0.x` and CsWinRT) adds
+megabytes to the exe, and the Community Toolkit's notifications package needs it. An exe that isn't
+installed needs its app id registered for Windows 10 to show its toasts: Sloperator writes
+`HKCU\Software\Classes\AppUserModelId\Sloperator` (DisplayName, IconUri) at the first notification of
+each start, with the icon as `Data\sloperator.png`, which Windows reads the picture from. That key is
+the one thing Sloperator writes outside its folder, and only with the setting on: turning it off
+deletes the key and takes down the notifications still up. Windows keeps a key of its own per app
+under `Notifications\Settings` (whether the user allowed it in Windows' settings), which is left be.
+All of it runs off the windows' thread, one call after another.
+
+Checked on the laptop (Windows 10 LTSC 21H2, 2026-10-30) with a stand-in server (`.dev/notify-test`:
+server.ps1 keyed by the message's words, drive.ps1, catch.ps1 which waits for a Sloperator banner by
+its icon's colour and clicks it, drain.ps1): a reply in a window behind Notepad showed the banner
+with the chat's title and "I wrote the poem into Notepad and saved it as poem.txt on your desktop."
+(bold and code marks gone); clicking it put that window in front. A 400 from the server showed
+"Stopped by an error: Chat request failed (400): …"; a `run_shell` under "Ask before shell commands
+and file changes" showed "Waiting for your OK: Delete the old logs", and with two windows open its
+click brought the second window forward, the first one's the first. With the window in front, nothing
+was shown or left in the action centre; after a click the window's notification was gone from it.
+Turned off in Settings, the registry key went, and a run in the other window showed nothing.
+Pitfall for such tests: banners wait on the screen while the user is away, one at a time, so a
+Sloperator banner queued behind another app's waits until those are moved to the action centre.
 
 ## Files in a message
 Drop files or folders anywhere on the window, paste them with Ctrl+V (a screenshot, a picture
@@ -3345,8 +3467,9 @@ reads the message before its next step, and a `wait` it is in ends for it. While
 its clicks and key presses hold off (for up to a minute), so they don't land in your typing. That
 includes a click whose target it is still looking for, and the rest of a series of key presses or
 of long text it is typing, which then goes back to the window it was meant for. A line above the
-box says it is paused and how it goes on: send the message, click Resume (what you typed stays in
-the box), or stop typing, after which it carries on in 15 seconds, counted down on that line. A
+box says it is paused and counts down to when it carries on by itself, 15 seconds after the last key
+("Paused while you type. I carry on in 12 s."); Resume beside it (what you typed stays in the box)
+and sending the message end the pause at once. A
 message that arrives as the run finishes starts the next one, and what the agent hadn't read when
 you stopped it goes back in the box.
 

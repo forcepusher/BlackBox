@@ -90,7 +90,7 @@ public sealed class MarkdownTable : Border
             while (Children.Count > count)
                 Children.RemoveAt(Children.Count - 1);
             while (Children.Count < count)
-                Children.Add(new SelectableTextBlock { TextWrapping = TextWrapping.Wrap, LineHeight = 20, Padding = CellPadding });
+                Children.Add(new SelectableText { TextWrapping = TextWrapping.Wrap, LineHeight = 20, Padding = CellPadding });
             for (var r = 0; r < table.Rows.Count; r++)
                 for (var c = 0; c < table.Columns; c++)
                 {
@@ -222,7 +222,7 @@ public sealed class MarkdownTable : Border
                 var typeface = new Typeface(code ? Mono : cell.FontFamily,
                     span.Style.HasFlag(MdStyle.Italic) ? FontStyle.Italic : FontStyle.Normal,
                     span.Style.HasFlag(MdStyle.Bold) ? FontWeight.SemiBold : cell.FontWeight);
-                var size = code ? cell.FontSize - 1 : cell.FontSize;
+                var size = cell.FontSize;
                 var start = 0;
                 for (var i = 0; i <= span.Text.Length; i++)
                 {

@@ -29,7 +29,7 @@
         <!-- Prompt: for a picture, animation, video, sound or 3D model that says how it was made, its
              prompts and settings under it. -->
         <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding ShowRecipe}" IsVisible="{Binding HasRecipe}" Margin="8,0,0,0"
-                      ToolTip.Tip="The prompts and settings it was made with, read from the file" AutomationProperties.Name="Prompt">
+                      ToolTip.Tip="Prompts and settings it was made with" AutomationProperties.Name="Prompt">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Width="14" Height="14" Data="M3 18h12v-2H3v2zM3 6v2h18V6H3zm0 7h18v-2H3v2z" />
             <TextBlock Text="Prompt" VerticalAlignment="Center" />

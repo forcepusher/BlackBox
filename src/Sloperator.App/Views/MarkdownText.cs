@@ -29,10 +29,21 @@ public static class MarkdownText
     /// <summary>Where each link is in a block's text, by character, for the clicks on it.</summary>
     private static readonly ConditionalWeakTable<TextBlock, List<(int Start, int End, string Url)>> Links = new();
 
+    /// <summary>What each block shows, to lay it out again when its size changes.</summary>
+    private static readonly ConditionalWeakTable<TextBlock, List<List<MdSpan>>> Shown = new();
+
     static MarkdownText()
     {
         SourceProperty.Changed.AddClassHandler<TextBlock>((block, e) => Render(block, e.NewValue as string ?? "", markdown: true));
         PlainProperty.Changed.AddClassHandler<TextBlock>((block, e) => Render(block, e.NewValue as string ?? "", markdown: false));
+        // A heading run is two sizes over its block. A block made in code gets its source before it is
+        // in the window, at Avalonia's 12 rather than the reply's 14, and sizes worked out from it then
+        // stayed (code was 11 beside 14): so again whenever the block's size changes.
+        TextBlock.FontSizeProperty.Changed.AddClassHandler<TextBlock>((block, _) =>
+        {
+            if (Shown.TryGetValue(block, out var lines))
+                Show(block, lines);
+        });
     }
 
     public static string? GetSource(TextBlock block) => block.GetValue(SourceProperty);
@@ -62,6 +73,7 @@ public static class MarkdownText
 
     private static void Show(TextBlock block, List<List<MdSpan>> lines)
     {
+        Shown.AddOrUpdate(block, lines);
         var inlines = new InlineCollection();
         // Lines end in a "\n" of their own rather than a LineBreak, so that a character's place in
         // the block's text, which a click is hit-tested to, is the sum of the runs before it.
@@ -97,11 +109,10 @@ public static class MarkdownText
             run.FontWeight = FontWeight.SemiBold;
         if (span.Style.HasFlag(MdStyle.Italic))
             run.FontStyle = FontStyle.Italic;
+        // Code in a line at the words' own size: Consolas at it is about as tall as Inter (it was a
+        // size under, and with the bug below 11 beside 14: "code is much smaller", the user, 2026-10-30).
         if (span.Style.HasFlag(MdStyle.Code))
-        {
             run.FontFamily = Mono;
-            run.FontSize = block.FontSize - 1;
-        }
         if (span.Style.HasFlag(MdStyle.Strike))
             run.TextDecorations = TextDecorations.Strikethrough;
         if (span.Style.HasFlag(MdStyle.Heading))

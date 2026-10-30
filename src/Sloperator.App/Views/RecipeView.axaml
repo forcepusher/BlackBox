@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:media="using:Sloperator.Core.Media"
+             xmlns:views="using:Sloperator.App.Views"
              x:Class="Sloperator.App.Views.RecipeView"
              x:DataType="media:MediaRecipe">
   <!-- What a file says it was made with: each prompt with Copy, then the settings, then Copy all. -->
@@ -19,7 +20,7 @@
                       ToolTip.Tip="Put it on the clipboard" AutomationProperties.Name="{Binding Label, StringFormat='Copy {0}'}" />
               <TextBlock Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
             </DockPanel>
-            <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+            <views:SelectableText Text="{Binding Text}" TextWrapping="Wrap" />
           </StackPanel>
         </DataTemplate>
       </ItemsControl.ItemTemplate>
@@ -34,7 +35,7 @@
         <DataTemplate x:DataType="media:RecipeSetting">
           <Grid ColumnDefinitions="112,*">
             <TextBlock Classes="muted" Text="{Binding Name}" />
-            <SelectableTextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
+            <views:SelectableText Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" />
           </Grid>
         </DataTemplate>
       </ItemsControl.ItemTemplate>

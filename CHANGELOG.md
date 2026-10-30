@@ -21,11 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ask the agent to connect another model ("use my LM Studio", an API address and key, a model's
   name) and it switches Sloperator's server, key and model itself, once the server answers; your next
   message goes to the new model.
+- **Notify me when done** under Settings → Notifications (off by default): a Windows notification
+  with the chat's title when a task is done, stops on an error or waits for your OK, unless you are
+  looking at its window. Click it to bring that window to the front.
 
 ### Changed
 - **Screenshot size** under Settings → Advanced replaces the width × height box: **Up to 720p**,
   **Up to 1080p** (the default) or **Native**. Screenshots keep your screen's width and shape and are
   only scaled down when the screen is taller, so ultrawide screens keep their detail.
+- Shorter texts throughout: the start screen, tooltips, server status lines, Settings, the Video
+  generator and the File inspector say the same in fewer words, and tooltips that only repeated a
+  button's name are gone.
+- On the start screen, "What should I do on your computer?" sits right over the chat box and stays in
+  view, with the cards scrolling above it. In a very short window it makes room for a long message.
 - A chat video's right-click Copy is now two entries: **Copy image** for the frame on screen and
   **Copy file** for the video.
 - A new look in neutral greys: a darker background, filled buttons, fields darker than the window,
@@ -63,9 +71,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **History** and **Servers** open the same kind of list as the dropdowns, and right-click menus have
   rows as tall as a dropdown's.
 - The Video generator's menu says **Show in folder**, as everywhere else.
+- The message box's hint no longer says "Enter to send" (it says how to start a new line, and while a
+  run goes on that it pauses while you type), and File changes' help line is shorter: "Pick lines or
+  files to ask about them, stage or discard them."
 
 ### Fixed
+- Code in a reply's line (`like this`) was much smaller than the words around it (11 beside 14);
+  it is the same size now, in a table too.
+- Selecting part of a reply redrew the selected words in the code font a size larger, and the rest of
+  the line moved along as the selection grew; selected words now keep their own font, size and weight.
+- Every dropdown's word (**Side panel**, the model, the effort, the ones in Settings) sat a pixel low at
+  100% scaling, under the buttons' beside it; it is in the middle now. Also level now: the context size
+  in its box, the words typed in the message box (and its hint) with Send's, the arrow beside **Side
+  panel** with its word at 125%, **File…** and **Generate** on the Video generator's cards, and the
+  labels in Settings with their dropdowns.
 - The app icon has a soft shadow, so the yellow blob keeps a clear edge on a light taskbar.
+- The app icon was blurry on the taskbar at 125% scaling and had a pale ring inside its edge; it is
+  now crisp at every size Windows uses.
+- The blob on the start screen is sharp: it was a large picture shrunk down, with soft edges.
 - A text box (the prompt, the server address, the API key, the context size, the boxes in Settings)
   kept the focus and its caret after a click on empty space, a panel or a label; a click anywhere away
   from it now takes the focus off it.

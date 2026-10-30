@@ -152,9 +152,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// <summary>The intro's line on what Sloperator asks before it acts, after "Ask me first" in Settings.</summary>
     public string ApprovalNote => _settings.Agent.Approval switch
     {
-        ApprovalMode.AskAll => "I ask for your OK before every click, key press, command and file change.",
-        ApprovalMode.AskRisky => "I ask for your OK before I run a command or change a file.",
-        _ => "I don't ask before I act. \"Ask me first\" in Settings changes that.",
+        ApprovalMode.AskAll => "I ask before every action.",
+        ApprovalMode.AskRisky => "I ask before commands and file changes.",
+        _ => "I act without asking (see Settings).",
     };
 
     /// <summary>The window is up: from now on the agent's inputs show in the screen corner, and a ring where it clicks.</summary>
@@ -506,13 +506,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     public bool TypingPauseHere => TypingHere();
 
     /// <summary>
-    /// What the pause line says: that the agent waits, and the three ways it goes on again, with
-    /// the seconds left until it does by itself. Someone who started typing and changed their mind
-    /// had no way to tell how to let it carry on.
+    /// What the pause line says: that the agent waits, with the seconds left until it goes on by
+    /// itself; Resume beside it lets it go on at once. Someone who started typing and changed their
+    /// mind had no way to tell how to let it carry on.
     /// </summary>
     public string TypingPauseText => TypingHere()
-        ? $"Paused while you type: my clicks and key presses wait. I carry on when you send this (Enter), click Resume, or in {Math.Max(1, (int)Math.Ceiling((TypingQuiet - (DateTime.UtcNow - _lastTyped)).TotalSeconds))} s without a key press."
-        : "Paused while you type in another Sloperator window: my clicks and key presses wait until you send it there, or stop typing for 15 s.";
+        ? $"Paused while you type. I carry on in {Math.Max(1, (int)Math.Ceiling((TypingQuiet - (DateTime.UtcNow - _lastTyped)).TotalSeconds))} s."
+        : "Paused while you type in another window.";
 
     /// <summary>Lets the agent carry on at once; what was typed stays in the box, to finish and send later.</summary>
     [RelayCommand]
@@ -529,10 +529,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// </summary>
     internal bool TypingHere() => Input.Length > 0 && DateTime.UtcNow - _lastTyped < TypingQuiet;
 
-    /// <summary>The hint in the empty box: what Enter does now, and that pictures and files can go in too.</summary>
+    /// <summary>The hint in the empty box: how to start a new line (Enter sending goes without saying), that the agent waits while the user types, and that pictures and files can go in too.</summary>
     public string InputHint => IsBusy
-        ? "Tell me something while I work… (Enter to send; I pause while you type)"
-        : "Describe a task, paste a screenshot or drop files… (Enter to send, Shift+Enter for a new line)";
+        ? "Tell me something while I work… (I pause while you type)"
+        : "Describe a task, paste a screenshot or drop files… (Shift+Enter for a new line)";
 
     /// <summary>When the run in progress started: from the message that started it, for how long the run took.</summary>
     private DateTime _runStarted;
@@ -699,7 +699,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         {
             // The run itself never throws; this is the preparation (an address that isn't one, a
             // server that doesn't answer), so Continue tries the message again.
-            if (!_runDetached) AddStopNotice(ex.Message, isError: true, delivered ? null : input, ex);
+            if (!_runDetached)
+            {
+                AddStopNotice(ex.Message, isError: true, delivered ? null : input, ex);
+                NotifyUser(FirstLine($"Stopped by an error: {ex.Message}"));
+            }
         }
         finally
         {
