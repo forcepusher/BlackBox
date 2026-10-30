@@ -419,7 +419,7 @@ public static partial class VideoCheck
                 using var bitmap = MediaPreview.ToBitmap(next.Frame);
                 var crop = new SKBitmap(box.Width, box.Height);
                 using (var canvas = new SKCanvas(crop))
-                    canvas.DrawBitmap(bitmap, box, new SKRect(0, 0, box.Width, box.Height));
+                    canvas.DrawBitmap(bitmap, box, new SKRect(0, 0, box.Width, box.Height), Sampling.Nearest);
                 while (at < picks.Count && next.Time.TotalSeconds + 0.001 >= picks[at])
                 {
                     cells.Add(($"{next.Time.TotalSeconds.ToString("0.00", CultureInfo.InvariantCulture)} s", crop));
@@ -738,8 +738,7 @@ public static partial class VideoCheck
         var (w, h) = (Small, height ?? SmallHeight(source));
         using var small = new SKBitmap(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Opaque));
         using (var canvas = new SKCanvas(small))
-        using (var paint = new SKPaint { FilterQuality = SKFilterQuality.Medium })
-            canvas.DrawBitmap(source, new SKRect(0, 0, w, h), paint);
+            canvas.DrawBitmap(source, new SKRect(0, 0, w, h), Sampling.Medium(source.Width, w));
         var gray = new double[w * h];
         var rgb = new double[w * h * 3];
         for (var yy = 0; yy < h; yy++)
@@ -867,11 +866,11 @@ public static partial class VideoCheck
             canvas.Clear(new SKColor(20, 20, 20));
             if (top is not null)
             {
-                canvas.DrawBitmap(top, 0, 0);
+                canvas.DrawBitmap(top, 0, 0, Sampling.Nearest);
                 using var line = new SKPaint { Color = new SKColor(252, 194, 27) };
                 canvas.DrawRect(0, top.Height + 4, SheetWidth, 4, line);
             }
-            canvas.DrawBitmap(bottom, 0, (top?.Height ?? 0) + gap);
+            canvas.DrawBitmap(bottom, 0, (top?.Height ?? 0) + gap, Sampling.Nearest);
         }
         return Jpeg(sheet);
     }
@@ -887,10 +886,10 @@ public static partial class VideoCheck
         var bitmap = new SKBitmap(sheetWidth, rows * cellH + (rows - 1) * 4);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(new SKColor(20, 20, 20));
-        using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true };
+        using var paint = new SKPaint { IsAntialias = true };
         // Times a model can read: qwen3.8 and Claude Haiku guessed them at a sixteenth of a cell.
         using var font = new SKFont(SKTypeface.FromFamilyName(null, SKFontStyle.Bold), Math.Clamp(cellW / 9f, 16, 34));
-        using var text = new SKPaint { Color = SKColors.White, IsAntialias = true, TextSize = font.Size, Typeface = font.Typeface };
+        using var text = new SKPaint { Color = SKColors.White, IsAntialias = true };
         using var shade = new SKPaint { Color = new SKColor(0, 0, 0, 180) };
         for (var i = 0; i < cells.Count; i++)
         {
@@ -901,12 +900,12 @@ public static partial class VideoCheck
             var (w, h) = ((float)(frame.Width * scale), (float)(frame.Height * scale));
             canvas.Save();
             canvas.ClipRect(new SKRect(x, y, x + cellW, y + cellH));
-            canvas.DrawBitmap(frame, new SKRect(x + (cellW - w) / 2, y + (cellH - h) / 2, x + (cellW + w) / 2, y + (cellH + h) / 2), paint);
+            canvas.DrawBitmap(frame, new SKRect(x + (cellW - w) / 2, y + (cellH - h) / 2, x + (cellW + w) / 2, y + (cellH + h) / 2), Sampling.High(frame.Width, w), paint);
             canvas.Restore();
             var label = cells[i].Label;
-            var labelW = text.MeasureText(label) + 10;
+            var labelW = font.MeasureText(label) + 10;
             canvas.DrawRect(x, y + cellH - font.Size - 8, labelW, font.Size + 8, shade);
-            canvas.DrawText(label, x + 5, y + cellH - 6, font, text);
+            canvas.DrawText(label, x + 5, y + cellH - 6, SKTextAlign.Left, font, text);
         }
         return bitmap;
     }
@@ -927,7 +926,6 @@ public static partial class VideoCheck
         using (var canvas = new SKCanvas(strip))
         {
             canvas.Clear(new SKColor(20, 20, 20));
-            using var paint = new SKPaint { FilterQuality = SKFilterQuality.Medium };
             for (var i = 0; i < count; i++)
             {
                 if (FrameAt(reader, Math.Min(seconds - 0.05, i + 0.5), first: i == 0) is not { } frame)
@@ -938,7 +936,7 @@ public static partial class VideoCheck
                 var x = i * frameWidth;
                 canvas.Save();
                 canvas.ClipRect(new SKRect(x, 0, x + frameWidth, frameHeight));
-                canvas.DrawBitmap(bitmap, new SKRect(x + (frameWidth - w) / 2, (frameHeight - h) / 2, x + (frameWidth + w) / 2, (frameHeight + h) / 2), paint);
+                canvas.DrawBitmap(bitmap, new SKRect(x + (frameWidth - w) / 2, (frameHeight - h) / 2, x + (frameWidth + w) / 2, (frameHeight + h) / 2), Sampling.Medium(bitmap.Width, w));
                 canvas.Restore();
             }
         }
@@ -966,7 +964,7 @@ public static partial class VideoCheck
             var scale = Math.Min(1, maxSide / (double)Math.Max(bitmap.Width, bitmap.Height));
             if (scale >= 1)
                 return Jpeg(bitmap);
-            using var small = bitmap.Resize(new SKImageInfo((int)(bitmap.Width * scale), (int)(bitmap.Height * scale)), SKFilterQuality.High);
+            using var small = bitmap.Resize(new SKImageInfo((int)(bitmap.Width * scale), (int)(bitmap.Height * scale)), Sampling.High(1, scale));
             return small is null ? null : Jpeg(small);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)

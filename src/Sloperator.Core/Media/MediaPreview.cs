@@ -206,18 +206,18 @@ public static class MediaPreview
         var sheet = new SKBitmap(TileWidth, rows * cellH + (rows - 1) * 4);
         using var canvas = new SKCanvas(sheet);
         canvas.Clear(new SKColor(32, 32, 32));
-        using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true };
+        using var paint = new SKPaint { IsAntialias = true };
         using var font = new SKFont(SKTypeface.Default, Math.Max(14, cellW / 14f));
-        using var text = new SKPaint { Color = SKColors.White, IsAntialias = true, TextSize = font.Size, Typeface = font.Typeface };
+        using var text = new SKPaint { Color = SKColors.White, IsAntialias = true };
         using var shade = new SKPaint { Color = new SKColor(0, 0, 0, 170) };
         for (var i = 0; i < shots.Count; i++)
         {
             var (x, y) = (i % columns * (cellW + 4), i / columns * (cellH + 4));
-            canvas.DrawBitmap(shots[i].Frame, new SKRect(x, y, x + cellW, y + cellH), paint);
+            canvas.DrawBitmap(shots[i].Frame, new SKRect(x, y, x + cellW, y + cellH), Sampling.High(shots[i].Frame.Width, cellW), paint);
             var label = shots[i].Time.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture) + " s";
-            var labelW = text.MeasureText(label) + 10;
+            var labelW = font.MeasureText(label) + 10;
             canvas.DrawRect(x, y + cellH - font.Size - 8, labelW, font.Size + 8, shade);
-            canvas.DrawText(label, x + 5, y + cellH - 6, font, text);
+            canvas.DrawText(label, x + 5, y + cellH - 6, SKTextAlign.Left, font, text);
         }
         return sheet;
     }
@@ -326,7 +326,7 @@ public static class MediaPreview
         using (var spec = new SKBitmap(TileWidth, specH))
         {
             spec.Pixels = pixels;
-            canvas.DrawBitmap(spec, 0, waveH);
+            canvas.DrawBitmap(spec, 0, waveH, Sampling.Nearest);
         }
 
         // Seconds along the bottom.
@@ -340,7 +340,7 @@ public static class MediaPreview
             var s = k * step;
             var x = (float)((s - start) / seconds * (TileWidth - 1));
             canvas.DrawLine(x, 0, x, waveH + specH, tick);
-            canvas.DrawText(s.ToString(step < 1 ? "0.0#" : "0", CultureInfo.InvariantCulture) + "s", Math.Min(x + 2, TileWidth - 44), waveH + specH + 16, font, label);
+            canvas.DrawText(s.ToString(step < 1 ? "0.0#" : "0", CultureInfo.InvariantCulture) + "s", Math.Min(x + 2, TileWidth - 44), waveH + specH + 16, SKTextAlign.Left, font, label);
         }
         return bitmap;
     }
@@ -408,8 +408,8 @@ public static class MediaPreview
             var (name, yaw, pitch) = views[i];
             using var view = MeshRenderer.Render(mesh, cell, cell, yaw, pitch);
             var (x, y) = (i % 2 * (cell + 4), i / 2 * (cell + 4));
-            canvas.DrawBitmap(view, x, y);
-            canvas.DrawText(name, x + 8, y + 22, font, text);
+            canvas.DrawBitmap(view, x, y, Sampling.Nearest);
+            canvas.DrawText(name, x + 8, y + 22, SKTextAlign.Left, font, text);
         }
         if (animation is null)
             return (line, tile, "the 3D model from four sides (front, right side, back, and from above), lit from the front");
@@ -420,8 +420,8 @@ public static class MediaPreview
             using var view = MeshRenderer.Render(mesh, small, small, -30, 15, positions: mesh.Pose(animation, at), bounds: bounds);
             var x = i * (small + 4);
             var y = cell * 2 + 8;
-            canvas.DrawBitmap(view, x, y);
-            canvas.DrawText($"{at.ToString("0.00", CultureInfo.InvariantCulture)} s", x + 6, y + 20, font, text);
+            canvas.DrawBitmap(view, x, y, Sampling.Nearest);
+            canvas.DrawText($"{at.ToString("0.00", CultureInfo.InvariantCulture)} s", x + 6, y + 20, SKTextAlign.Left, font, text);
         }
         return (line, tile, $"the 3D model from four sides (front, right side, back, and from above), lit from the front, and under them its animation \"{animation.Name}\" from the front left at four times, its time on each");
     }
@@ -435,8 +435,8 @@ public static class MediaPreview
         var fitted = new SKBitmap(w, h);
         using var canvas = new SKCanvas(fitted);
         canvas.Clear(SKColors.White);
-        using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true };
-        canvas.DrawBitmap(bitmap, new SKRect(0, 0, w, h), paint);
+        using var paint = new SKPaint { IsAntialias = true };
+        canvas.DrawBitmap(bitmap, new SKRect(0, 0, w, h), Sampling.High(bitmap.Width, w), paint);
         return fitted;
     }
 
@@ -452,16 +452,16 @@ public static class MediaPreview
         var canvas = surface.Canvas;
         canvas.Clear(new SKColor(16, 16, 16));
         canvas.Scale((float)(outW / (double)width), (float)(outH / (double)height));
-        using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true };
+        using var paint = new SKPaint { IsAntialias = true };
         using var font = new SKFont(SKTypeface.Default, 20);
         using var text = new SKPaint { Color = SKColors.White, IsAntialias = true };
         float y = 0;
         foreach (var (label, bitmap) in tiles)
         {
-            canvas.DrawText(label, 8, y + 22, font, text);
+            canvas.DrawText(label, 8, y + 22, SKTextAlign.Left, font, text);
             y += labelH;
             var h = (float)(bitmap.Height * (double)width / bitmap.Width);
-            canvas.DrawBitmap(bitmap, new SKRect(0, y, width, y + h), paint);
+            canvas.DrawBitmap(bitmap, new SKRect(0, y, width, y + h), Sampling.High(bitmap.Width, outW), paint);
             y += h;
         }
         using var image = surface.Snapshot();
@@ -496,13 +496,13 @@ public static class MediaPreview
         using var surface = SKSurface.Create(new SKImageInfo(outW, outH, SKColorType.Rgba8888, SKAlphaType.Premul));
         var canvas = surface.Canvas;
         canvas.Clear(new SKColor(16, 16, 16));
-        using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true };
+        using var paint = new SKPaint { IsAntialias = true };
         using var font = new SKFont(SKTypeface.Default, 20);
         using var text = new SKPaint { Color = SKColors.White, IsAntialias = true };
-        canvas.DrawText(label + ": " + Path.GetFileName(reference), 8, 22, font, text);
-        canvas.DrawText("What was made", leftW + gap + 8, 22, font, text);
-        canvas.DrawBitmap(left, new SKRect(0, labelH, leftW, labelH + height), paint);
-        canvas.DrawBitmap(right, new SKRect(leftW + gap, labelH, leftW + gap + rightW, labelH + height), paint);
+        canvas.DrawText(label + ": " + Path.GetFileName(reference), 8, 22, SKTextAlign.Left, font, text);
+        canvas.DrawText("What was made", leftW + gap + 8, 22, SKTextAlign.Left, font, text);
+        canvas.DrawBitmap(left, new SKRect(0, labelH, leftW, labelH + height), Sampling.High(left.Width, leftW), paint);
+        canvas.DrawBitmap(right, new SKRect(leftW + gap, labelH, leftW + gap + rightW, labelH + height), Sampling.High(right.Width, rightW), paint);
         using var image = surface.Snapshot();
         using var jpeg = image.Encode(SKEncodedImageFormat.Jpeg, 85);
         return jpeg.ToArray();

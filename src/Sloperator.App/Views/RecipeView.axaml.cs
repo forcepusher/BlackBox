@@ -1,3 +1,4 @@
+using Avalonia.Input.Platform;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Sloperator.Core.Media;

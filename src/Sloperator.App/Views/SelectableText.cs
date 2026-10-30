@@ -36,8 +36,8 @@ public class SelectableText : SelectableTextBlock
                 shown.Add(run);
                 continue;
             }
-            var recoloured = new GenericTextRunProperties(p.Typeface, p.FontFeatures, p.FontRenderingEmSize,
-                p.TextDecorations, selected, p.BackgroundBrush, p.BaselineAlignment, p.CultureInfo);
+            var recoloured = new GenericTextRunProperties(p.Typeface, p.FontRenderingEmSize,
+                p.TextDecorations, selected, p.BackgroundBrush, p.BaselineAlignment, p.CultureInfo, p.FontFeatures);
             if (from > 0)
                 shown.Add(new TextCharacters(run.Text[..from], p));
             shown.Add(new TextCharacters(run.Text[from..to], recoloured));
@@ -46,7 +46,7 @@ public class SelectableText : SelectableTextBlock
         }
 
         var typeface = new Avalonia.Media.Typeface(FontFamily, FontStyle, FontWeight, FontStretch);
-        var defaults = new GenericTextRunProperties(typeface, FontFeatures, FontSize, TextDecorations, Foreground);
+        var defaults = new GenericTextRunProperties(typeface, FontSize, TextDecorations, Foreground, fontFeatures: FontFeatures);
         var paragraph = new GenericTextParagraphProperties(FlowDirection, TextAlignment, true, false,
             defaults, TextWrapping, LineHeight, 0, LetterSpacing);
         var max = GetMaxSizeFromConstraint();

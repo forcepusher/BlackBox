@@ -1961,6 +1961,13 @@ open. A command the agent started while a picture was being read then kept it op
 so the picture couldn't be deleted or replaced; the read_file picture test failed now and then the
 same way (2 of 4 full runs, 24 October 2026), when another test started a process at that moment.
 
+Skia (SkiaSharp 4, newer than the 3.x Avalonia 12 asks for; Avalonia runs on it) takes how to read a
+picture's pixels at another size as `SKSamplingOptions`, given with each draw or resize: SkiaSharp 4
+dropped the paint's filter quality. `Sampling` (Media) gives SkiaSharp 2's pixels, measured against
+it on a screenshot (2026-10-30): High shrinks through mipmaps and enlarges with Mitchell's cubic.
+SkiaSharp 3's own stand-in for High, the cubic both ways, came out 2.9 grey levels off on average
+shrinking a screenshot to 37% (aliased text); mipmaps 0.2.
+
 Until a chat is used, it shows first that Pause/Break stops it and that corrections and hints can be
 typed to it while it works, that it uses the mouse and keyboard but pauses while you type and what it
 asks before it acts, then that Ctrl+V pastes a screenshot or files into a message and that files can
@@ -4019,7 +4026,7 @@ versions (EV certificates no longer skip it, Microsoft, 2026).
   sound (Media Foundation), PDF pages, text recognition, notifications, file previews and signature
   checks (COM and WinRT called through their vtables, `ComAbi`). Only referenced when building on Windows.
 - `src/Sloperator.Cli`: headless runner for trying tasks and models.
-- `src/Sloperator.App`: Avalonia 11 UI with CommunityToolkit.Mvvm.
+- `src/Sloperator.App`: Avalonia 12 UI with CommunityToolkit.Mvvm.
 - `tests/Sloperator.Core.Tests`: xUnit tests (unit tests plus opt-in server integration tests).
 - `tests/Sloperator.App.Tests`: the app's windows laid out headless (the chat, lists, players, Settings).
 - `tests/Sloperator.McpTestServer`: a small MCP server the tests run in-process and as a child process.

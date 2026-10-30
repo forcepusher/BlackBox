@@ -70,8 +70,8 @@ internal static class Picture
 
         using var surface = SKSurface.Create(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
         surface.Canvas.Clear(SKColors.White);
-        using (var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true })
-            surface.Canvas.DrawBitmap(original, new SKRect(0, 0, width, height), paint);
+        using (var paint = new SKPaint { IsAntialias = true })
+            surface.Canvas.DrawBitmap(original, new SKRect(0, 0, width, height), Sampling.High(original.Width, width), paint);
         using var image = surface.Snapshot();
         using var jpeg = image.Encode(SKEncodedImageFormat.Jpeg, 85);
         return new Shown(original.Width, original.Height, width, height, jpeg.ToArray(), Transparency(original));

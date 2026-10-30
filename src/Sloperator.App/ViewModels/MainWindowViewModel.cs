@@ -316,7 +316,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     /// a browser): saved as a PNG in Data/pasted, since the agent works on files, and attached like a
     /// dropped one.
     /// </summary>
-    public void AttachPicture(Avalonia.Media.Imaging.Bitmap picture) => SavePasted(path => picture.Save(path));
+    public void AttachPicture(Avalonia.Media.Imaging.Bitmap picture) => SavePasted(path => picture.Save(path, Avalonia.Media.Imaging.PngBitmapEncoderOptions.Default));
 
     /// <inheritdoc cref="AttachPicture(Avalonia.Media.Imaging.Bitmap)"/>
     public void AttachPicture(byte[] png) => SavePasted(path => File.WriteAllBytes(path, png));

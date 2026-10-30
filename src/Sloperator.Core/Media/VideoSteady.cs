@@ -128,7 +128,7 @@ public static partial class VideoSteady
             {
                 using var held = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
                 using var canvas = new SKCanvas(held);
-                using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true };
+                using var paint = new SKPaint { IsAntialias = true };
                 var stdin = process.StandardInput.BaseStream;
                 var (cx, cy) = (width / 2f, height / 2f);
                 reader.Seek(TimeSpan.Zero);
@@ -143,7 +143,7 @@ public static partial class VideoSteady
                     canvas.Translate(cx, cy);
                     canvas.Scale((float)(enlarged / grow));
                     canvas.Translate((float)(-cx - x * width), (float)(-cy - y * height));
-                    canvas.DrawBitmap(frame, 0, 0, paint);
+                    canvas.DrawBitmap(frame, 0, 0, Sampling.High(grow, enlarged), paint);
                     canvas.Restore();
                     canvas.Flush();
                     stdin.Write(held.GetPixelSpan());

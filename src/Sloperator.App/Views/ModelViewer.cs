@@ -191,7 +191,7 @@ public sealed class ModelViewer : Control
         _drawing = true;
         var request = ++_request;
         var (yaw, pitch, zoom, panX, panY, animation, time) = (Yaw, Pitch, Zoom, PanX, PanY, Animation, Time);
-        var scaling = VisualRoot?.RenderScaling ?? 1;
+        var scaling = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
         var (pw, ph) = ((int)(w * scaling), (int)(h * scaling));
         Task.Run(() =>
         {

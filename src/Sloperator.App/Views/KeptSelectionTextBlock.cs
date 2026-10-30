@@ -1,5 +1,5 @@
 using Avalonia.Controls;
-using Avalonia.Interactivity;
+using Avalonia.Input;
 
 namespace Sloperator.App.Views;
 
@@ -12,7 +12,7 @@ public class KeptSelectionTextBlock : SelectableText
 {
     protected override Type StyleKeyOverride => typeof(SelectableTextBlock);
 
-    protected override void OnLostFocus(RoutedEventArgs e)
+    protected override void OnLostFocus(FocusChangedEventArgs e)
     {
         var (start, end) = (SelectionStart, SelectionEnd);
         base.OnLostFocus(e);

@@ -94,7 +94,7 @@ public sealed partial class InspectorAnimationViewModel : ObservableObject, IDis
                 var ms = Math.Max(info[i].Duration, 20);
                 if (scale < 1)
                 {
-                    using var small = full.Resize(kept, SKFilterQuality.Medium);
+                    using var small = full.Resize(kept, Sampling.Medium(1, scale));
                     frames.Add((FilePreview.ToBitmap(small), at, ms));
                 }
                 else

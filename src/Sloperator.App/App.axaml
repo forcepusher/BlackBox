@@ -802,6 +802,7 @@
       <Setter Property="Margin" Value="0,-0.6,0,0.6" />
       <!-- Its words follow the paperclip, not a border of their own: Fluent's 10, not a field's 12. -->
       <Setter Property="Padding" Value="10,6,6,5" />
+      <Setter Property="PlaceholderForeground" Value="{StaticResource BbMuted}" />
     </Style>
     <Style Selector="Border.composer:focus-within">
       <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
@@ -811,11 +812,6 @@
                      TextBox.composer:focus /template/ Border#PART_BorderElement">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
-    </Style>
-    <Style Selector="TextBox.composer /template/ TextBlock#PART_Watermark,
-                     TextBox.composer:pointerover /template/ TextBlock#PART_Watermark,
-                     TextBox.composer:focus /template/ TextBlock#PART_Watermark">
-      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
     </Style>
 
   </Application.Styles>

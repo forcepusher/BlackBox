@@ -683,7 +683,7 @@ internal static class AnthropicImages
         {
             var scale = Math.Min(1.0, (double)side / Math.Max(width, height));
             var info = new SkiaSharp.SKImageInfo(Math.Max(1, (int)Math.Round(width * scale)), Math.Max(1, (int)Math.Round(height * scale)));
-            using var resized = scale < 1 ? bitmap.Resize(info, SkiaSharp.SKFilterQuality.High) : null;
+            using var resized = scale < 1 ? bitmap.Resize(info, Media.Sampling.High(width, info.Width)) : null;
             using var image = SkiaSharp.SKImage.FromBitmap(resized ?? bitmap);
             using var data = image.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 90);
             var jpeg = data.ToArray();

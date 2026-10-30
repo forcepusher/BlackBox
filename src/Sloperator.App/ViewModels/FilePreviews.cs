@@ -178,7 +178,7 @@ public sealed partial class AnimationPreview(string path, int width = FilePrevie
         for (var i = 0; i < count; i++)
         {
             codec.GetPixels(full.Info, full.GetPixels(), new SKCodecOptions(i, codec.FrameCount > 1 ? info[i].RequiredFrame : -1));
-            using var small = full.Resize(size, SKFilterQuality.Medium);
+            using var small = full.Resize(size, Sampling.Medium(1, scale));
             var ms = codec.FrameCount > 1 ? Math.Max(info[i].Duration, 20) : 100;
             total += ms;
             frames.Add((ToBitmap(small), ms));

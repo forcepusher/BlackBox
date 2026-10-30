@@ -128,12 +128,13 @@ public class FindTextTests
     {
         using var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(bitmap))
-        using (var font = new SKPaint { Typeface = SKTypeface.FromFamilyName("Segoe UI"), TextSize = 12, IsAntialias = true, Color = new SKColor(20, 22, 26) })
+        using (var font = new SKFont(SKTypeface.FromFamilyName("Segoe UI"), 12))
+        using (var ink = new SKPaint { IsAntialias = true, Color = new SKColor(20, 22, 26) })
         {
             canvas.Clear(SKColors.White);
             string[] codes = ["AB-123", "CD-456", "EF-789", "GH-012", "VY-643", "KL-345"];
             for (var i = 0; i < codes.Length; i++)
-                canvas.DrawText(codes[i], 10 + i * 100, 100, font);
+                canvas.DrawText(codes[i], 10 + i * 100, 100, SKTextAlign.Left, font, ink);
         }
         var pixels = new byte[width * height * 4];
         Marshal.Copy(bitmap.GetPixels(), pixels, 0, pixels.Length);

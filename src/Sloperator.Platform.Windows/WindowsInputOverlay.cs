@@ -184,17 +184,18 @@ internal sealed class WindowsInputOverlay : IInputOverlay
             // No antialiasing on the boxes: their edges meet the colour key, and blended edge
             // pixels would show as a pink fringe.
             using var back = new SKPaint { IsAntialias = false, Color = LineBack };
-            using var text = new SKPaint { IsAntialias = true, Typeface = typeface, TextSize = 17 };
+            using var font = new SKFont(typeface, 17);
+            using var text = new SKPaint { IsAntialias = true };
             for (var i = 0; i < lines.Count; i++)
             {
                 var (entry, alpha) = lines[i];
                 var label = entry.Count > 1 ? $"{entry.Text}  ×{entry.Count}" : entry.Text;
-                var width = Math.Min(PanelWidth, text.MeasureText(label) + 24);
+                var width = Math.Min(PanelWidth, font.MeasureText(label) + 24);
                 var top = 4 + i * LineHeight;
                 canvas.DrawRect(new SKRect(PanelWidth - width, top, PanelWidth, top + LineHeight - 6), back);
                 // A line fades by its text sinking into the box; the box goes when the line does.
                 text.Color = Blend(LineBack, SKColors.White, alpha);
-                canvas.DrawText(label, PanelWidth - width + 12, top + 20, text);
+                canvas.DrawText(label, PanelWidth - width + 12, top + 20, SKTextAlign.Left, font, text);
             }
         });
     }
