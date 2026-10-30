@@ -11,7 +11,8 @@ done. The model runs on any OpenAI-compatible server: LM Studio (on this PC or a
 your network), llama.cpp's llama-server, vLLM, or a hosted API.
 
 ## Portable layout
-No installer, no registry, nothing in AppData or %TEMP%. Ship just `Sloperator.exe`: on first run it
+No installer, no registry (but for one key while Notify me when done is on, see there), nothing in
+AppData or %TEMP%. Ship just `Sloperator.exe`: on first run it
 unpacks its native UI libraries into `Data/runtime` next to itself. They are embedded as a zip of
 the files stored as they are, packed whole with Brotli (`scripts/pack-runtime.cs`, quality 11, 16 MB
 window): 7.6 MB where the zip's own Deflate made 10.0 (Skia, PDFium, ANGLE and HarfBuzz, 23 MB
@@ -35,7 +36,8 @@ Sloperator/
                pasted/ (pictures pasted into the chat, see Files in a message),
                videos/ (a folder per video: storyboard, frames, shots, song and the video, see Videos),
                index/ (the indexes of the folders the agent indexed, a file each, see Folder index),
-               crash.log (errors no code caught, see below), errors.log (every error shown, see below)
+               crash.log (errors no code caught, see below), errors.log (every error shown, see below),
+               sloperator.png (the notifications' icon, see Notify me when done)
 ```
 
 Set `SLOPERATOR_HOME` to use a different root. Debug builds use `.dev/` in the repository.
@@ -1732,6 +1734,51 @@ A soak of 20 minutes on the stand-in (2026-10-23): two windows each sending "key
 as soon as the last one ended, 45 tasks each and 91 chats saved, taking turns with the keyboard
 all along. The process stayed at 340-510 MB (up and down with the screenshots it collects), about
 940 handles and 107 threads from the fourth minute to the end, and nothing went to the crash log.
+
+## Notify me when done
+Settings → Notifications → **Notify me when done** (off by default) shows a Windows notification
+when a window's run ends or waits: done (the chat's title over the first line of the last reply, its
+Markdown marks taken out, cut at a word past 140 characters), stopped by an error ("Stopped by an
+error: " and the chat's red line), or waiting for the user's OK under "Ask me first" ("Waiting for
+your OK: " and the call's summary). None for a run the user stopped, for one whose messages sent
+too late start the next run at once, or for a Compact context; none while that window is the active
+one and not minimized, as the user is looking at it. The research behind it: done or needs-input
+notifications were among the most asked-for features in comparable agents.
+
+Each window has a tag of its own (`window-N`), so its next notification replaces the last one in
+the action centre too, and two windows' notifications stand side by side. A click on one brings its
+window forward (`ChatWindows.BringForward`); Windows lets the clicked app take the foreground, so the
+window comes to the front rather than flashing on the taskbar. A window's notification goes when the
+window is activated (it says what the notification said), when it closes, and when Sloperator ends:
+no COM activator is registered, so a click after the process ended would do nothing. The setting is
+Sloperator's, not the window's: saved in one window's Settings, it holds for every window.
+
+How (`WindowsToasts`): Windows' own toasts through WinRT (`ToastNotificationManager`), called
+through the interfaces' vtables, as Media Foundation is (see Pictures, video and sound), with the
+Activated event's handler a hand-made COM object of four slots (its IID, that of
+`TypedEventHandler<ToastNotification, Object>`, computed from WinRT's parameterized-interface
+rule: ab54de2d-…). No package: the Windows SDK projection (`net10.0-windows10.0.x` and CsWinRT) adds
+megabytes to the exe, and the Community Toolkit's notifications package needs it. An exe that isn't
+installed needs its app id registered for Windows 10 to show its toasts: Sloperator writes
+`HKCU\Software\Classes\AppUserModelId\Sloperator` (DisplayName, IconUri) at the first notification of
+each start, with the icon as `Data\sloperator.png`, which Windows reads the picture from. That key is
+the one thing Sloperator writes outside its folder, and only with the setting on: turning it off
+deletes the key and takes down the notifications still up. Windows keeps a key of its own per app
+under `Notifications\Settings` (whether the user allowed it in Windows' settings), which is left be.
+All of it runs off the windows' thread, one call after another.
+
+Checked on the laptop (Windows 10 LTSC 21H2, 2026-10-30) with a stand-in server (`.dev/notify-test`:
+server.ps1 keyed by the message's words, drive.ps1, catch.ps1 which waits for a Sloperator banner by
+its icon's colour and clicks it, drain.ps1): a reply in a window behind Notepad showed the banner
+with the chat's title and "I wrote the poem into Notepad and saved it as poem.txt on your desktop."
+(bold and code marks gone); clicking it put that window in front. A 400 from the server showed
+"Stopped by an error: Chat request failed (400): …"; a `run_shell` under "Ask before shell commands
+and file changes" showed "Waiting for your OK: Delete the old logs", and with two windows open its
+click brought the second window forward, the first one's the first. With the window in front, nothing
+was shown or left in the action centre; after a click the window's notification was gone from it.
+Turned off in Settings, the registry key went, and a run in the other window showed nothing.
+Pitfall for such tests: banners wait on the screen while the user is away, one at a time, so a
+Sloperator banner queued behind another app's waits until those are moved to the action centre.
 
 ## Files in a message
 Drop files or folders anywhere on the window, paste them with Ctrl+V (a screenshot, a picture

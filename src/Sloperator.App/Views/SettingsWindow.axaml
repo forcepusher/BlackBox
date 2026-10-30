@@ -42,6 +42,10 @@
         <TextBlock Classes="h2" Text="Side panel" />
         <CheckBox IsChecked="{Binding Panels.OpenFileChanges}" Content="Open File changes when the agent changes a file" />
 
+        <TextBlock Classes="h2" Text="Notifications" />
+        <CheckBox IsChecked="{Binding Notify.WhenDone}" Content="Notify me when done"
+                  ToolTip.Tip="A Windows notification when a task is done, stops on an error or waits for your OK, unless you are looking at its window." />
+
         <TextBlock Classes="h2" Text="Safety" />
         <Grid Classes="form" ColumnDefinitions="160,*">
           <TextBlock Classes="label" Text="Ask me first" />

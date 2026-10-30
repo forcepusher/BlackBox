@@ -372,11 +372,22 @@ public sealed class PanelSettings
     public bool OpenFileChanges { get; set; } = true;
 }
 
+/// <summary>What Sloperator tells the user outside its windows.</summary>
+public sealed class NotifySettings
+{
+    /// <summary>
+    /// A Windows notification when a run ends (done, or stopped by an error) or waits for the
+    /// user's OK, unless its window is in front already. Off by default.
+    /// </summary>
+    public bool WhenDone { get; set; }
+}
+
 public sealed class AppSettings
 {
     public ServerSettings Server { get; set; } = new();
     public AgentSettings Agent { get; set; } = new();
     public PanelSettings Panels { get; set; } = new();
+    public NotifySettings Notify { get; set; } = new();
 
     /// <summary>The main window's last size and place; null until it was first closed.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -423,6 +434,7 @@ public sealed class SettingsStore(AppPaths paths)
             settings.Server ??= new();
             settings.Agent ??= new();
             settings.Panels ??= new();
+            settings.Notify ??= new();
             var loaded = JsonSerializer.Serialize(settings, SettingsJson.Default.AppSettings);
             _base = JsonNode.Parse(loaded) as JsonObject;
             // Rewrite the file if it still has keys from older versions, so it only ever holds
