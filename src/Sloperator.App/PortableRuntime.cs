@@ -25,6 +25,9 @@ internal static class PortableRuntime
     private const bool DebugBuild = false;
 #endif
 
+    /// <summary>The single-file exe publish.ps1 makes, which carries its native libraries: not a debug or folder build.</summary>
+    public static bool SingleFile { get; } = Assembly.GetExecutingAssembly().GetManifestResourceInfo(PayloadName) is not null;
+
     /// <summary>The portable folder this build keeps its data in (debug builds: <c>.dev/</c> in the repository).</summary>
     public static AppPaths FindPaths() => new(AppPaths.FindRoot(useRepositoryDevFolder: DebugBuild));
 
@@ -49,7 +52,11 @@ internal static class PortableRuntime
                 // started while the old one was open) and holds the libraries: "Sloperator could not
                 // start. UnauthorizedAccessException: Access to the path 'libSkiaSharp.dll' is denied."
                 // This one unpacks beside them; the next start alone goes back to Data/runtime.
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && File.Exists(Path.Combine(dir, "libSkiaSharp.dll")))
+                // Whatever is left of the folder counts: started by a restart into an update, the old
+                // version, still ending, had let go of libSkiaSharp.dll but not of libHarfBuzzSharp.dll,
+                // and the deleting got rid of the one it looked for before failing on the other.
+                // A Data folder that takes nothing (Program Files) fails beside them too, and says so.
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException && Directory.Exists(dir))
                 {
                     dir = Path.Combine(paths.DataDir, $"runtime-{moduleId.ToString("N")[..8]}");
                     if (!Unpacked(dir, version))

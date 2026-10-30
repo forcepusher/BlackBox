@@ -70,7 +70,10 @@ in (Program Files), it says to move `Sloperator.exe` to a folder of your own, ra
 "Access to the path '…\Data\runtime' is denied". A newer version started from the folder where an
 older one is still open (`Sloperator (1).exe` downloaded next to `Sloperator.exe`) unpacks its
 libraries into `Data/runtime-<id>` beside the ones the old one holds; that failed to start before,
-and the folder goes once nothing uses it.
+and the folder goes once nothing uses it. Any of `Data/runtime` left after a failed delete counts as
+held: it went by `libSkiaSharp.dll` alone, and a restart into an update (see Updates), with the old
+version still ending, had let go of that one but not of HarfBuzz, so the delete took Skia away and
+the new version didn't start (2026-10-30, 1 of 4 restarts).
 
 ## Documents
 `read_file` reads more than text: PDFs (their text layer, page by page), Word, Excel and PowerPoint
@@ -3495,6 +3498,48 @@ answers too, and the model's answer to it ("Both questions are answered...") sho
 reply at the end of the run that nobody had asked for. A message that comes while the model writes
 its final answer isn't marked: the task is done by then, so it is the next request, as if sent after
 the run.
+
+## Updates
+Sloperator updates itself (`Updater` in the app, `SelfUpdate` and `GitHubReleases` in Core). Once
+the first window is up (5 s on, after its own server check and MCP servers) and then once an hour, it
+asks GitHub for the newest release of forcepusher/Sloperator: `GitHubReleases.LatestAsync`, shared
+with ComfyUI's install, reads the API's `releases/latest` (tag, page, the `Sloperator.exe` asset and
+its `digest`), and past the API's 60 requests an hour (often reached behind a VPN) the
+`/releases/latest` redirect and the release's `expanded_assets` page. A check that comes due while a
+run is going in any window waits for the last run to end (`ChatWindows.BusyChanged`): no download
+competes with a task for the connection, and the line doesn't show up mid-task.
+
+The tag ("1.2.0", "v1.2.0"; a "-beta" suffix is dropped) against the running exe's file version
+(Directory.Build.props `Version`): newer, and with `Sloperator.exe` among its files, it is downloaded
+by `Downloader` (resumed after a cut, checked against GitHub's SHA-256) into the exe's own folder as
+`<exe>.new`, under the running exe's own name (`Sloperator (1).exe` gets `Sloperator (1).exe.new`),
+and only once it is whole and its file version is higher than the running one. A release published
+before its build attached the exe (the release workflow runs a few minutes, longer while SignPath
+waits for the approver) is no update until the exe is there. No signature check of Sloperator's
+own: the user's call (2026-10-30), as GitHub's checksum and the release being the repository's own
+cover what a check would.
+
+Then each chat window shows one line under the server rows (`Border.bar.slim`, 33 high):
+"Sloperator 1.2.0 is ready", **What's new** (the release's page) and **Restart**, which waits while a
+run is going in any window. Restart flushes the chats, swaps the files (`SelfUpdate.Swap`: the
+running exe to `<exe>.old`, which Windows allows for a running exe, then `<exe>.new` to `<exe>`;
+when the second rename fails the first is undone), starts the new exe with `--reopen <id>,<id>`
+(the windows' chats in the order they opened, empty for a window without one) and ends. The new
+build opens a window for each and opens its chat, as History would. The two never talk: the new
+build's `SingleInstance` name is its own, so it doesn't hand its start to the old one still ending,
+and `PortableRuntime` unpacks beside the old one's `Data/runtime` while that holds it. A new exe
+that doesn't start goes back to `<exe>.new` and the old one stays in place. Not restarted, the swap
+is made when the last window closes, without starting again. Each start deletes `<exe>.old` and a
+leftover `<exe>.new` or `<exe>.new.part`, quietly, unless they are still held.
+
+A folder Sloperator can't write to (Program Files, a locked folder; a file made and deleted at once
+tells) gets no download: the line says "Sloperator 1.2.0 is out" with **Download**, the release's
+page. Only the single-file exe publish.ps1 makes (the one with the embedded runtime) updates itself:
+a debug or folder build would be replaced by a lone exe; there, **Check for updates** says so and
+nothing checks by itself. Settings → Updates: **Check for updates** (checks now: "Checking…", then
+"Up to date", the ready or out version, or what went wrong) and **Check automatically**, on by
+default; off, Sloperator never contacts GitHub by itself. `SLOPERATOR_RELEASES_SERVER` points the
+lookup at a stand-in for GitHub's API and pages, for tests only.
 
 ## Build
 Requires the .NET 10 SDK.

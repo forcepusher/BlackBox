@@ -357,6 +357,16 @@
     <Style Selector="Border.bar.foot">
       <Setter Property="BorderThickness" Value="0,1,0,0" />
     </Style>
+    <!-- A line of news under the chat's top rows (a new version): small buttons 4 from its edges, 33
+         high with or without one (the line that a new version is out has none). The room is kept
+         for the button inside, not as the line's own height: 33 is 41.25 px at 125%, and the line
+         went to 42, the button a pixel under the words beside it. -->
+    <Style Selector="Border.bar.slim">
+      <Setter Property="Padding" Value="16,4" />
+    </Style>
+    <Style Selector="Border.bar.slim > DockPanel">
+      <Setter Property="MinHeight" Value="24" />
+    </Style>
     <!-- The gap between the chat and a side panel, and between File changes' list and its diff: the
          title bar's colour. -->
     <Style Selector="GridSplitter">
@@ -421,6 +431,27 @@
     </Style>
     <Style Selector="Button.bare /template/ ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <!-- A link among words (What's new): the accent's colour and underlined, as the chat's links are,
+         lighter under the pointer; no look of a button's own. Its words go in a TextBlock. -->
+    <Style Selector="Button.link">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.link /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource BbAccent}" />
+    </Style>
+    <Style Selector="Button.link:pointerover /template/ ContentPresenter">
+      <Setter Property="Foreground" Value="{StaticResource BbAccentHover}" />
+    </Style>
+    <Style Selector="Button.link:pressed">
+      <Setter Property="RenderTransform" Value="none" />
+    </Style>
+    <Style Selector="Button.link TextBlock">
+      <Setter Property="TextDecorations" Value="Underline" />
     </Style>
     <!-- A ghost button that opens a list (History, the video's name): the arrow 10 from its right
          edge, 12 from the word, as on the Side panel dropdown beside it; pressed, it doesn't shrink,

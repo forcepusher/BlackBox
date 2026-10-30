@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Sloperator updates itself: it checks GitHub for a new version at start and once an hour (never
+  during a task), downloads it beside itself, and a line under the top bar says **Sloperator 1.2.0 is
+  ready**, with **Restart** and **What's new**. Restart opens the new version with the same chats;
+  closing Sloperator instead puts it in place for the next start. In a folder Sloperator can't write
+  to (Program Files) the line says the new version is out, with a link to download it.
+- **Check for updates** and **Check automatically** (on by default) under Settings → Updates. Off,
+  Sloperator never contacts GitHub by itself.
 - Releases are built by GitHub Actions and signed through SignPath, so Windows shows Sloperator's
   publisher instead of an unknown app once the signature has built up trust.
 - Right-click any picture in Sloperator for **Copy image**, and any other file (a video, a sound, a
@@ -78,6 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   files to ask about them, stage or discard them."
 
 ### Fixed
+- A newer Sloperator started from the folder of one still closing could fail with "Access to the path
+  'libHarfBuzzSharp.dll' is denied".
 - Code in a reply's line (`like this`) was much smaller than the words around it (11 beside 14);
   it is the same size now, in a table too.
 - Selecting part of a reply redrew the selected words in the code font a size larger, and the rest of

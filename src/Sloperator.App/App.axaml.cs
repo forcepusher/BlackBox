@@ -61,7 +61,11 @@ public partial class App : Application
             // Ends with the last chat window, not with whichever window was opened first.
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
             var windows = new ChatWindows(paths, CreatePlatform(), desktop);
-            var first = windows.Open();
+            // Restarted into an update: a window for each chat the old version had open.
+            var reopen = ChatWindows.ChatsToReopen(desktop.Args);
+            var first = windows.Open(reopen.FirstOrDefault());
+            foreach (var chat in reopen.Skip(1))
+                windows.Open(chat);
             desktop.MainWindow = first;
             // Stops the MCP server processes with the app; otherwise they would outlive it.
             desktop.Exit += (_, _) => windows.Exit();
@@ -77,6 +81,7 @@ public partial class App : Application
                 windows.Front()?.Vm.ShowProblem($"Sloperator closed unexpectedly last time ({crash}).");
             // Sloperator started again: another window here.
             SingleInstance.OnOpenWindow(() => Dispatcher.UIThread.Post(() => windows.Open()));
+            windows.Updater.Start(new Core.Settings.SettingsStore(paths).Load().Updates.Automatic);
             Program.Started = true;
         }
 
