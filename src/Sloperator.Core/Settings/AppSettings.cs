@@ -328,6 +328,9 @@ public sealed class AgentSettings
     /// <summary>The agent may use the mouse and keyboard; only while it can see the screen too (see <see cref="Controls"/>).</summary>
     public bool EnableControl { get; set; } = true;
 
+    /// <summary>The agent may read the screen's text with Windows' own recognition (find_text), and offers to install it where it is missing.</summary>
+    public bool EnableTextRecognition { get; set; } = true;
+
     /// <summary>Whether the agent gets the mouse and keyboard tools: never blind, without screenshots.</summary>
     [JsonIgnore]
     public bool Controls => EnableScreenshots && EnableControl;

@@ -298,6 +298,11 @@ public class ToolTests
         var blind = ToolRegistry.CreateDefault(includeScreenTools: false, includeControl: true);
         Assert.All(look.Concat(act), n => Assert.False(Has(blind, n), n));
 
+        // Text recognition off: no find_text, and the prompt doesn't point at it.
+        Assert.False(Has(ToolRegistry.CreateDefault(includeScreenTools: true, includeFindText: false), "find_text"));
+        Assert.True(new AgentSettings().EnableTextRecognition);
+        Assert.DoesNotContain("find_text", Sloperator.Core.Agent.SystemPrompt.Build("Test OS", [new ScreenSpace(new ScreenRect(0, 0, 1920, 1080), null)], "C:\\", "", findText: false));
+
         Assert.True(new AgentSettings().Controls);
         Assert.False(new AgentSettings { EnableControl = false }.Controls);
         Assert.False(new AgentSettings { EnableScreenshots = false, EnableControl = true }.Controls);

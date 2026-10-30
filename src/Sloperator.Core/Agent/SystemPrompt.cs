@@ -17,7 +17,7 @@ public static class SystemPrompt
     /// <param name="modelServer">Whether model_server is in the tool list.</param>
     public static string Build(string platformName, IReadOnlyList<ScreenSpace>? screens, string workingDirectory, string customInstructions,
         IReadOnlyList<McpServerStatus>? mcpServers = null, bool webSearch = false, string? toolsDirectory = null, string? scratchDirectory = null,
-        bool folderIndex = true, bool control = true, bool modelServer = false)
+        bool folderIndex = true, bool control = true, bool modelServer = false, bool findText = true)
     {
         var screen = screens is { Count: > 0 } ? screens[0] : null;
         var sb = new StringBuilder();
@@ -75,7 +75,8 @@ public static class SystemPrompt
         {
             sb.AppendLine("- Start GUI tasks with a screenshot. Look before you click; never guess coordinates.");
             sb.AppendLine("- Aim for the center of buttons, fields and icons. After each action, check the new screenshot to confirm it worked before moving on.");
-            sb.AppendLine("- To find a label, a link or a value among many (a table, a long list, a page of text), use find_text rather than searching by zooming.");
+            if (findText)
+                sb.AppendLine("- To find a label, a link or a value among many (a table, a long list, a page of text), use find_text rather than searching by zooming.");
             sb.AppendLine("- Maximize small windows (double-click the title bar or press win+up) when that makes them easier to work with.");
             sb.AppendLine("- Prefer keyboard shortcuts and the shell when they are more reliable than clicking (e.g. win+r, ctrl+l, Start-Process).");
             sb.AppendLine("- Click a text field before typing into it.");

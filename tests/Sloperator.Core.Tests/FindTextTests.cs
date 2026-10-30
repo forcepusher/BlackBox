@@ -79,7 +79,10 @@ public class FindTextTests
         var ctx = new ToolContext { Platform = new FakePlatform { Text = new NoLanguageReader() }, Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
         var result = await new FindTextTool().ExecuteAsync(new JsonObject { ["text"] = "OK" }, ctx, CancellationToken.None);
         Assert.True(result.IsError);
-        Assert.Contains("Only if they agree", result.Text);
+        // Install, skip for now, or turn it off for good in Settings.
+        Assert.Contains("Only if they choose to install", result.Text);
+        Assert.Contains("skip it for now", result.Text);
+        Assert.Contains("Settings → Advanced → Use text recognition", result.Text);
         Assert.Contains("-Verb RunAs", result.Text); // installing a capability needs an administrator
         Assert.Contains("Add-WindowsCapability -Online -Name", result.Text);
     }
