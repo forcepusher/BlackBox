@@ -349,6 +349,22 @@
       <Setter Property="Margin" Value="0,12,0,4" />
     </Style>
 
+    <!-- Tabs (Settings' General and Advanced): Fluent's, the yellow line under the picked one, the
+         headers smaller than its 24 and each page right under them. The first header's word 16 in
+         from the window's edge (4 here and Fluent's 12 inside a header), where the pages' text starts.
+         Fluent sets the strip's margin under [TabStripPlacement=Top], which outranks a selector
+         without a condition: this one has the same. -->
+    <Style Selector="TabControl">
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="TabControl[TabStripPlacement=Top] /template/ ItemsPresenter#PART_ItemsPresenter">
+      <Setter Property="Margin" Value="4,0" />
+    </Style>
+    <Style Selector="TabItem">
+      <Setter Property="FontSize" Value="20" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
     <!-- The bar along the top of the chat and of each side panel, and along the foot of Settings:
          on the background, a line on its inner side, 16 in from the window's edge, its buttons and
          dropdowns 8 from its edges, so every such bar is 49 high and those side by side line up.

@@ -462,7 +462,7 @@ public sealed partial class TextRecognitionOffer(ITextReader reader, Action turn
         {
             TextInstall.Installed => $"Installed: {string.Join(", ", reader.Languages())}.",
             TextInstall.Declined => "Not installed: Windows' prompt was declined. Offered again next time.",
-            _ => "Not installed: Windows couldn't add it. Try Settings → Advanced.",
+            _ => "Not installed: Windows couldn't add it. Try Settings → General.",
         };
         await LingerThenCloseAsync();
     }
@@ -479,7 +479,7 @@ public sealed partial class TextRecognitionOffer(ITextReader reader, Action turn
     {
         IsOpen = false;
         turnOff();
-        Status = "Turned off. Back on in Settings → Advanced.";
+        Status = "Turned off. Back on in Settings → General.";
         await LingerThenCloseAsync();
     }
 

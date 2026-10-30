@@ -37,66 +37,81 @@
       </DockPanel>
     </Border>
 
-    <ScrollViewer>
-      <StackPanel Spacing="4" Margin="16,8,28,24">
-        <TextBlock Classes="h2" Text="Side panel" />
-        <CheckBox IsChecked="{Binding Panels.OpenFileChanges}" Content="Open File changes when the agent changes a file" />
+    <!-- Everyday options in General, the ones most people never touch in Advanced. -->
+    <TabControl x:Name="Tabs">
+      <TabItem Header="General">
+        <ScrollViewer>
+          <StackPanel Spacing="4" Margin="16,8,28,24">
+            <TextBlock Classes="h2" Text="Side panel" />
+            <CheckBox IsChecked="{Binding Panels.OpenFileChanges}" Content="Open File changes when the agent changes a file" />
 
-        <TextBlock Classes="h2" Text="Notifications" />
-        <CheckBox IsChecked="{Binding Notify.WhenDone}" Content="Notify me when done"
-                  ToolTip.Tip="A Windows notification when a task is done, stops on an error or waits for your OK, unless you are looking at its window." />
+            <TextBlock Classes="h2" Text="Notifications" />
+            <CheckBox IsChecked="{Binding Notify.WhenDone}" Content="Notify me when done"
+                      ToolTip.Tip="A Windows notification when a task is done, stops on an error or waits for your OK, unless you are looking at its window." />
 
-        <TextBlock Classes="h2" Text="Safety" />
-        <Grid Classes="form" ColumnDefinitions="160,*">
-          <TextBlock Classes="label" Text="Ask me first" />
-          <ComboBox Grid.Column="1" ItemsSource="{Binding ApprovalModes}" SelectedIndex="{Binding ApprovalIndex}" HorizontalAlignment="Stretch" />
-        </Grid>
-        <CheckBox x:Name="ScreenshotsBox" IsChecked="{Binding Agent.EnableScreenshots}" Content="Enable screenshots" />
-        <!-- No clicking blind: the mouse and keyboard only go with screenshots. -->
-        <CheckBox IsChecked="{Binding Agent.EnableControl}" IsEnabled="{Binding #ScreenshotsBox.IsChecked}" Content="Enable keyboard and mouse control" />
+            <TextBlock Classes="h2" Text="Safety" />
+            <Grid Classes="form" ColumnDefinitions="160,*">
+              <TextBlock Classes="label" Text="Ask me first" />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding ApprovalModes}" SelectedIndex="{Binding ApprovalIndex}" HorizontalAlignment="Stretch" />
+            </Grid>
+            <CheckBox x:Name="ScreenshotsBox" IsChecked="{Binding Agent.EnableScreenshots}" Content="Enable screenshots" />
+            <!-- No clicking blind: the mouse and keyboard only go with screenshots. -->
+            <CheckBox IsChecked="{Binding Agent.EnableControl}" IsEnabled="{Binding #ScreenshotsBox.IsChecked}" Content="Enable keyboard and mouse control" />
 
-        <TextBlock Classes="h2" Text="Things Sloperator should always know" />
-        <TextBox Text="{Binding Agent.CustomInstructions}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100"
-                 Watermark="For example: my documents are in D:\Docs. Use Firefox for browsing. Answer in German." />
+            <TextBlock Classes="h2" Text="Things Sloperator should always know" />
+            <TextBox Text="{Binding Agent.CustomInstructions}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100"
+                     Watermark="For example: my documents are in D:\Docs. Use Firefox for browsing. Answer in German." />
 
-        <TextBlock Classes="h2" Text="MCP servers" />
-        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Tools from other programs, like Blender. Sloperator adds them as needed."
-                   ToolTip.Tip="{Binding Paths.McpConfigFile, StringFormat='Kept in {0}'}" />
-        <TextBox x:Name="McpBox" Text="{Binding McpConfigText}" Watermark="{Binding McpExample}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
-                 FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12" MinHeight="200" Margin="0,8,0,0"
-                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                 ToolTip.Tip="Same format as Claude Desktop, LM Studio and Cursor" />
-        <views:SelectableText Classes="muted error" TextWrapping="Wrap" Text="{Binding McpError}" IsVisible="{Binding HasMcpError}" />
-        <views:SelectableText Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
-
-        <TextBlock Classes="h2" Text="Updates" />
-        <CheckBox IsChecked="{Binding Updates.Automatic}" Content="Check automatically"
-                  ToolTip.Tip="At start and once an hour Sloperator asks GitHub for a new version and downloads it. Off, it never contacts GitHub by itself." />
-        <StackPanel Orientation="Horizontal" Spacing="12">
-          <Button Classes="ghost" Content="Check for updates" Command="{Binding CheckForUpdatesCommand}" />
-          <TextBlock Classes="muted" VerticalAlignment="Center" Text="{Binding Updater.Status}" />
-        </StackPanel>
-
-        <TextBlock Classes="h2" Text="Advanced" />
-        <Grid Classes="form" ColumnDefinitions="160,*">
-          <TextBlock Classes="label" Text="Screenshot size" />
-          <ComboBox Grid.Column="1" ItemsSource="{Binding ScreenshotSizes}" SelectedIndex="{Binding ScreenshotSizeIndex}" HorizontalAlignment="Stretch"
-                    AutomationProperties.Name="Screenshot size" />
-        </Grid>
-        <TextBlock Classes="muted" TextWrapping="Wrap"
-                   Text="Taller screens are scaled down, never up. Smaller uses less context, but clicks miss more." />
-        <CheckBox IsChecked="{Binding Agent.EnableTextRecognition}" Content="Use text recognition" Margin="0,8,0,0" IsVisible="{Binding ShowsTextRecognition}" />
-        <Grid Classes="form" ColumnDefinitions="160,*" IsVisible="{Binding ShowsTextRecognition}">
-          <TextBlock Classes="label" Text="Languages" />
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" Margin="0,4">
-            <TextBlock Text="{Binding TextRecognition}" VerticalAlignment="Center" />
-            <Button Classes="ghost" Content="Add a language" Command="{Binding OpenLanguageSettingsCommand}" IsVisible="{Binding !HasTextRecognition}"
-                    ToolTip.Tip="Opens Windows' language settings: a language added there brings its text recognition" />
+            <StackPanel Spacing="4" IsVisible="{Binding ShowsTextRecognition}">
+              <TextBlock Classes="h2" Text="Text recognition" />
+              <CheckBox IsChecked="{Binding Agent.EnableTextRecognition}" Content="Use text recognition" />
+              <Grid Classes="form" ColumnDefinitions="160,*">
+                <TextBlock Classes="label" Text="Languages" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" Margin="0,4">
+                  <TextBlock Text="{Binding TextRecognition}" VerticalAlignment="Center" />
+                  <Button Classes="ghost" Content="Add a language" Command="{Binding OpenLanguageSettingsCommand}" IsVisible="{Binding !HasTextRecognition}"
+                          ToolTip.Tip="Opens Windows' language settings: a language added there brings its text recognition" />
+                </StackPanel>
+              </Grid>
+              <TextBlock Classes="muted" TextWrapping="Wrap"
+                         Text="Makes model's clicks more accurate. Not used or offered when disabled." />
+            </StackPanel>
           </StackPanel>
-        </Grid>
-        <TextBlock Classes="muted" TextWrapping="Wrap" IsVisible="{Binding ShowsTextRecognition}"
-                   Text="Makes model's clicks more accurate. Not used or offered when disabled." />
-      </StackPanel>
-    </ScrollViewer>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Advanced">
+        <ScrollViewer>
+          <StackPanel Spacing="4" Margin="16,8,28,24">
+            <TextBlock Classes="h2" Text="Screenshots" />
+            <Grid Classes="form" ColumnDefinitions="160,*">
+              <TextBlock Classes="label" Text="Screenshot size" />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding ScreenshotSizes}" SelectedIndex="{Binding ScreenshotSizeIndex}" HorizontalAlignment="Stretch"
+                        AutomationProperties.Name="Screenshot size" />
+            </Grid>
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Taller screens are scaled down, never up. Smaller uses less context, but clicks miss more." />
+
+            <TextBlock Classes="h2" Text="MCP servers" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="Tools from other programs, like Blender. Sloperator adds them as needed."
+                       ToolTip.Tip="{Binding Paths.McpConfigFile, StringFormat='Kept in {0}'}" />
+            <TextBox x:Name="McpBox" Text="{Binding McpConfigText}" Watermark="{Binding McpExample}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+                     FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12" MinHeight="200" Margin="0,8,0,0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                     ToolTip.Tip="Same format as Claude Desktop, LM Studio and Cursor" />
+            <views:SelectableText Classes="muted error" TextWrapping="Wrap" Text="{Binding McpError}" IsVisible="{Binding HasMcpError}" />
+            <views:SelectableText Classes="muted" TextWrapping="Wrap" Margin="0,4,0,0" Text="{Binding McpStatusText}" IsVisible="{Binding HasMcpStatus}" />
+
+            <TextBlock Classes="h2" Text="Updates" />
+            <CheckBox IsChecked="{Binding Updates.Automatic}" Content="Check automatically"
+                      ToolTip.Tip="At start and once an hour Sloperator asks GitHub for a new version and downloads it. Off, it never contacts GitHub by itself." />
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <Button Classes="ghost" Content="Check for updates" Command="{Binding CheckForUpdatesCommand}" />
+              <TextBlock Classes="muted" VerticalAlignment="Center" Text="{Binding Updater.Status}" />
+            </StackPanel>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
   </DockPanel>
 </Window>

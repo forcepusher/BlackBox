@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - The agent can find text on the screen with Windows' own text recognition, so it finds a label, a
   link or a value in a big table or a page of text in one step instead of zooming around for it.
-  **Use text recognition** under Settings → Advanced (on by default) turns it on or off, and shows the
+  **Use text recognition** under Settings → General (on by default) turns it on or off, and shows the
   languages Windows reads; where there is none, **Add a language** opens Windows' language settings.
   Without one, Sloperator offers to install it for your language above the message box (Windows asks
   you to allow it): you can install it, skip it for now (it's offered again next time), or turn text
@@ -18,10 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   1.2.0 is ready**, with **Restart** and **What's new**. Restart opens the new version with the same
   chats; closing Sloperator instead puts it in place for the next start. In a folder Sloperator can't
   write to (Program Files) the line says the new version is out, with a link to download it.
-- **Check for updates** and **Check automatically** (on by default) under Settings → Updates. Off,
+- **Check for updates** and **Check automatically** (on by default) under Settings → Advanced → Updates. Off,
   Sloperator never contacts GitHub by itself.
 - A signed Sloperator only installs an update signed by the same publisher; one that isn't is
-  deleted and not downloaded again, and Settings → Updates says it couldn't be verified.
+  deleted and not downloaded again, and Settings → Advanced → Updates says it couldn't be verified.
 - Releases are built by GitHub Actions and signed through SignPath, so Windows shows Sloperator's
   publisher instead of an unknown app once the signature has built up trust.
 - Right-click any picture in Sloperator for **Copy image**, and any other file (a video, a sound, a
@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In the Video generator, a clip nothing is said of yet says "Say in the chat what happens in it.",
   and a new sound what to pick, instead of "Nothing said yet."
 - A sound line's volume in the Video generator moves in steps of 5%.
+- Settings has two tabs: **General** (side panel, notifications, safety, what Sloperator should
+  always know, text recognition) and **Advanced** (screenshot size, MCP servers, updates).
 - Every button, dropdown and text field keeps its words the same distance from its left edge, as the
   Servers button does; buttons are a little wider.
 - Before clicking a named button, menu, tab, link or setting, the agent looks it up with text

@@ -1632,6 +1632,13 @@ Servers' lists unlike the dropdowns'):
   under 32-high controls, so every bar is 49 high (at 125%: 61 px) and the chat's top bar and a
   panel's line up; the chat's server rows (`Border.bar.fields`) a shade lighter. In them buttons are
   8 apart and 12 from text. The splitters are one `GridSplitter` style (the title bar's colour).
+- **Settings' tabs** (the user, 2026-10-30; it had General and Advanced tabs before 17 October too):
+  General (Side panel, Notifications, Safety, the instructions, Text recognition) and Advanced
+  (Screenshot size, MCP servers, Updates). One shared `TabControl` style: headers 20 SemiBold, the
+  first one's word 16 in from the window's edge, where each tab's text starts; the Fluent yellow line
+  under the picked one. Save with a broken MCP list turns to Advanced. Fluent sets the strip's margin
+  in a `[TabStripPlacement=Top]` style, which outranks a selector without a condition (the header sat
+  4 left of the text), so the override has the same condition.
 - **Labels** left of a field are `TextBlock.label` (grey, 12, centred on the field): the chat's
   Server, API key, Model and Context, Settings' (which were 14 and white) and Video generator's.
 - **Spacing** goes in steps of 4, whole pixels at 100, 125, 150 and 175%: bars, cards (12 all
@@ -2701,7 +2708,7 @@ place the text is, in screenshot coordinates, with the line it is in; failing th
 closest to it (within a third of its letters, with O/0 and l/I/1 taken as one), since Windows read
 "VY-643" in a table as "w-643". The screen is read twice, enlarged 1.5 and 2.5 times, and both
 readings kept: on six 12 px Segoe UI codes 1.5x read all six, 2x to 5x read "VY" as "w", 1x missed
-two. Each call takes 100 to 300 ms. Settings → Advanced → Use text recognition (on by default,
+two. Each call takes 100 to 300 ms. Settings → General → Use text recognition (on by default,
 `AgentSettings.EnableTextRecognition`) takes find_text and its prompt line away when off. Where no
 OCR language is installed the tool has the model offer the user, every time it comes up (the user's
 choice, not once a chat), to install the pack of their own language, skip it for now, or turn text
@@ -2723,7 +2730,7 @@ was answered. Clicking No on that prompt (error 1223) leaves it uninstalled and 
 It is one inline command (`-Command`), which an execution policy never stops (only script files);
 `-ExecutionPolicy Bypass` is passed all the same. Tried on the laptop (30 October 2026) with its OCR
 packs removed: the offer came, the install ran once the user allowed it, and find_text read 139 lines
-in the same run; Settings → Advanced → Text recognition lists the languages Windows reads
+in the same run; Settings → General → Text recognition lists the languages Windows reads
 (`ITextReader.Languages`, from `OcrEngine.AvailableRecognizerLanguages`), or "Not installed" with
 Add a language, which opens `ms-settings:regionlanguage`: each language added there brings its OCR. On the click
 benchmark (pixels, 3 retries, 30 October 2026) Qwen hit 97 of 114 first and 113 in the end, against
@@ -3654,7 +3661,7 @@ not the thumbprint: a renewed certificate keeps the subject. Plain P/Invoke (Lib
 `X509Certificate2` over the CERT_CONTEXT, which HTTPS already brings in: no package, trim-safe.
 - Rejected (unsigned, invalid, another publisher): `<exe>.new` is deleted, the version goes to
   `Data/update-rejected.txt`, and that version isn't downloaded again; a later one is. The
-  windows' line shows nothing; Settings → Updates says "Sloperator 1.2.0 couldn't be verified",
+  windows' line shows nothing; Settings → Advanced → Updates says "Sloperator 1.2.0 couldn't be verified",
   and `Data/errors.log` has why ("it is not validly signed (0x800B0100), the running exe is signed
   by CN=…").
 - Couldn't be checked (no revocation answer, the file couldn't be read: 0x8007xxxx): the download is
@@ -3685,7 +3692,7 @@ A folder Sloperator can't write to (Program Files, a locked folder; a file made 
 tells) gets no download: the line says "Sloperator 1.2.0 is out" with **Download**, the release's
 page. Only the single-file exe publish.ps1 makes (the one with the embedded runtime) updates itself:
 a debug or folder build would be replaced by a lone exe; there, **Check for updates** says so and
-nothing checks by itself. Settings → Updates: **Check for updates** (checks now: "Checking…", then
+nothing checks by itself. Settings → Advanced → Updates: **Check for updates** (checks now: "Checking…", then
 "Up to date", the ready or out version, or what went wrong) and **Check automatically**, on by
 default; off, Sloperator never contacts GitHub by itself. `SLOPERATOR_RELEASES_SERVER` points the
 lookup at a stand-in for GitHub's API and pages, for tests only.
