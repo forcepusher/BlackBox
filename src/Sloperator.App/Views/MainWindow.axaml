@@ -714,10 +714,10 @@
                 <Border DockPanel.Dock="Left" Classes="key" Margin="0,0,8,0" VerticalAlignment="Top">
                   <TextBlock Text="Pause/Break" />
                 </Border>
-                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Text="stops me at any time, in any window, even mid-task." />
+                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center" Text="stops me at any time, in any window." />
               </DockPanel>
               <TextBlock Classes="muted capabilityNote" TextWrapping="Wrap">
-                <Run Text="Type to correct me; I pause while you type." />
+                <Run Text="Send prompts during a task to correct me; I pause while you type." />
                 <Run Text="{Binding ApprovalNote}" />
               </TextBlock>
             </StackPanel>
