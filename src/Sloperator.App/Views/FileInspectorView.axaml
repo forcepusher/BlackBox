@@ -17,8 +17,10 @@
                   ToolTip.Tip="{Binding ZoomOutTip}" AutomationProperties.Name="Zoom out">
             <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
           </Button>
-          <Button Classes="ghost small act" MinWidth="48" HorizontalContentAlignment="Center" Command="{Binding ZoomFitCommand}" Content="{Binding ZoomText}"
-                  ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding ZoomFitTip}" AutomationProperties.Name="Zoom to fit" />
+          <Button Classes="ghost small act" HorizontalContentAlignment="Center" Command="{Binding ZoomFitCommand}"
+                  ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding ZoomFitTip}" AutomationProperties.Name="Zoom to fit">
+            <views:SlotText Text="{Binding ZoomText}" Slot="{x:Static vm:FileInspectorViewModel.ZoomSlot}" TextAlignment="Center" TextElement.FontFeatures="+tnum" />
+          </Button>
           <Button Classes="ghost icon small act" Command="{Binding ZoomInCommand}" ToolTip.ShowOnDisabled="True"
                   ToolTip.Tip="{Binding ZoomInTip}" AutomationProperties.Name="Zoom in">
             <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
@@ -57,44 +59,44 @@
       <Panel>
         <TextBlock Classes="muted" Text="{Binding Message}" IsVisible="{Binding HasMessage}" HorizontalAlignment="Center" VerticalAlignment="Center"
                    TextWrapping="Wrap" MaxWidth="360" TextAlignment="Center" />
-  
+
         <!-- Markdown and tables, as a reply is drawn; text selected in it, or in the text below, goes
              into the chat's box (see FileInspectorView.axaml.cs). The left margin is inside the scroller, so the
              text's selection margin isn't cut off. -->
         <ScrollViewer x:Name="DocumentScroll" IsVisible="{Binding ShowsMarkdown}" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Document">
           <views:MarkdownView x:Name="Document" KeepsSelection="True" Source="{Binding Markdown}" Margin="20,16,20,20" />
         </ScrollViewer>
-  
+
         <ScrollViewer x:Name="TextScroll" IsVisible="{Binding ShowsText}" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="Document text">
           <views:KeptSelectionTextBlock x:Name="PlainText" Text="{Binding Text}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Margin="16,12,16,16" TextWrapping="NoWrap" />
         </ScrollViewer>
-  
+
         <!-- A picture: zoomed with the wheel, panned with a right drag, an area marked with a left one. -->
         <views:ZoomBox x:Name="PictureBox" Source="{Binding Picture}" Drawing="{Binding Drawing}" IsVisible="{Binding ShowsPicture}" Margin="16"
                        views:FileMenu.Image="{Binding Picture}" views:FileMenu.File="{Binding Path}"
                        Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Picture" />
-  
+
         <!-- A video's frame, the same; its player is under it. -->
         <views:ZoomBox x:Name="FrameBox" Source="{Binding Video.Frame}" IsVisible="{Binding ShowsVideo}" Margin="16,16,16,8"
                        views:FileMenu.Image="{Binding Video.Frame}" views:FileMenu.File="{Binding Path}"
                        Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Video frame" />
-  
+
         <!-- An animation's frame, the same; its player is under it. -->
         <views:ZoomBox x:Name="AnimationBox" Source="{Binding Animation.Frame}" IsVisible="{Binding ShowsAnimation}" Margin="16,16,16,8"
                        views:FileMenu.Image="{Binding Animation.Frame}" views:FileMenu.File="{Binding Path}"
                        Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Animation frame" />
-  
+
         <!-- A sound's waveform: a click sets the playhead, a drag picks a stretch, the ruler scrubs, the wheel zooms. -->
         <views:WaveformView x:Name="Waveform" Sound="{Binding Sound}" IsVisible="{Binding ShowsSound}"
                             Margin="16,16,16,8" AutomationProperties.Name="Waveform" />
-  
+
         <!-- A 3D model: a left drag turns it, the wheel comes closer, a right or middle drag moves it. -->
         <views:ModelViewer x:Name="ModelView" Mesh="{Binding Model.Mesh}" IsVisible="{Binding ShowsModel}" Margin="16,16,16,8" CanPan="True" MinZoom="1"
                            Yaw="{Binding Model.Yaw, Mode=TwoWay, FallbackValue=0}" Pitch="{Binding Model.Pitch, Mode=TwoWay, FallbackValue=0}"
                            Zoom="{Binding Model.Zoom, Mode=TwoWay, FallbackValue=1}" PanX="{Binding Model.PanX, Mode=TwoWay, FallbackValue=0}" PanY="{Binding Model.PanY, Mode=TwoWay, FallbackValue=0}"
                            Animation="{Binding Model.Animation}" Time="{Binding Model.Time, FallbackValue=0}"
                            AutomationProperties.Name="3D model" />
-  
+
         <!-- A PDF's pages, drawn by Windows' PDF renderer as they come on screen: the list makes only the pages in view.
              Its width is set in code: the panel's, times the zoom (Ctrl+wheel or the buttons). -->
         <ScrollViewer x:Name="PdfScroll" IsVisible="{Binding ShowsPages}" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="PDF pages">
@@ -112,17 +114,17 @@
             </ItemsControl.ItemTemplate>
           </ItemsControl>
         </ScrollViewer>
-  
+
         <!-- Office files and web pages (and a PDF Windows' renderer can't open), drawn by Windows' previewer for them. -->
         <views:ShellPreviewHost x:Name="Shell" Path="{Binding ShellPath}" IsVisible="{Binding ShowsShell}" />
-  
+
         <!-- With Area on: the view frozen, to drag an area over. -->
         <views:ZoomBox x:Name="FrozenBox" Source="{Binding Frozen}" IsVisible="{Binding Frozen, Converter={x:Static ObjectConverters.IsNotNull}}"
                        views:FileMenu.Image="{Binding Frozen}" views:FileMenu.File="{Binding Path}"
                        Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="True" AutomationProperties.Name="Frozen view" />
-  
+
       </Panel>
-  
+
       <!-- An animation's player: a frame back, play, a frame on; where it is. -->
       <Border Grid.Row="1" IsVisible="{Binding Animation, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
         <DockPanel DataContext="{Binding Animation}" x:DataType="vm:InspectorAnimationViewModel">
@@ -148,7 +150,7 @@
                   AutomationProperties.Name="Frame slider" />
         </DockPanel>
       </Border>
-  
+
       <!-- A sound's player: play (the stretch picked, else from the playhead); where the playhead is; the stretch picked. -->
       <Border Grid.Row="1" IsVisible="{Binding Sound, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
         <DockPanel DataContext="{Binding Sound}" x:DataType="vm:InspectorSoundViewModel">
@@ -164,7 +166,7 @@
                      HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,4,0" TextTrimming="CharacterEllipsis" AutomationProperties.Name="Stretch picked" />
         </DockPanel>
       </Border>
-  
+
       <!-- A 3D model's views: from the front, a side, the back, above, or as at first; where it is seen
            from. Over them, for a model with animations, its player: a frame back, play, a frame on, its
            animations, where it is. -->
@@ -213,7 +215,7 @@
         </DockPanel>
         </StackPanel>
       </Border>
-  
+
       <!-- A video's player: a frame back, play, a frame on; where it is; its sound. -->
       <Border Grid.Row="1" IsVisible="{Binding Video, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
         <DockPanel DataContext="{Binding Video}" x:DataType="vm:InspectorVideoViewModel">

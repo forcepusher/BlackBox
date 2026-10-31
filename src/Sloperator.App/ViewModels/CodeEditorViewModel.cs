@@ -22,7 +22,7 @@ public sealed class CodeDraft(CodeFile file, TextDocument document)
 /// project the agent changed files in. Opening a file puts nothing in the chat's box: only lines the
 /// user selects go there, and the message sent from there carries them for the model.
 /// </summary>
-public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
+public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel, IWatchPanel
 {
     private readonly MainWindowViewModel _chat;
 
@@ -139,6 +139,9 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
 
     /// <summary>How big the text is against its usual size, on the button between − and + (as the File inspector's zoom says it).</summary>
     public string ZoomText => $"{FontSize / DefaultFontSize * 100:0}%";
+
+    /// <summary>The zoom's widest text (67% to 300%, its figures all as wide): the button between − and + is as wide at every size.</summary>
+    public static IReadOnlyList<string> ZoomSlot { get; } = ["100%"];
 
     private bool CanZoomOut() => HasFile && FontSize > MinFontSize;
 
@@ -351,7 +354,8 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
 
     /// <summary>The text of the file open, as typed; null with none.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasFile), nameof(OpenPath), nameof(EmptyText), nameof(FileStatus))]
+    [NotifyPropertyChangedFor(nameof(HasFile), nameof(OpenPath), nameof(EmptyText), nameof(FileStatus), nameof(SaveTip), nameof(RevertTip),
+        nameof(ZoomOutTip), nameof(ZoomResetTip), nameof(ZoomInTip), nameof(LanguageTip), nameof(EncodingTip), nameof(LineBreakTip))]
     [NotifyCanExecuteChangedFor(nameof(ZoomInCommand), nameof(ZoomOutCommand), nameof(ZoomResetCommand))]
     private TextDocument? _document;
 
@@ -372,7 +376,7 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
 
     /// <summary>Edited since it was read or saved.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FileStatus), nameof(RevertName), nameof(RevertTip))]
+    [NotifyPropertyChangedFor(nameof(FileStatus), nameof(RevertName), nameof(RevertTip), nameof(SaveTip))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ReloadCommand))]
     private bool _isUnsaved;
 
@@ -383,13 +387,33 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
     /// </summary>
     public string RevertName => IsUnsaved ? "Discard" : "Reload";
 
-    public string RevertTip => IsUnsaved
+    public string RevertTip => FileTip(IsUnsaved
         ? "Throw away the edits not saved: the file as it is on disk"
-        : "The file shows what is on disk by itself while nothing is edited here";
+        : "The file shows what is on disk by itself while nothing is edited here");
+
+    /// <summary>
+    /// A tip of a button in the panel's bars, which are there with no file too, greyed (the user,
+    /// 2026-10-31): what it does, else why it doesn't apply, as the File inspector's tips say it.
+    /// </summary>
+    private string FileTip(string what) => HasFile ? what : "Open a file first";
+
+    public string SaveTip => FileTip(CanSave() ? "Save (Ctrl+S)" : "Nothing to save: no edits here");
+
+    public string ZoomOutTip => FileTip("Smaller text (Ctrl+wheel down)");
+
+    public string ZoomResetTip => FileTip("Back to 100% (Ctrl+0)");
+
+    public string ZoomInTip => FileTip("Bigger text (Ctrl+wheel up)");
+
+    public string LanguageTip => FileTip("Highlighting: another language picked is kept for every file of this kind");
+
+    public string EncodingTip => FileTip("Encoding: another one picked writes the whole file in it when you save");
+
+    public string LineBreakTip => FileTip("Line breaks: others picked end every line in them");
 
     /// <summary>Changed on disk (by the agent, another program) while it had edits here not saved: Save keeps those, Reload takes the disk's.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FileStatus))]
+    [NotifyPropertyChangedFor(nameof(FileStatus), nameof(SaveTip))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ReloadCommand))]
     private bool _changedOnDisk;
 
@@ -426,6 +450,9 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
     /// <summary>On its button in the file's bar: "C#", "Plain text".</summary>
     public string LanguageName => Document is null ? "Language" : Language ?? CodeLanguages.PlainText;
 
+    /// <summary>Every text the language's button can show: it is as wide for every file, and with none.</summary>
+    public static IReadOnlyList<string> LanguageSlot { get; } = ["Language", .. CodeLanguages.Names, CodeLanguages.PlainText];
+
     /// <summary>Whether the language menu's entry is the one shown; null for Automatic, ticked while nothing was picked for the kind.</summary>
     internal bool IsLanguage(string? name) => _file is { } file && (name is null
         ? !_chat.Panels.CodeLanguages.ContainsKey(CodeLanguages.Key(file.Path))
@@ -457,6 +484,11 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
 
     /// <summary>The line breaks its lines end in ("CRLF", "LF"), "Mixed" when not all the same.</summary>
     public string LineBreakName => Document is null ? "Line breaks" : _mixedBreaks ? "Mixed" : CodeFile.NameOfBreak(_lineBreak);
+
+    /// <summary>Every text the encoding's button can show, and the line breaks': as wide for every file.</summary>
+    public static IReadOnlyList<string> EncodingSlot { get; } = ["Encoding", .. CodeFile.Encodings.Select(CodeFile.NameOf)];
+
+    public static IReadOnlyList<string> LineBreakSlot { get; } = ["Line breaks", "Mixed", "CR", .. CodeFile.LineBreaks.Select(lineBreak => lineBreak.Name)];
 
     private string _lineBreak = "\r\n";
     private bool _mixedBreaks;
@@ -618,6 +650,7 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
             row.IsUnsaved = IsUnsaved;
     }
 
+    /// <summary>Save and Discard: edits not saved, or the file changed on disk meanwhile.</summary>
     private bool CanSave() => IsUnsaved || ChangedOnDisk;
 
     /// <summary>Save (Ctrl+S): the text over the file, in the encoding it was read in.</summary>
@@ -646,10 +679,8 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         OnPropertyChanged(nameof(EncodingName));
     }
 
-    private bool CanRevert() => IsUnsaved || ChangedOnDisk;
-
     /// <summary>Discard (Reload with nothing edited): the file as it is on disk, in place of the edits not saved and an encoding picked.</summary>
-    [RelayCommand(CanExecute = nameof(CanRevert))]
+    [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task ReloadAsync()
     {
         if (_file is not { } file || Document is not { } document)

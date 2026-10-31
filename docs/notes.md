@@ -1690,6 +1690,19 @@ Servers' lists unlike the dropdowns'):
   under 32-high controls, so every bar is 49 high (at 125%: 61 px) and the chat's top bar and a
   panel's line up; the chat's server rows (`Border.bar.fields`) a shade lighter. In them buttons are
   8 apart and 12 from text. The splitters are one `GridSplitter` style (the title bar's colour).
+- **A bar's buttons keep their place** (the user, 2026-10-31: always there, never appearing or moving
+  mid-task, greyed with a tip saying why when they don't apply). A button whose word changes shows it
+  in a `SlotText`: a slot as wide as the widest word it can show (`Slot`, unseen under it), so the
+  button keeps its size and those beside it their place. The zoom between − and + in the File
+  inspector, Code editor and Video generator ("Fit", "125%", tabular figures: `ZoomSlot`) and the
+  Code editor's Language, Encoding and Line breaks (`LanguageSlot` etc., their no-file words
+  included) use it. Before (found driving the real app, 2026-10-31), + slid right as the zoom grew
+  ("Fit" 60 → "125%" 76 → "1000%" 85 px at 125%), and the three menus shrank from "Language",
+  "Encoding", "Line breaks" to "C#", "UTF-8", "LF" when a file opened. A greyed menu in a bar is
+  `act` as a greyed button there (transparent, not filled), and its tip says why it is greyed, as
+  the File inspector's do: the Code editor's say "Open a file first" with none open (`FileTip`), Save
+  "Nothing to save: no edits here" (until then they gave what they do, greyed or not). Wrap and
+  Watch are one control (`WatchToggles`, for any `IWatchPanel`: File changes, Code editor).
 - **Settings' tabs** (the user, 2026-10-30; it had General and Advanced tabs before 17 October too):
   General (the instructions, Notifications, Safety, Text recognition) and Advanced
   (Updates, Screenshot size, MCP servers); the instructions and Updates went first on 2026-10-31,
@@ -3550,7 +3563,7 @@ coloured headings, and a 300-page test PDF drew sharp at the panel's width, whit
 panel, page 151 in place at half way.
 
 ### Code editor
-**Code editor** in the Side panel dropdown (`CodeEditorViewModel`, `CodeEditorPanel`; least 736, for
+**Code editor** in the Side panel dropdown (`CodeEditorViewModel`, `CodeEditorPanel`; least 800, for
 its bars, see Language) is a bare VS Code beside the chat (the user's request, 2026-10-31): a folder's files in a
 tree on the left, the file clicked open on the right to read and edit, Ctrl+S to save. It is drawn as
 File changes is: the same bar, a 230 list of one-line rows (`ListBox.files`, now in App.axaml for both),
@@ -3613,7 +3626,8 @@ showed "not saved", and Save wrote EF BB BF and \r\n.
 **Language** (the user, 2026-10-31: "manually select highlighting if the file format is weird"): a third
 menu button beside the encoding's, the three now in a bar along the foot of the code (`Border.bar.slim.foot`,
 as a code editor's status bar), as the file bar over the code had no room for them and Save, Reload and
-the path at the panel's least width; that least is 736 (was 560; 640 before the zoom buttons below), where the widest labels ("Visual Basic",
+the path at the panel's least width; that least is 800 (was 560; 640 before the zoom buttons below; 736 until the three
+buttons were made as wide for every file, see A bar's buttons keep their place), where the widest labels ("Visual Basic",
 "UTF-8 with BOM", "Mixed") still fit. Its menu has Automatic (the language the extension says, `CodeLanguages.Of`),
 the fifteen languages by friendly names (`CodeLanguages.Names`: "SQL" for AvaloniaEdit's TSQL, "Diff" for
 Patch, "Visual Basic" for VB; `CodeView.Definition` maps them back) and Plain text. A pick is kept in

@@ -272,6 +272,9 @@ public sealed partial class VideoGeneratorViewModel : ObservableObject, ISidePan
     /// <summary>How close the timeline is against its usual zoom, as the Code editor's zoom says it.</summary>
     public string ZoomText => $"{Pps / DefaultPps * 100:0}%";
 
+    /// <summary>The zoom's widest text (19% to 375%, its figures all as wide): the button between − and + is as wide at every zoom.</summary>
+    public static IReadOnlyList<string> ZoomSlot { get; } = ["100%"];
+
     private bool CanZoomIn() => Pps < MaxPps;
 
     private bool CanZoomOut() => Pps > MinPps;

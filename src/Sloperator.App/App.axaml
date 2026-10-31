@@ -721,7 +721,8 @@
     </Style>
     <!-- A button over what it acts on (File changes' Stage, Unstage and Discard, the Code editor's
          Save): one that has nothing to act on is only greyed, not filled: it shouldn't look the more
-         pressable. So is a toggle that doesn't apply (File inspector's Code, Area and Prompt), on or off. -->
+         pressable. So is a toggle that doesn't apply (File inspector's Area, Text and Prompt
+         metadata), on or off, and a menu of the bar under the code (Language, Encoding, Line breaks). -->
     <Style Selector="Button.act:disabled /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.ghost:disabled /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="{StaticResource BbControlBorder}" />

@@ -22,22 +22,8 @@
     <Border DockPanel.Dock="Top" Classes="bar">
       <DockPanel MinHeight="32">
         <views:SidePanelClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
-        <!-- Watch: the file the agent edits opens at the lines it changed, lit a moment, as in File
-             changes; there from the start. -->
-        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding Watch}" Margin="8,0,0,0"
-                      ToolTip.Tip="Follow the agent's changes as they happen" AutomationProperties.Name="Watch">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <PathIcon Width="14" Height="14" Data="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
-            <TextBlock Text="Watch" VerticalAlignment="Center" />
-          </StackPanel>
-        </ToggleButton>
-        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding Wrap}" Margin="8,0,0,0"
-                      ToolTip.Tip="Wrap long lines" AutomationProperties.Name="Wrap">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <PathIcon Width="14" Height="14" Data="M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3 3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z" />
-            <TextBlock Text="Wrap" VerticalAlignment="Center" />
-          </StackPanel>
-        </ToggleButton>
+        <!-- Watch: the file the agent edits opens at the lines it changed, lit a moment, as in File changes. -->
+        <views:WatchToggles DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
         <Button DockPanel.Dock="Right" Classes="ghost" Margin="12,0,0,0" Click="OnOpenFolder"
                 ToolTip.Tip="Open a folder to browse and edit its files" AutomationProperties.Name="Open folder">
           <StackPanel Orientation="Horizontal" Spacing="8">
@@ -83,7 +69,7 @@
         <Border DockPanel.Dock="Top" Classes="bar" Padding="8">
           <DockPanel>
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8">
-              <Button Classes="ghost small act" Command="{Binding SaveCommand}" ToolTip.ShowOnDisabled="True" ToolTip.Tip="Save (Ctrl+S)" AutomationProperties.Name="Save">
+              <Button Classes="ghost small act" Command="{Binding SaveCommand}" ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding SaveTip}" AutomationProperties.Name="Save">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <PathIcon Width="12" Height="12" Data="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" />
                   <TextBlock Text="Save" VerticalAlignment="Center" />
@@ -108,40 +94,43 @@
                  buttons; Ctrl+wheel and Ctrl+0 do the same. Greyed with no file. -->
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4">
               <Button Classes="ghost icon small act" Command="{Binding ZoomOutCommand}" ToolTip.ShowOnDisabled="True"
-                      ToolTip.Tip="Smaller text (Ctrl+wheel down)" AutomationProperties.Name="Zoom out">
+                      ToolTip.Tip="{Binding ZoomOutTip}" AutomationProperties.Name="Zoom out">
                 <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
               </Button>
-              <Button Classes="ghost small act" MinWidth="48" HorizontalContentAlignment="Center" Command="{Binding ZoomResetCommand}" Content="{Binding ZoomText}"
-                      ToolTip.ShowOnDisabled="True" ToolTip.Tip="Back to 100% (Ctrl+0)" AutomationProperties.Name="Zoom to 100%" />
+              <Button Classes="ghost small act" HorizontalContentAlignment="Center" Command="{Binding ZoomResetCommand}"
+                      ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding ZoomResetTip}" AutomationProperties.Name="Zoom to 100%">
+                <views:SlotText Text="{Binding ZoomText}" Slot="{x:Static vm:CodeEditorViewModel.ZoomSlot}" TextAlignment="Center" TextElement.FontFeatures="+tnum" />
+              </Button>
               <Button Classes="ghost icon small act" Command="{Binding ZoomInCommand}" ToolTip.ShowOnDisabled="True"
-                      ToolTip.Tip="Bigger text (Ctrl+wheel up)" AutomationProperties.Name="Zoom in">
+                      ToolTip.Tip="{Binding ZoomInTip}" AutomationProperties.Name="Zoom in">
                 <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
               </Button>
             </StackPanel>
             <!-- The file's language, encoding and line breaks, at the right of a bar along the foot of the code
                  as a code editor's status bar shows them: its own when opened; another language picked is kept
                  for the kind, another encoding or line breaks convert the whole file (the user, 2026-10-31).
-                 Greyed with no file. -->
+                 Greyed with no file, as the zoom's buttons are; each as wide for every file (SlotText), so none
+                 of them moves when a file opens. -->
             <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right" Orientation="Horizontal" Spacing="8">
-              <views:MenuButton x:Name="LanguageButton" Classes="ghost menu small" IsEnabled="{Binding HasFile}" ToolTip.ShowOnDisabled="True"
-                                ToolTip.Tip="Highlighting: another language picked is kept for every file of this kind" AutomationProperties.Name="Language">
+              <views:MenuButton x:Name="LanguageButton" Classes="ghost menu small act" IsEnabled="{Binding HasFile}" ToolTip.ShowOnDisabled="True"
+                                ToolTip.Tip="{Binding LanguageTip}" AutomationProperties.Name="Language">
                 <DockPanel>
                   <PathIcon DockPanel.Dock="Right" Classes="arrow" />
-                  <TextBlock Text="{Binding LanguageName}" VerticalAlignment="Center" />
+                  <views:SlotText Text="{Binding LanguageName}" Slot="{x:Static vm:CodeEditorViewModel.LanguageSlot}" />
                 </DockPanel>
               </views:MenuButton>
-              <views:MenuButton x:Name="EncodingButton" Classes="ghost menu small" IsEnabled="{Binding HasFile}" ToolTip.ShowOnDisabled="True"
-                                ToolTip.Tip="Encoding: another one picked writes the whole file in it when you save" AutomationProperties.Name="Encoding">
+              <views:MenuButton x:Name="EncodingButton" Classes="ghost menu small act" IsEnabled="{Binding HasFile}" ToolTip.ShowOnDisabled="True"
+                                ToolTip.Tip="{Binding EncodingTip}" AutomationProperties.Name="Encoding">
                 <DockPanel>
                   <PathIcon DockPanel.Dock="Right" Classes="arrow" />
-                  <TextBlock Text="{Binding EncodingName}" VerticalAlignment="Center" />
+                  <views:SlotText Text="{Binding EncodingName}" Slot="{x:Static vm:CodeEditorViewModel.EncodingSlot}" />
                 </DockPanel>
               </views:MenuButton>
-              <views:MenuButton x:Name="LineBreakButton" Classes="ghost menu small" IsEnabled="{Binding HasFile}" ToolTip.ShowOnDisabled="True"
-                                ToolTip.Tip="Line breaks: others picked end every line in them" AutomationProperties.Name="Line breaks">
+              <views:MenuButton x:Name="LineBreakButton" Classes="ghost menu small act" IsEnabled="{Binding HasFile}" ToolTip.ShowOnDisabled="True"
+                                ToolTip.Tip="{Binding LineBreakTip}" AutomationProperties.Name="Line breaks">
                 <DockPanel>
                   <PathIcon DockPanel.Dock="Right" Classes="arrow" />
-                  <TextBlock Text="{Binding LineBreakName}" VerticalAlignment="Center" />
+                  <views:SlotText Text="{Binding LineBreakName}" Slot="{x:Static vm:CodeEditorViewModel.LineBreakSlot}" />
                 </DockPanel>
               </views:MenuButton>
             </StackPanel>
