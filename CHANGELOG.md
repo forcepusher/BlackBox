@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Video generator's **Make the video** is a grey button like the others in its bar, no longer lit
   yellow all the time.
+- Settings opens on what Sloperator should always know, at the top of General; Updates comes first
+  in Advanced.
 - File changes shows Wrap and Watch even before any file has changed, so its bar no longer shifts
   when the agent makes its first change.
 - File changes always shows Stage, Unstage and Discard over the diff, greyed while they have nothing
