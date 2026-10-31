@@ -17,8 +17,6 @@ public sealed partial class SettingsViewModel(AppSettings settings, AppPaths pat
 
     public AgentSettings Agent => Settings.Agent;
 
-    public PanelSettings Panels => Settings.Panels;
-
     public NotifySettings Notify => Settings.Notify;
 
     public UpdateSettings Updates => Settings.Updates;

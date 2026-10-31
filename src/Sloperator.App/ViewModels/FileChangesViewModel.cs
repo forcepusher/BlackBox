@@ -185,7 +185,6 @@ public sealed partial class FileChangesViewModel : ObservableObject, ISidePanel
             _refreshTimer!.Stop();
             _ = LoadAsync();
         });
-        _lightFirstRead = chat.OpeningOnFirstChange;
         _fade = new DispatcherTimer(LitFor, DispatcherPriority.Background, (_, _) =>
         {
             _fade!.Stop();
@@ -360,15 +359,9 @@ public sealed partial class FileChangesViewModel : ObservableObject, ISidePanel
         if (!ReferenceEquals(loading, _loading))
             return;
         var same = ReferenceEquals(changes, _shownChanges);
-        // Opened by the agent's first change, the first read is that change: all of it is new.
-        var first = _lightFirstRead && _shownChanges is null;
-        _lightFirstRead = false;
-        Show(diff, keepPicks: same, fresh: (same && !byUser) || first);
+        Show(diff, keepPicks: same, fresh: same && !byUser);
         _shownChanges = changes;
     }
-
-    /// <summary>The panel opened on its own at the agent's first change in the chat: its first read lights what it shows.</summary>
-    private bool _lightFirstRead;
 
     /// <summary>Whose list is shown: picks are kept across a refresh of the same chat's, not into another chat's.</summary>
     private FileChanges? _shownChanges;
@@ -403,8 +396,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, ISidePanel
             foreach (var line in file.Lines.Take(MaxRows - rows.Count))
                 rows.Add(new DiffRow(item, line) { Index = rows.Count });
         }
-        // Another chat's list, or the first read (unless the panel opened on the agent's first change),
-        // has no "just now": nothing lights up.
+        // Another chat's list, or the first read, has no "just now": nothing lights up.
         var now = fresh ? Fresh(before, rows) : [];
         if (now.Count > 0)
         {
