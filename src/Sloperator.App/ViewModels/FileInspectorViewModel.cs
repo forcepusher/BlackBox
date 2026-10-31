@@ -60,7 +60,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>The file shown; null before one is.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FileName), nameof(HasFile))]
+    [NotifyPropertyChangedFor(nameof(FileName), nameof(HasFile), nameof(AreaTip), nameof(PromptTip), nameof(CodeTip))]
     private string? _path;
 
     public string FileName => System.IO.Path.GetFileName(Path ?? "");
@@ -78,12 +78,12 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
     public bool HasMessage => Message is not null;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsMarkdown), nameof(CanFreeze))]
+    [NotifyPropertyChangedFor(nameof(ShowsMarkdown), nameof(CanFreeze), nameof(AreaTip))]
     private string? _markdown;
 
     /// <summary>Text in a fixed-width font: code, a log, a document's text where nothing on this PC previews it.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsText), nameof(CanFreeze))]
+    [NotifyPropertyChangedFor(nameof(ShowsText), nameof(CanFreeze), nameof(AreaTip))]
     private string? _text;
 
     /// <summary>What <see cref="Markdown"/> or <see cref="Text"/> is: the file as written (its lines are the file's), a CSV drawn as a table, or a document's text only.</summary>
@@ -100,10 +100,13 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>An SVG, drawn sharp at any zoom in place of <see cref="Picture"/> (which holds it drawn at its own size, to copy).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsDrawing))]
+    [NotifyPropertyChangedFor(nameof(IsDrawing), nameof(CodeTip))]
     private SvgPicture? _drawing;
 
     public bool IsDrawing => Drawing is not null;
+
+    /// <summary>Code is always in the panel's bar, greyed for any file but an SVG.</summary>
+    public string CodeTip => IsDrawing ? "The SVG's source" : HasFile ? "Only for SVG pictures" : "Open a file first";
 
     /// <summary>Code is on: an SVG's source shows in place of what it draws, its lines to select and ask about.</summary>
     [ObservableProperty]
@@ -139,7 +142,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>A 3D model, to turn about.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(MaxZoom), nameof(CanFreeze), nameof(ShowsModel))]
+    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(MaxZoom), nameof(CanFreeze), nameof(AreaTip), nameof(ShowsModel))]
     private InspectorModelViewModel? _model;
 
     public bool ShowsModel => Model is not null && Frozen is null;
@@ -154,7 +157,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>The file for Windows' previewer to draw (see <see cref="Views.ShellPreviewHost"/>).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsShell), nameof(CanFreeze))]
+    [NotifyPropertyChangedFor(nameof(ShowsShell), nameof(CanFreeze), nameof(AreaTip))]
     private string? _shellPath;
 
     /// <summary>What a load under way is: one started after it wins.</summary>
@@ -162,10 +165,13 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>The prompts and settings a picture, animation, video, sound or 3D model says it was made with (ComfyUI keeps them in every file it saves); null when it says none.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasRecipe))]
+    [NotifyPropertyChangedFor(nameof(HasRecipe), nameof(PromptTip))]
     private MediaRecipe? _recipe;
 
     public bool HasRecipe => Recipe is not null;
+
+    /// <summary>Prompt is always in the panel's bar, greyed for a file that says nothing of how it was made.</summary>
+    public string PromptTip => HasRecipe ? "Prompts and settings it was made with" : HasFile ? "This file doesn't say how it was made" : "Open a file first";
 
     /// <summary>Prompt is on: what the file was made with shows under it; it stays on from one file to the next.</summary>
     [ObservableProperty]
@@ -498,6 +504,9 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>What shows a text or Windows' previewer: Area can be turned on (in the panel).</summary>
     public bool CanFreeze => CanPick && (ShellPath is not null || Markdown is not null || Text is not null || Model is not null);
+
+    /// <summary>Area is always in the panel's bar, greyed where a drag marks an area as it is (a picture, a video) or there is nothing to mark.</summary>
+    public string AreaTip => CanFreeze ? "Freeze the view to drag over a part of it" : HasFile ? "Only for text, documents and 3D models: on a picture or video, drag over it" : "Open a file first";
 
     /// <summary>The panel's view of the file, frozen while Area is on; null otherwise.</summary>
     [ObservableProperty]
