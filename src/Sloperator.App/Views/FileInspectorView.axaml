@@ -5,228 +5,247 @@
              xmlns:core="using:Sloperator.Core.Media"
              x:Class="Sloperator.App.Views.FileInspectorView"
              x:DataType="vm:FileInspectorViewModel">
-  <!-- The file itself, as the File inspector panel and the full-screen viewer show it. A right-click on it
-       gives the file's menu (see FileMenu), but in text, which has its own Copy. -->
-  <Grid RowDefinitions="*,Auto" Background="Transparent" views:FileMenu.File="{Binding Path}">
-    <Panel>
-      <TextBlock Classes="muted" Text="{Binding Message}" IsVisible="{Binding HasMessage}" HorizontalAlignment="Center" VerticalAlignment="Center"
-                 TextWrapping="Wrap" MaxWidth="360" TextAlignment="Center" />
-
-      <!-- Markdown and tables, as a reply is drawn; text selected in it, or in the text below, goes
-           into the chat's box (see FileInspectorView.axaml.cs). The left margin is inside the scroller, so the
-           text's selection margin isn't cut off. -->
-      <ScrollViewer x:Name="DocumentScroll" IsVisible="{Binding ShowsMarkdown}" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Document">
-        <views:MarkdownView x:Name="Document" KeepsSelection="True" Source="{Binding Markdown}" Margin="20,16,20,20" />
-      </ScrollViewer>
-
-      <ScrollViewer x:Name="TextScroll" IsVisible="{Binding ShowsText}" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="Document text">
-        <views:KeptSelectionTextBlock x:Name="PlainText" Text="{Binding Text}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Margin="16,12,16,16" TextWrapping="NoWrap" />
-      </ScrollViewer>
-
-      <!-- A picture: zoomed with the wheel, panned with a right drag, an area marked with a left one. -->
-      <views:ZoomBox x:Name="PictureBox" Source="{Binding Picture}" Drawing="{Binding Drawing}" IsVisible="{Binding ShowsPicture}" Margin="16"
-                     views:FileMenu.Image="{Binding Picture}" views:FileMenu.File="{Binding Path}"
-                     Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Picture" />
-
-      <!-- A video's frame, the same; its player is under it. -->
-      <views:ZoomBox x:Name="FrameBox" Source="{Binding Video.Frame}" IsVisible="{Binding ShowsVideo}" Margin="16,16,16,8"
-                     views:FileMenu.Image="{Binding Video.Frame}" views:FileMenu.File="{Binding Path}"
-                     Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Video frame" />
-
-      <!-- An animation's frame, the same; its player is under it. -->
-      <views:ZoomBox x:Name="AnimationBox" Source="{Binding Animation.Frame}" IsVisible="{Binding ShowsAnimation}" Margin="16,16,16,8"
-                     views:FileMenu.Image="{Binding Animation.Frame}" views:FileMenu.File="{Binding Path}"
-                     Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Animation frame" />
-
-      <!-- A sound's waveform: a click sets the playhead, a drag picks a stretch, the ruler scrubs, the wheel zooms. -->
-      <views:WaveformView x:Name="Waveform" Sound="{Binding Sound}" IsVisible="{Binding ShowsSound}"
-                          Margin="16,16,16,8" AutomationProperties.Name="Waveform" />
-
-      <!-- A 3D model: a left drag turns it, the wheel comes closer, a right or middle drag moves it. -->
-      <views:ModelViewer x:Name="ModelView" Mesh="{Binding Model.Mesh}" IsVisible="{Binding ShowsModel}" Margin="16,16,16,8" CanPan="True" MinZoom="1"
-                         Yaw="{Binding Model.Yaw, Mode=TwoWay, FallbackValue=0}" Pitch="{Binding Model.Pitch, Mode=TwoWay, FallbackValue=0}"
-                         Zoom="{Binding Model.Zoom, Mode=TwoWay, FallbackValue=1}" PanX="{Binding Model.PanX, Mode=TwoWay, FallbackValue=0}" PanY="{Binding Model.PanY, Mode=TwoWay, FallbackValue=0}"
-                         Animation="{Binding Model.Animation}" Time="{Binding Model.Time, FallbackValue=0}"
-                         AutomationProperties.Name="3D model" />
-
-      <!-- A PDF's pages, drawn by Windows' PDF renderer as they come on screen: the list makes only the pages in view.
-           Its width is set in code: the panel's, times the zoom (Ctrl+wheel or the buttons). -->
-      <ScrollViewer x:Name="PdfScroll" IsVisible="{Binding ShowsPages}" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="PDF pages">
-        <ItemsControl x:Name="PagesList" ItemsSource="{Binding Pages}" Margin="16,12,16,16" HorizontalAlignment="Left">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <VirtualizingStackPanel />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:PdfPageItem">
-              <views:PdfPageView HorizontalAlignment="Center" Margin="0,0,0,12" AutomationProperties.Name="{Binding}" views:FileMenu.Image="{Binding Image}"
-                                 views:FileMenu.File="{Binding $parent[views:FileInspectorView].((vm:FileInspectorViewModel)DataContext).Path, FallbackValue={x:Null}}" />
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </ScrollViewer>
-
-      <!-- Office files and web pages (and a PDF Windows' renderer can't open), drawn by Windows' previewer for them. -->
-      <views:ShellPreviewHost x:Name="Shell" Path="{Binding ShellPath}" IsVisible="{Binding ShowsShell}" />
-
-      <!-- With Area on: the view frozen, to drag an area over. -->
-      <views:ZoomBox x:Name="FrozenBox" Source="{Binding Frozen}" IsVisible="{Binding Frozen, Converter={x:Static ObjectConverters.IsNotNull}}"
-                     views:FileMenu.Image="{Binding Frozen}" views:FileMenu.File="{Binding Path}"
-                     Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="True" AutomationProperties.Name="Frozen view" />
-
-      <!-- In the corner over the file: Prompt metadata, then the zoom buttons. -->
-      <StackPanel x:Name="CornerButtons" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,16">
-        <!-- Prompt metadata: what the file was made with, under it, in the panel (the user, 2026-10-31: not a
-             selection, so not in the bar with Text and Area). There only for a file that carries prompts. A toggle of its
-             own as the bar's are, as tall as the zoom buttons' box: in a box of its own, pressed in it showed the
-             box's frame round its yellow. -->
-        <ToggleButton Classes="ghost" IsVisible="{Binding ShowsPromptButton}" IsChecked="{Binding ShowRecipe}" ToolTip.Tip="Prompts and settings it was made with" AutomationProperties.Name="Prompt metadata">
+  <DockPanel>
+    <!-- A bar along the foot, as the Code editor's under its code (the user, 2026-10-31): the zoom at its left
+         (out, back to fit, in), Prompt metadata at its right. Always there, greyed where they don't apply
+         (their tips say why), so nothing comes, goes or moves from one file to the next; not over the file,
+         where Area's still would catch them. -->
+    <Border DockPanel.Dock="Bottom" Classes="bar slim foot" Padding="8,4">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4">
+          <Button Classes="ghost icon small act" Command="{Binding ZoomOutCommand}" ToolTip.ShowOnDisabled="True"
+                  ToolTip.Tip="{Binding ZoomOutTip}" AutomationProperties.Name="Zoom out">
+            <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
+          </Button>
+          <Button Classes="ghost small act" MinWidth="48" HorizontalContentAlignment="Center" Command="{Binding ZoomFitCommand}" Content="{Binding ZoomText}"
+                  ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding ZoomFitTip}" AutomationProperties.Name="Zoom to fit" />
+          <Button Classes="ghost icon small act" Command="{Binding ZoomInCommand}" ToolTip.ShowOnDisabled="True"
+                  ToolTip.Tip="{Binding ZoomInTip}" AutomationProperties.Name="Zoom in">
+            <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+          </Button>
+        </StackPanel>
+        <!-- Prompt metadata: what the file was made with, under it (not a selection, so not in the top bar
+             with Text and Area). In the panel only: the full-screen viewer's file has none to show. -->
+        <ToggleButton DockPanel.Dock="Right" HorizontalAlignment="Right" Classes="ghost small" IsVisible="{Binding CanPick}" IsEnabled="{Binding HasRecipe}"
+                      IsChecked="{Binding ShowRecipe}" ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding PromptTip}" AutomationProperties.Name="Prompt metadata">
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <PathIcon Width="14" Height="14" Data="M3 18h12v-2H3v2zM3 6v2h18V6H3zm0 7h18v-2H3v2z" />
+            <PathIcon Width="12" Height="12" Data="M3 18h12v-2H3v2zM3 6v2h18V6H3zm0 7h18v-2H3v2z" />
             <TextBlock Text="Prompt metadata" VerticalAlignment="Center" />
           </StackPanel>
         </ToggleButton>
-        <!-- Zoom: out, back to fit, in. -->
-        <Border IsVisible="{Binding CanZoom}" CornerRadius="6" Padding="4"
-                Background="{StaticResource BbSurfaceRaised}" BorderBrush="{StaticResource BbBorder}" BorderThickness="1">
-          <StackPanel Orientation="Horizontal" Spacing="4">
-            <Button Classes="ghost icon small"
-                    Command="{Binding ZoomOutCommand}" ToolTip.Tip="Zoom out" AutomationProperties.Name="Zoom out">
-              <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
+      </DockPanel>
+    </Border>
+
+    <!-- What the file was made with, with Prompt metadata on: under the file, over the bar, at most half the
+         view's height (set in code), scrolling past that. Room around the text as its margin: a ScrollViewer's
+         padding isn't taken from the width, and the text ran past the edge. -->
+    <Border x:Name="RecipeBox" DockPanel.Dock="Bottom" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">
+      <Border.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="CanPick" />
+          <Binding Path="ShowRecipe" />
+          <Binding Path="HasRecipe" />
+        </MultiBinding>
+      </Border.IsVisible>
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Made with">
+        <views:RecipeView DataContext="{Binding Recipe}" Margin="16,12,16,16" />
+      </ScrollViewer>
+    </Border>
+
+    <!-- The file itself, as the File inspector panel and the full-screen viewer show it. A right-click on it
+         gives the file's menu (see FileMenu), but in text, which has its own Copy. -->
+    <Grid RowDefinitions="*,Auto" Background="Transparent" views:FileMenu.File="{Binding Path}">
+      <Panel>
+        <TextBlock Classes="muted" Text="{Binding Message}" IsVisible="{Binding HasMessage}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   TextWrapping="Wrap" MaxWidth="360" TextAlignment="Center" />
+  
+        <!-- Markdown and tables, as a reply is drawn; text selected in it, or in the text below, goes
+             into the chat's box (see FileInspectorView.axaml.cs). The left margin is inside the scroller, so the
+             text's selection margin isn't cut off. -->
+        <ScrollViewer x:Name="DocumentScroll" IsVisible="{Binding ShowsMarkdown}" HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Document">
+          <views:MarkdownView x:Name="Document" KeepsSelection="True" Source="{Binding Markdown}" Margin="20,16,20,20" />
+        </ScrollViewer>
+  
+        <ScrollViewer x:Name="TextScroll" IsVisible="{Binding ShowsText}" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="Document text">
+          <views:KeptSelectionTextBlock x:Name="PlainText" Text="{Binding Text}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12" Margin="16,12,16,16" TextWrapping="NoWrap" />
+        </ScrollViewer>
+  
+        <!-- A picture: zoomed with the wheel, panned with a right drag, an area marked with a left one. -->
+        <views:ZoomBox x:Name="PictureBox" Source="{Binding Picture}" Drawing="{Binding Drawing}" IsVisible="{Binding ShowsPicture}" Margin="16"
+                       views:FileMenu.Image="{Binding Picture}" views:FileMenu.File="{Binding Path}"
+                       Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Picture" />
+  
+        <!-- A video's frame, the same; its player is under it. -->
+        <views:ZoomBox x:Name="FrameBox" Source="{Binding Video.Frame}" IsVisible="{Binding ShowsVideo}" Margin="16,16,16,8"
+                       views:FileMenu.Image="{Binding Video.Frame}" views:FileMenu.File="{Binding Path}"
+                       Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Video frame" />
+  
+        <!-- An animation's frame, the same; its player is under it. -->
+        <views:ZoomBox x:Name="AnimationBox" Source="{Binding Animation.Frame}" IsVisible="{Binding ShowsAnimation}" Margin="16,16,16,8"
+                       views:FileMenu.Image="{Binding Animation.Frame}" views:FileMenu.File="{Binding Path}"
+                       Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Animation frame" />
+  
+        <!-- A sound's waveform: a click sets the playhead, a drag picks a stretch, the ruler scrubs, the wheel zooms. -->
+        <views:WaveformView x:Name="Waveform" Sound="{Binding Sound}" IsVisible="{Binding ShowsSound}"
+                            Margin="16,16,16,8" AutomationProperties.Name="Waveform" />
+  
+        <!-- A 3D model: a left drag turns it, the wheel comes closer, a right or middle drag moves it. -->
+        <views:ModelViewer x:Name="ModelView" Mesh="{Binding Model.Mesh}" IsVisible="{Binding ShowsModel}" Margin="16,16,16,8" CanPan="True" MinZoom="1"
+                           Yaw="{Binding Model.Yaw, Mode=TwoWay, FallbackValue=0}" Pitch="{Binding Model.Pitch, Mode=TwoWay, FallbackValue=0}"
+                           Zoom="{Binding Model.Zoom, Mode=TwoWay, FallbackValue=1}" PanX="{Binding Model.PanX, Mode=TwoWay, FallbackValue=0}" PanY="{Binding Model.PanY, Mode=TwoWay, FallbackValue=0}"
+                           Animation="{Binding Model.Animation}" Time="{Binding Model.Time, FallbackValue=0}"
+                           AutomationProperties.Name="3D model" />
+  
+        <!-- A PDF's pages, drawn by Windows' PDF renderer as they come on screen: the list makes only the pages in view.
+             Its width is set in code: the panel's, times the zoom (Ctrl+wheel or the buttons). -->
+        <ScrollViewer x:Name="PdfScroll" IsVisible="{Binding ShowsPages}" HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="PDF pages">
+          <ItemsControl x:Name="PagesList" ItemsSource="{Binding Pages}" Margin="16,12,16,16" HorizontalAlignment="Left">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <VirtualizingStackPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:PdfPageItem">
+                <views:PdfPageView HorizontalAlignment="Center" Margin="0,0,0,12" AutomationProperties.Name="{Binding}" views:FileMenu.Image="{Binding Image}"
+                                   views:FileMenu.File="{Binding $parent[views:FileInspectorView].((vm:FileInspectorViewModel)DataContext).Path, FallbackValue={x:Null}}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+  
+        <!-- Office files and web pages (and a PDF Windows' renderer can't open), drawn by Windows' previewer for them. -->
+        <views:ShellPreviewHost x:Name="Shell" Path="{Binding ShellPath}" IsVisible="{Binding ShowsShell}" />
+  
+        <!-- With Area on: the view frozen, to drag an area over. -->
+        <views:ZoomBox x:Name="FrozenBox" Source="{Binding Frozen}" IsVisible="{Binding Frozen, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       views:FileMenu.Image="{Binding Frozen}" views:FileMenu.File="{Binding Path}"
+                       Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="True" AutomationProperties.Name="Frozen view" />
+  
+      </Panel>
+  
+      <!-- An animation's player: a frame back, play, a frame on; where it is. -->
+      <Border Grid.Row="1" IsVisible="{Binding Animation, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
+        <DockPanel DataContext="{Binding Animation}" x:DataType="vm:InspectorAnimationViewModel">
+          <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <Button Classes="ghost icon"
+                    Command="{Binding StepBackCommand}" ToolTip.Tip="A frame back (Left)" AutomationProperties.Name="A frame back">
+              <PathIcon Width="14" Height="14" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
             </Button>
-            <Button Classes="ghost small" MinWidth="48" HorizontalContentAlignment="Center"
-                    Command="{Binding ZoomFitCommand}" Content="{Binding ZoomText}" ToolTip.Tip="Fit" AutomationProperties.Name="Zoom to fit" />
-            <Button Classes="ghost icon small"
-                    Command="{Binding ZoomInCommand}" ToolTip.Tip="Zoom in" AutomationProperties.Name="Zoom in">
-              <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+            <Button Classes="ghost icon"
+                    Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play">
+              <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
+            </Button>
+            <Button Classes="ghost icon"
+                    Command="{Binding StepForwardCommand}" ToolTip.Tip="A frame on (Right)" AutomationProperties.Name="A frame on">
+              <PathIcon Width="14" Height="14" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
             </Button>
           </StackPanel>
-        </Border>
-      </StackPanel>
-    </Panel>
-
-    <!-- An animation's player: a frame back, play, a frame on; where it is. -->
-    <Border Grid.Row="1" IsVisible="{Binding Animation, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
-      <DockPanel DataContext="{Binding Animation}" x:DataType="vm:InspectorAnimationViewModel">
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-          <Button Classes="ghost icon"
-                  Command="{Binding StepBackCommand}" ToolTip.Tip="A frame back (Left)" AutomationProperties.Name="A frame back">
-            <PathIcon Width="14" Height="14" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
-          </Button>
-          <Button Classes="ghost icon"
+          <Panel DockPanel.Dock="Right" Margin="12,0,4,0" VerticalAlignment="Center">
+            <TextBlock Text="{Binding LongestFrameText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
+            <TextBlock Classes="muted" Text="{Binding FrameText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" AutomationProperties.Name="Frame" />
+          </Panel>
+          <Slider Minimum="0" Maximum="{Binding LastFrame}" Value="{Binding SliderFrame}" SmallChange="1" LargeChange="10" VerticalAlignment="Center" Margin="8,0,0,0"
+                  AutomationProperties.Name="Frame slider" />
+        </DockPanel>
+      </Border>
+  
+      <!-- A sound's player: play (the stretch picked, else from the playhead); where the playhead is; the stretch picked. -->
+      <Border Grid.Row="1" IsVisible="{Binding Sound, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
+        <DockPanel DataContext="{Binding Sound}" x:DataType="vm:InspectorSoundViewModel">
+          <Button DockPanel.Dock="Left" Classes="ghost icon"
                   Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play">
             <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
           </Button>
-          <Button Classes="ghost icon"
-                  Command="{Binding StepForwardCommand}" ToolTip.Tip="A frame on (Right)" AutomationProperties.Name="A frame on">
-            <PathIcon Width="14" Height="14" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
-          </Button>
+          <Panel DockPanel.Dock="Left" Margin="8,0,0,0" VerticalAlignment="Center">
+            <TextBlock Text="{Binding LongestTimeText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
+            <TextBlock Classes="muted" Text="{Binding TimeText}" FontSize="12" FontFeatures="+tnum" AutomationProperties.Name="Time" />
+          </Panel>
+          <TextBlock Text="{Binding RangeText}" IsVisible="{Binding HasRange}" FontSize="12" FontFeatures="+tnum" Foreground="{StaticResource BbAccent}"
+                     HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,4,0" TextTrimming="CharacterEllipsis" AutomationProperties.Name="Stretch picked" />
+        </DockPanel>
+      </Border>
+  
+      <!-- A 3D model's views: from the front, a side, the back, above, or as at first; where it is seen
+           from. Over them, for a model with animations, its player: a frame back, play, a frame on, its
+           animations, where it is. -->
+      <Border Grid.Row="1" IsVisible="{Binding Model, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
+        <StackPanel DataContext="{Binding Model}" x:DataType="vm:InspectorModelViewModel" Spacing="4">
+        <DockPanel IsVisible="{Binding HasAnimations}">
+          <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <Button Classes="ghost icon"
+                    Command="{Binding StepBackCommand}" ToolTip.Tip="A frame back (Left)" AutomationProperties.Name="A frame back">
+              <PathIcon Width="14" Height="14" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+            </Button>
+            <Button Classes="ghost icon"
+                    Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play">
+              <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
+            </Button>
+            <Button Classes="ghost icon"
+                    Command="{Binding StepForwardCommand}" ToolTip.Tip="A frame on (Right)" AutomationProperties.Name="A frame on">
+              <PathIcon Width="14" Height="14" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+            </Button>
+            <ComboBox ItemsSource="{Binding Animations}" SelectedItem="{Binding Animation}" IsVisible="{Binding HasSeveralAnimations}" MaxWidth="160" Margin="8,0,0,0"
+                      VerticalAlignment="Center" ToolTip.Tip="Which animation" AutomationProperties.Name="Animation">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="core:MeshAnimation">
+                  <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </StackPanel>
+          <Panel DockPanel.Dock="Right" Margin="12,0,4,0" VerticalAlignment="Center">
+            <TextBlock Text="{Binding LongestTimeText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
+            <TextBlock Classes="muted" Text="{Binding TimeText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" AutomationProperties.Name="Frame" />
+          </Panel>
+          <Slider Minimum="0" Maximum="{Binding Duration}" Value="{Binding Time}" VerticalAlignment="Center" Margin="8,0,0,0" AutomationProperties.Name="Animation slider" />
+        </DockPanel>
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <Button Classes="ghost small" Content="Front" Command="{Binding ViewFromCommand}" CommandParameter="front" ToolTip.Tip="See it from the front" />
+            <Button Classes="ghost small" Content="Right" Command="{Binding ViewFromCommand}" CommandParameter="right" ToolTip.Tip="See it from its right" />
+            <Button Classes="ghost small" Content="Back" Command="{Binding ViewFromCommand}" CommandParameter="back" ToolTip.Tip="See it from the back" />
+            <Button Classes="ghost small" Content="Left" Command="{Binding ViewFromCommand}" CommandParameter="left" ToolTip.Tip="See it from its left" />
+            <Button Classes="ghost small" Content="Top" Command="{Binding ViewFromCommand}" CommandParameter="top" ToolTip.Tip="See it from above" />
+            <Button Classes="ghost small" Content="Reset" Command="{Binding ViewFromCommand}" CommandParameter="start" ToolTip.Tip="Reset view (double-click)" />
+          </StackPanel>
+          <TextBlock Classes="muted" Text="{Binding ViewText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,4,0"
+                     TextTrimming="CharacterEllipsis" AutomationProperties.Name="Seen from" />
+        </DockPanel>
         </StackPanel>
-        <Panel DockPanel.Dock="Right" Margin="12,0,4,0" VerticalAlignment="Center">
-          <TextBlock Text="{Binding LongestFrameText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
-          <TextBlock Classes="muted" Text="{Binding FrameText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" AutomationProperties.Name="Frame" />
-        </Panel>
-        <Slider Minimum="0" Maximum="{Binding LastFrame}" Value="{Binding SliderFrame}" SmallChange="1" LargeChange="10" VerticalAlignment="Center" Margin="8,0,0,0"
-                AutomationProperties.Name="Frame slider" />
-      </DockPanel>
-    </Border>
-
-    <!-- A sound's player: play (the stretch picked, else from the playhead); where the playhead is; the stretch picked. -->
-    <Border Grid.Row="1" IsVisible="{Binding Sound, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
-      <DockPanel DataContext="{Binding Sound}" x:DataType="vm:InspectorSoundViewModel">
-        <Button DockPanel.Dock="Left" Classes="ghost icon"
-                Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play">
-          <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
-        </Button>
-        <Panel DockPanel.Dock="Left" Margin="8,0,0,0" VerticalAlignment="Center">
-          <TextBlock Text="{Binding LongestTimeText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
-          <TextBlock Classes="muted" Text="{Binding TimeText}" FontSize="12" FontFeatures="+tnum" AutomationProperties.Name="Time" />
-        </Panel>
-        <TextBlock Text="{Binding RangeText}" IsVisible="{Binding HasRange}" FontSize="12" FontFeatures="+tnum" Foreground="{StaticResource BbAccent}"
-                   HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,4,0" TextTrimming="CharacterEllipsis" AutomationProperties.Name="Stretch picked" />
-      </DockPanel>
-    </Border>
-
-    <!-- A 3D model's views: from the front, a side, the back, above, or as at first; where it is seen
-         from. Over them, for a model with animations, its player: a frame back, play, a frame on, its
-         animations, where it is. -->
-    <Border Grid.Row="1" IsVisible="{Binding Model, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
-      <StackPanel DataContext="{Binding Model}" x:DataType="vm:InspectorModelViewModel" Spacing="4">
-      <DockPanel IsVisible="{Binding HasAnimations}">
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-          <Button Classes="ghost icon"
-                  Command="{Binding StepBackCommand}" ToolTip.Tip="A frame back (Left)" AutomationProperties.Name="A frame back">
-            <PathIcon Width="14" Height="14" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+      </Border>
+  
+      <!-- A video's player: a frame back, play, a frame on; where it is; its sound. -->
+      <Border Grid.Row="1" IsVisible="{Binding Video, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
+        <DockPanel DataContext="{Binding Video}" x:DataType="vm:InspectorVideoViewModel">
+          <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <Button Classes="ghost icon"
+                    Command="{Binding StepBackCommand}" ToolTip.Tip="A frame back (Left)" AutomationProperties.Name="A frame back">
+              <PathIcon Width="14" Height="14" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+            </Button>
+            <Button Classes="ghost icon"
+                    Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play">
+              <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
+            </Button>
+            <Button Classes="ghost icon"
+                    Command="{Binding StepForwardCommand}" ToolTip.Tip="A frame on (Right)" AutomationProperties.Name="A frame on">
+              <PathIcon Width="14" Height="14" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+            </Button>
+          </StackPanel>
+          <Button DockPanel.Dock="Right" Classes="ghost icon"
+                  Command="{Binding ToggleSoundCommand}" ToolTip.Tip="Sound on or off" AutomationProperties.Name="Sound">
+            <PathIcon Width="14" Height="14" Data="{Binding SoundIcon}" />
           </Button>
-          <Button Classes="ghost icon"
-                  Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play">
-            <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
-          </Button>
-          <Button Classes="ghost icon"
-                  Command="{Binding StepForwardCommand}" ToolTip.Tip="A frame on (Right)" AutomationProperties.Name="A frame on">
-            <PathIcon Width="14" Height="14" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
-          </Button>
-          <ComboBox ItemsSource="{Binding Animations}" SelectedItem="{Binding Animation}" IsVisible="{Binding HasSeveralAnimations}" MaxWidth="160" Margin="8,0,0,0"
-                    VerticalAlignment="Center" ToolTip.Tip="Which animation" AutomationProperties.Name="Animation">
-            <ComboBox.ItemTemplate>
-              <DataTemplate x:DataType="core:MeshAnimation">
-                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-        </StackPanel>
-        <Panel DockPanel.Dock="Right" Margin="12,0,4,0" VerticalAlignment="Center">
-          <TextBlock Text="{Binding LongestTimeText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
-          <TextBlock Classes="muted" Text="{Binding TimeText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" AutomationProperties.Name="Frame" />
-        </Panel>
-        <Slider Minimum="0" Maximum="{Binding Duration}" Value="{Binding Time}" VerticalAlignment="Center" Margin="8,0,0,0" AutomationProperties.Name="Animation slider" />
-      </DockPanel>
-      <DockPanel>
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-          <Button Classes="ghost small" Content="Front" Command="{Binding ViewFromCommand}" CommandParameter="front" ToolTip.Tip="See it from the front" />
-          <Button Classes="ghost small" Content="Right" Command="{Binding ViewFromCommand}" CommandParameter="right" ToolTip.Tip="See it from its right" />
-          <Button Classes="ghost small" Content="Back" Command="{Binding ViewFromCommand}" CommandParameter="back" ToolTip.Tip="See it from the back" />
-          <Button Classes="ghost small" Content="Left" Command="{Binding ViewFromCommand}" CommandParameter="left" ToolTip.Tip="See it from its left" />
-          <Button Classes="ghost small" Content="Top" Command="{Binding ViewFromCommand}" CommandParameter="top" ToolTip.Tip="See it from above" />
-          <Button Classes="ghost small" Content="Reset" Command="{Binding ViewFromCommand}" CommandParameter="start" ToolTip.Tip="Reset view (double-click)" />
-        </StackPanel>
-        <TextBlock Classes="muted" Text="{Binding ViewText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,4,0"
-                   TextTrimming="CharacterEllipsis" AutomationProperties.Name="Seen from" />
-      </DockPanel>
-      </StackPanel>
-    </Border>
-
-    <!-- A video's player: a frame back, play, a frame on; where it is; its sound. -->
-    <Border Grid.Row="1" IsVisible="{Binding Video, Converter={x:Static ObjectConverters.IsNotNull}}" Padding="12,4,12,12">
-      <DockPanel DataContext="{Binding Video}" x:DataType="vm:InspectorVideoViewModel">
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-          <Button Classes="ghost icon"
-                  Command="{Binding StepBackCommand}" ToolTip.Tip="A frame back (Left)" AutomationProperties.Name="A frame back">
-            <PathIcon Width="14" Height="14" Data="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
-          </Button>
-          <Button Classes="ghost icon"
-                  Command="{Binding PlayCommand}" ToolTip.Tip="Play or pause (Space)" AutomationProperties.Name="Play">
-            <PathIcon Width="14" Height="14" Data="{Binding PlayIcon}" />
-          </Button>
-          <Button Classes="ghost icon"
-                  Command="{Binding StepForwardCommand}" ToolTip.Tip="A frame on (Right)" AutomationProperties.Name="A frame on">
-            <PathIcon Width="14" Height="14" Data="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
-          </Button>
-        </StackPanel>
-        <Button DockPanel.Dock="Right" Classes="ghost icon"
-                Command="{Binding ToggleSoundCommand}" ToolTip.Tip="Sound on or off" AutomationProperties.Name="Sound">
-          <PathIcon Width="14" Height="14" Data="{Binding SoundIcon}" />
-        </Button>
-        <!-- Where it is, in a slot as wide as its longest text for this video (hidden under it), its
-             figures all as wide: the slider beside it keeps still as the text changes. -->
-        <Panel DockPanel.Dock="Right" Margin="12,0,4,0" VerticalAlignment="Center">
-          <TextBlock Text="{Binding LongestFrameText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
-          <TextBlock Classes="muted" Text="{Binding FrameText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" AutomationProperties.Name="Frame" />
-        </Panel>
-        <Slider Minimum="0" Maximum="{Binding LastFrame}" Value="{Binding SliderFrame}" SmallChange="1" LargeChange="10" VerticalAlignment="Center" Margin="8,0,0,0"
-                AutomationProperties.Name="Frame slider" />
-      </DockPanel>
-    </Border>
-  </Grid>
+          <!-- Where it is, in a slot as wide as its longest text for this video (hidden under it), its
+               figures all as wide: the slider beside it keeps still as the text changes. -->
+          <Panel DockPanel.Dock="Right" Margin="12,0,4,0" VerticalAlignment="Center">
+            <TextBlock Text="{Binding LongestFrameText}" FontSize="12" FontFeatures="+tnum" Opacity="0" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw" />
+            <TextBlock Classes="muted" Text="{Binding FrameText}" FontSize="12" FontFeatures="+tnum" HorizontalAlignment="Right" AutomationProperties.Name="Frame" />
+          </Panel>
+          <Slider Minimum="0" Maximum="{Binding LastFrame}" Value="{Binding SliderFrame}" SmallChange="1" LargeChange="10" VerticalAlignment="Center" Margin="8,0,0,0"
+                  AutomationProperties.Name="Frame slider" />
+        </DockPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
 </UserControl>

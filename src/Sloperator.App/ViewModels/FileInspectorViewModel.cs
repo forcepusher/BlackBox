@@ -208,13 +208,16 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>The prompts and settings a picture, animation, video, sound or 3D model says it was made with (ComfyUI keeps them in every file it saves); null when it says none.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasRecipe), nameof(ShowsPromptButton))]
+    [NotifyPropertyChangedFor(nameof(HasRecipe), nameof(PromptTip))]
     private MediaRecipe? _recipe;
 
     public bool HasRecipe => Recipe is not null;
 
-    /// <summary>Prompt metadata, in the corner over the file in the panel: there only for a file that says how it was made.</summary>
-    public bool ShowsPromptButton => HasRecipe && CanPick;
+    /// <summary>
+    /// Prompt metadata, at the right of the bar under the file in the panel: there for every file, greyed
+    /// with why for one that doesn't say how it was made (the user, 2026-10-31: bar buttons never come and go).
+    /// </summary>
+    public string PromptTip => HasRecipe ? "Prompts and settings it was made with" : HasFile ? "This file doesn't say how it was made" : "Open a file first";
 
     /// <summary>Prompt is on: what the file was made with shows under it; it stays on from one file to the next.</summary>
     [ObservableProperty]
@@ -529,14 +532,50 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
             model.Zoom = value;
     }
 
-    [RelayCommand]
+    /// <summary>
+    /// The zoom buttons are at the left of the bar under the file for every file, as the Code editor's
+    /// are (the user, 2026-10-31), greyed at the ends and for a file that doesn't zoom; their tips say why.
+    /// </summary>
+    private string ZoomTip(string what) => CanZoom ? what : HasFile ? "This file doesn't zoom" : "Open a file first";
+
+    public string ZoomOutTip => ZoomTip("Zoom out");
+
+    public string ZoomFitTip => ZoomTip("Fit");
+
+    public string ZoomInTip => ZoomTip("Zoom in");
+
+    private bool CanZoomIn() => CanZoom && Zoom < MaxZoom - 0.001;
+
+    private bool CanZoomOut() => CanZoom && Zoom > 1.001;
+
+    [RelayCommand(CanExecute = nameof(CanZoomIn))]
     private void ZoomIn() => Zoom = Math.Min(MaxZoom, Zoom * Views.ZoomBox.Step);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanZoomOut))]
     private void ZoomOut() => Zoom = Math.Max(1, Zoom / Views.ZoomBox.Step);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanZoomOut))]
     private void ZoomFit() => Zoom = 1;
+
+    /// <summary>CanZoom, MaxZoom and HasFile follow many properties: the zoom buttons and the tips that follow them are told here.</summary>
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.PropertyName is nameof(Zoom) or nameof(CanZoom) or nameof(MaxZoom))
+        {
+            ZoomInCommand.NotifyCanExecuteChanged();
+            ZoomOutCommand.NotifyCanExecuteChanged();
+            ZoomFitCommand.NotifyCanExecuteChanged();
+        }
+        if (e.PropertyName is nameof(CanZoom) or nameof(HasFile))
+        {
+            OnPropertyChanged(nameof(ZoomOutTip));
+            OnPropertyChanged(nameof(ZoomFitTip));
+            OnPropertyChanged(nameof(ZoomInTip));
+        }
+        if (e.PropertyName is nameof(HasFile))
+            OnPropertyChanged(nameof(PromptTip));
+    }
 
     // ---- Area: what is shown, frozen to be marked on ----------------------------------------------
 

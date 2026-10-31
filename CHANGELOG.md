@@ -43,8 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to the next. Area works on every file, pictures, videos, sounds and PDFs too. Text, in place of
   Code (an SVG's source), shows a file's text to select: an SVG's or a Markdown file's source, a CSV
   as written, the text of a Word, PowerPoint, Excel or PDF file or a web page.
-- File inspector's Prompt is now **Prompt metadata**, beside the zoom buttons over the file, and shows
-  only for a file that carries prompts.
+- File inspector's Prompt is now **Prompt metadata**. It and the zoom buttons sit in a bar under the
+  file, as in the Code editor, instead of floating over the file's corner. They are there for every
+  file, greyed (the tooltip says why) for one that doesn't zoom or carry prompts.
+- File inspector's folder button reads **Open file**, as the Code editor's reads Open folder.
 - History shows the trash button on every chat; for one open in another window it is greyed, and
   its tooltip says to close the chat there first.
 - Settings → General → Text recognition always has **Add a language**, also once Windows reads one,

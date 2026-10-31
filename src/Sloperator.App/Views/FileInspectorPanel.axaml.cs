@@ -10,12 +10,7 @@ namespace Sloperator.App.Views;
 /// <summary>The File inspector panel, on the left of the chat window: the file's bar over the file (<see cref="FileInspectorView"/>).</summary>
 public partial class FileInspectorPanel : UserControl
 {
-    public FileInspectorPanel()
-    {
-        InitializeComponent();
-        // What the file was made with takes at most half the panel: the file stays the larger part.
-        SizeChanged += (_, e) => RecipeBox.MaxHeight = Math.Max(120, Math.Floor(e.NewSize.Height / 2));
-    }
+    public FileInspectorPanel() => InitializeComponent();
 
     /// <summary>A click on the bar selects nothing: the selection leaves the box, as a click beside the text does.</summary>
     private void OnBarReleased(object? sender, PointerReleasedEventArgs e)

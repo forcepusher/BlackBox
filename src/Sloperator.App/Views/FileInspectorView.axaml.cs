@@ -39,6 +39,8 @@ public partial class FileInspectorView : UserControl
         PdfScroll.AddHandler(PointerMovedEvent, OnPdfMoved, RoutingStrategies.Tunnel);
         PdfScroll.AddHandler(PointerReleasedEvent, OnPdfReleased, RoutingStrategies.Tunnel);
         PdfScroll.GetObservable(ScrollViewer.ViewportProperty).Subscribe(new Watch<Size>(_ => SizePages()));
+        // What the file was made with takes at most half the view: the file stays the larger part.
+        SizeChanged += (_, e) => RecipeBox.MaxHeight = Math.Max(120, Math.Floor(e.NewSize.Height / 2));
     }
 
     private FileInspectorViewModel? _vm;
@@ -94,20 +96,14 @@ public partial class FileInspectorView : UserControl
             return;
         }
         ClearSelection();
-        // Read off the screen, the buttons in the corner over a picture would be in the still: hidden for the frame it is read in.
-        CornerButtons.Opacity = 0;
         DispatcherTimer.RunOnce(() =>
         {
             if (_vm is not { AreaMode: true, Frozen: null })
-            {
-                CornerButtons.Opacity = 1;
                 return;
-            }
             Control? shown = _vm.Markdown is not null ? DocumentScroll : _vm.Text is not null ? TextScroll : _vm.Model is not null ? ModelView
                 : _vm.Pages is not null ? PdfScroll : _vm.Video is not null ? FrameBox : _vm.Animation is not null ? AnimationBox
                 : _vm.Sound is not null ? Waveform : _vm.Picture is not null ? PictureBox : null;
             Frozen(shown is null ? null : OnScreen(shown));
-            CornerButtons.Opacity = 1;
         }, TimeSpan.FromMilliseconds(80));
     }
 
