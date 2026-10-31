@@ -74,6 +74,9 @@ public sealed partial class MainWindowViewModel
         new(FileInspectorName, "Look inside any file", 420, 0,
             vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir),
             OpenIn: "Inspector", Opens: path => !LocalFolder(path)),
+        new("Code editor", "Browse and edit a folder's files", 560, 0,
+            vm => new CodeEditorViewModel(vm),
+            OpenIn: "Code editor", Opens: Core.Documents.FileInspector.IsText),
         new("Video generator", "Plan and make a video shot by shot", 770, 633,
             vm => new VideoGeneratorViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
     ];
@@ -226,8 +229,10 @@ public sealed partial class MainWindowViewModel
     /// </summary>
     private bool _changesNotShown;
 
-    private void UseChanges(FileChanges changes)
+    /// <param name="editorFolder">The folder the chat had open in the Code editor panel (see <see cref="EditorFolder"/>).</param>
+    private void UseChanges(FileChanges changes, string? editorFolder = null)
     {
+        EditorFolder = editorFolder;
         if (Changes is not null)
             Changes.Changed -= OnChanges;
         Changes = changes;
@@ -264,6 +269,17 @@ public sealed partial class MainWindowViewModel
 
     /// <summary>Set while File changes opens on the agent's first change: what its first read shows is that change, lit up.</summary>
     internal bool OpeningOnFirstChange { get; private set; }
+
+    // ---- the Code editor panel's folder and unsaved files ---------------------------------------
+
+    /// <summary>
+    /// The folder the user opened in the Code editor panel in the chat on screen, saved with the chat;
+    /// null while none was, and the panel shows the project the agent worked in.
+    /// </summary>
+    internal string? EditorFolder { get; set; }
+
+    /// <summary>Files edited in the Code editor panel and not saved yet, by path: kept while the window is open, so closing the panel loses nothing.</summary>
+    internal Dictionary<string, CodeDraft> CodeDrafts { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Where a chat's list is kept: Data/chats/changes/id.json.</summary>
     private string ChangesFile(string chatId) => Path.Combine(_chats.Folder, "changes", Path.GetFileName(chatId) + ".json");

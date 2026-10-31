@@ -96,6 +96,19 @@
     <SolidColorBrush x:Key="BbError" Color="#E06C6C" />
     <SolidColorBrush x:Key="BbErrorHover" Color="#E88787" />
     <SolidColorBrush x:Key="BbErrorPressed" Color="#C75E5E" />
+    <!-- Code in the Code editor panel (CodeView): what AvaloniaEdit's highlighting names comments, strings,
+         numbers, keywords, types, calls, preprocessor lines and names (attributes, properties, variables),
+         one colour each for every language, readable on the dark background; the rest is BbCode. -->
+    <!-- What the agent just changed, lit a moment (the Code editor's Watch). -->
+    <SolidColorBrush x:Key="BbFresh" Color="#40FCC21B" />
+    <SolidColorBrush x:Key="BbSyntaxComment" Color="#6A9955" />
+    <SolidColorBrush x:Key="BbSyntaxString" Color="#CE9178" />
+    <SolidColorBrush x:Key="BbSyntaxNumber" Color="#B5CEA8" />
+    <SolidColorBrush x:Key="BbSyntaxKeyword" Color="#569CD6" />
+    <SolidColorBrush x:Key="BbSyntaxType" Color="#4EC9B0" />
+    <SolidColorBrush x:Key="BbSyntaxMethod" Color="#DCDCAA" />
+    <SolidColorBrush x:Key="BbSyntaxPreprocessor" Color="#C586C0" />
+    <SolidColorBrush x:Key="BbSyntaxName" Color="#9CDCFE" />
 
     <!-- Every control's corners: 8 (a card 12, the message box 16, set in the styles below). -->
     <CornerRadius x:Key="ControlCornerRadius">8</CornerRadius>
@@ -194,6 +207,8 @@
         <ColorPaletteResources x:Key="Dark" Accent="#FCC21B" BaseHigh="#F0F0F0" />
       </FluentTheme.Palettes>
     </FluentTheme>
+    <!-- The Code editor panel's editor (AvaloniaEdit), drawn as Fluent's controls are. -->
+    <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
 
     <Style Selector="Window">
       <Setter Property="Background" Value="{StaticResource BbBackground}" />
@@ -685,6 +700,35 @@
     <Style Selector="Slider:not(:disabled) /template/ Thumb, Slider:disabled /template/ Thumb">
       <Setter Property="BorderThickness" Value="2" />
       <Setter Property="BorderBrush" Value="{StaticResource BbBar}" />
+    </Style>
+    <!-- A list of files, one line a file so a long list fits (the user, 2026-10-29): File changes' changed
+         files and the Code editor's tree. -->
+    <Style Selector="ListBox.files">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox.files ListBoxItem">
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <!-- A foldout's arrow (File changes' sections, the Code editor's folders): pointing right while
+         folded, down while open. -->
+    <Style Selector="PathIcon.fold">
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+      <Setter Property="RenderTransform" Value="rotate(-90deg)" />
+    </Style>
+    <Style Selector="PathIcon.fold.open">
+      <Setter Property="RenderTransform" Value="none" />
+    </Style>
+    <!-- A button over what it acts on (File changes' Stage, Unstage and Discard, the Code editor's
+         Save): one that has nothing to act on is only greyed, not filled: it shouldn't look the more
+         pressable. -->
+    <Style Selector="Button.act:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{StaticResource BbControlBorder}" />
+      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
+    </Style>
+    <Style Selector="Button.act:disabled">
+      <Setter Property="Opacity" Value="0.6" />
     </Style>
     <!-- A list's row (File changes' files) lights to a card's colour under the pointer, a button's
          pressed; a picked one keeps its tint (Fluent's). -->

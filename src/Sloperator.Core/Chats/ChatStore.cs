@@ -87,6 +87,9 @@ public sealed class SavedChat
     public List<ChatEntry> Entries { get; set; } = [];
     public List<ChatMessage> History { get; set; } = [];
 
+    /// <summary>The folder opened in the Code editor panel in this chat; null when none was opened there.</summary>
+    public string? Folder { get; set; }
+
     /// <summary>Pictures to write into the chat's folder with this version, by file name; not part of the JSON.</summary>
     [JsonIgnore]
     public Dictionary<string, byte[]> NewPictures { get; set; } = [];

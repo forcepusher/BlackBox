@@ -108,14 +108,6 @@
       <Setter Property="Margin" Value="4,1,4,-1" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
-    <Style Selector="ListBox.files">
-      <Setter Property="Background" Value="Transparent" />
-    </Style>
-    <!-- One line a file, so a long list fits (the user, 2026-10-29): its name, its counts at the right. -->
-    <Style Selector="ListBox.files ListBoxItem">
-      <Setter Property="Padding" Value="8,4" />
-      <Setter Property="MinHeight" Value="0" />
-    </Style>
     <!-- A file some of whose lines are picked: grey, selected or not, as only those lines are (the
          user, 2026-10-28); yellow again once they are let go, if it is selected. -->
     <Style Selector="ListBox.files ListBoxItem.lines /template/ ContentPresenter#PART_ContentPresenter,
@@ -124,29 +116,12 @@
                      ListBox.files ListBoxItem.lines:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{StaticResource BbChip}" />
     </Style>
-    <!-- Stage, Unstage and Discard over the diff: one that has nothing to act on is only greyed, not
-         filled: it shouldn't look the more pressable. -->
-    <Style Selector="Button.act:disabled /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="{StaticResource BbControlBorder}" />
-      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
-    </Style>
-    <Style Selector="Button.act:disabled">
-      <Setter Property="Opacity" Value="0.6" />
-    </Style>
-    <!-- A foldout's header in the file list: a flat button as wide as the list, its arrow pointing
-         down while open; lit under the pointer as any button is. -->
+    <!-- A foldout's header in the file list: a flat button as wide as the list; lit under the pointer as
+         any button is. -->
     <Style Selector="Button.fold">
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
       <Setter Property="CornerRadius" Value="0" />
-    </Style>
-    <Style Selector="Button.fold PathIcon.arrow">
-      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
-      <Setter Property="RenderTransform" Value="rotate(-90deg)" />
-    </Style>
-    <Style Selector="Button.fold.open PathIcon.arrow">
-      <Setter Property="RenderTransform" Value="none" />
     </Style>
     <Style Selector="TextBlock.added">
       <Setter Property="Foreground" Value="{StaticResource BbAdded}" />
@@ -192,10 +167,10 @@
             <DataTemplate x:DataType="vm:FileSection">
               <StackPanel>
                 <!-- A foldout's header: Committed, Staged, Unstaged or Outside git, and how many files. -->
-                <Button Classes="flat fold" Classes.open="{Binding IsExpanded}" Command="{Binding ToggleCommand}" IsVisible="{Binding HasHeader}"
+                <Button Classes="flat fold" Command="{Binding ToggleCommand}" IsVisible="{Binding HasHeader}"
                         AutomationProperties.Name="{Binding Name}" ToolTip.Tip="Fold or unfold">
                   <StackPanel Orientation="Horizontal" Spacing="4">
-                    <PathIcon Classes="arrow" Width="10" Height="10" Data="M7 10l5 5 5-5z" />
+                    <PathIcon Classes="fold" Classes.open="{Binding IsExpanded}" Width="10" Height="10" Data="M7 10l5 5 5-5z" />
                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding Count}" Classes="muted" Margin="4,0,0,0" VerticalAlignment="Center" />
                   </StackPanel>
