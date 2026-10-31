@@ -223,12 +223,6 @@ public sealed partial class MainWindowViewModel
     /// <summary>On the window's thread: the list changed, or another chat's took its place.</summary>
     internal event Action? ChangesUpdated;
 
-    /// <summary>
-    /// The chat on screen has had no file changed by the agent: its first change opens File changes,
-    /// once (the user, 2026-10-27). A chat whose list has files had its turn, closed or not.
-    /// </summary>
-    private bool _changesNotShown;
-
     /// <param name="editorFolder">The folder the chat had open in the Code editor panel (see <see cref="EditorFolder"/>).</param>
     private void UseChanges(FileChanges changes, string? editorFolder = null)
     {
@@ -236,39 +230,18 @@ public sealed partial class MainWindowViewModel
         if (Changes is not null)
             Changes.Changed -= OnChanges;
         Changes = changes;
-        _changesNotShown = changes.IsEmpty;
         changes.Changed += OnChanges;
         ChangesUpdated?.Invoke();
     }
 
     // A run stopped by leaving the chat still writes into the chat's own list, never into this one.
-    private void OnChanges(FileChanges changes)
+    // File changes never opens by itself (the user, 2026-10-31: it widened the window mid-task): it
+    // shows the changes once picked in the Side panel dropdown.
+    private void OnChanges(FileChanges changes) => Dispatcher.UIThread.Post(() =>
     {
-        // Read on the agent's thread: a write_file that failed is in the list, but changed nothing to show.
-        var first = _changesNotShown && ReferenceEquals(changes, Changes) && changes.Diff().Files.Count > 0;
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (!ReferenceEquals(changes, Changes))
-                return;
-            if (first && _changesNotShown)
-                OpenOnFirstChange();
+        if (ReferenceEquals(changes, Changes))
             ChangesUpdated?.Invoke();
-        });
-    }
-
-    /// <summary>The agent's first change in the chat: File changes opens, unless the user turned that off or has another panel open, which it doesn't take the place of.</summary>
-    private void OpenOnFirstChange()
-    {
-        _changesNotShown = false;
-        if (!_settings.Panels.OpenFileChanges || SidePanel is not null || _closed)
-            return;
-        OpeningOnFirstChange = true;
-        try { SelectedSidePanel = SidePanelOptions.First(o => o.Name == FileChangesName); }
-        finally { OpeningOnFirstChange = false; }
-    }
-
-    /// <summary>Set while File changes opens on the agent's first change: what its first read shows is that change, lit up.</summary>
-    internal bool OpeningOnFirstChange { get; private set; }
+    });
 
     // ---- the Code editor panel's folder and unsaved files ---------------------------------------
 

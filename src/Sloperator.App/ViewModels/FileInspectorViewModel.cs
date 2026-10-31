@@ -60,7 +60,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>The file shown; null before one is.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FileName), nameof(HasFile))]
+    [NotifyPropertyChangedFor(nameof(FileName), nameof(HasFile), nameof(CanFreeze), nameof(AreaTip), nameof(TextTip))]
     private string? _path;
 
     public string FileName => System.IO.Path.GetFileName(Path ?? "");
@@ -78,12 +78,12 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
     public bool HasMessage => Message is not null;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsMarkdown), nameof(CanFreeze))]
+    [NotifyPropertyChangedFor(nameof(ShowsMarkdown), nameof(CanShowText), nameof(TextTip))]
     private string? _markdown;
 
     /// <summary>Text in a fixed-width font: code, a log, a document's text where nothing on this PC previews it.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsText), nameof(CanFreeze))]
+    [NotifyPropertyChangedFor(nameof(ShowsText), nameof(TextTip))]
     private string? _text;
 
     /// <summary>What <see cref="Markdown"/> or <see cref="Text"/> is: the file as written (its lines are the file's), a CSV drawn as a table, or a document's text only.</summary>
@@ -100,53 +100,99 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>An SVG, drawn sharp at any zoom in place of <see cref="Picture"/> (which holds it drawn at its own size, to copy).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsDrawing))]
+    [NotifyPropertyChangedFor(nameof(CanShowText), nameof(TextTip))]
     private SvgPicture? _drawing;
 
     public bool IsDrawing => Drawing is not null;
 
-    /// <summary>Code is on: an SVG's source shows in place of what it draws, its lines to select and ask about.</summary>
+    /// <summary>What kind of file is shown, once its load has begun.</summary>
+    private InspectorKind? _kind;
+
+    /// <summary>
+    /// Text can be turned on: the file is drawn as something else that has text to select (an SVG's
+    /// source, a Markdown file's or a CSV's as written, the text in a Word, PowerPoint, Excel or PDF
+    /// file or a web page). A text file or code already shows as text; a picture, video, sound or 3D
+    /// model has none.
+    /// </summary>
+    public bool CanShowText => IsDrawing || ShellPath is not null || Pages is not null
+        || (_kind is InspectorKind.Markdown or InspectorKind.Table && (Markdown is not null || ShowText));
+
+    /// <summary>Text is always in the panel's bar (the user, 2026-10-31: in place of Code, which only an SVG had), greyed where it has nothing to show.</summary>
+    public string TextTip => CanShowText ? (ShowText ? "Back to the file as it looks" : "Its text, to select and ask about")
+        : !HasFile ? "Open a file first" : Text is not null || Markdown is not null ? "Shown as text already" : "This file has no text";
+
+    /// <summary>Text is on: the file's text shows in place of how it looks, to select and ask about.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(ShowsPicture))]
-    private bool _showCode;
+    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(ShowsPicture), nameof(ShowsShell), nameof(ShowsPages), nameof(CanShowText), nameof(TextTip))]
+    private bool _showText;
 
-    public bool ShowsPicture => Picture is not null && !ShowCode;
+    public bool ShowsPicture => Picture is not null && !ShowText && Frozen is null;
 
-    partial void OnShowCodeChanged(bool value)
+    /// <summary>How the file looked with Text off: a Markdown file's or a CSV's drawing, and what its selections are.</summary>
+    private (string? Markdown, Shown Shown) _looks;
+
+    partial void OnShowTextChanged(bool value)
     {
         Unpick();
         AreaMode = false;
         if (!value)
-            Text = null;
-        else if (Path is { } path)
-            (_shown, Text) = (Shown.File, FileInspector.ReadText(path).Text);
+        {
+            (_shown, Markdown, Text) = (_looks.Shown, _looks.Markdown, null);
+            return;
+        }
+        if (Path is not { } path)
+            return;
+        _looks = (Markdown, _shown);
+        if (IsDrawing || _kind is InspectorKind.Markdown or InspectorKind.Table)
+        {
+            (_shown, Markdown, Text) = (Shown.File, null, FileInspector.ReadText(path).Text);
+            return;
+        }
+        // A document's text, as read_file gives it the agent (Word's and PowerPoint's as Markdown): read off the UI thread.
+        var load = _loading;
+        Task.Run(() =>
+        {
+            string? text = null;
+            try { text = FileInspector.DocumentAsText(path); }
+            catch (Exception ex) when (ex is not OutOfMemoryException) { }
+            var markdown = System.IO.Path.GetExtension(path).ToLowerInvariant() is ".docx" or ".docm" or ".dotx" or ".pptx" or ".pptm" or ".potx";
+            Post(load, () =>
+            {
+                if (!ShowText)
+                    return;
+                _shown = Shown.TextOnly;
+                if (text is null) Text = "";
+                else if (markdown) Markdown = text;
+                else Text = text;
+            });
+        });
     }
 
     /// <summary>A video, in a player of the panel's own: frame by frame, zoomed, an area marked on a frame.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanZoom))]
+    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(ShowsVideo))]
     private InspectorVideoViewModel? _video;
 
     /// <summary>An animation, frame by frame as a video is.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanZoom))]
+    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(ShowsAnimation))]
     private InspectorAnimationViewModel? _animation;
 
     /// <summary>A sound, as its waveform.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(MaxZoom))]
+    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(MaxZoom), nameof(ShowsSound))]
     private InspectorSoundViewModel? _sound;
 
     /// <summary>A 3D model, to turn about.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(MaxZoom), nameof(CanFreeze), nameof(ShowsModel))]
+    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(MaxZoom), nameof(ShowsModel))]
     private InspectorModelViewModel? _model;
 
     public bool ShowsModel => Model is not null && Frozen is null;
 
     /// <summary>A PDF's pages, drawn by Windows' PDF renderer as they come on screen; null for any other file.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanZoom))]
+    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(ShowsPages), nameof(CanShowText), nameof(TextTip))]
     private IReadOnlyList<PdfPageItem>? _pages;
 
     /// <summary>The PDF the pages are drawn from, open while it is shown.</summary>
@@ -154,7 +200,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>The file for Windows' previewer to draw (see <see cref="Views.ShellPreviewHost"/>).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsShell), nameof(CanFreeze))]
+    [NotifyPropertyChangedFor(nameof(ShowsShell), nameof(CanShowText), nameof(TextTip))]
     private string? _shellPath;
 
     /// <summary>What a load under way is: one started after it wins.</summary>
@@ -162,10 +208,13 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>The prompts and settings a picture, animation, video, sound or 3D model says it was made with (ComfyUI keeps them in every file it saves); null when it says none.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasRecipe))]
+    [NotifyPropertyChangedFor(nameof(HasRecipe), nameof(ShowsPromptButton))]
     private MediaRecipe? _recipe;
 
     public bool HasRecipe => Recipe is not null;
+
+    /// <summary>Prompt metadata, in the corner over the file in the panel: there only for a file that says how it was made.</summary>
+    public bool ShowsPromptButton => HasRecipe && CanPick;
 
     /// <summary>Prompt is on: what the file was made with shows under it; it stays on from one file to the next.</summary>
     [ObservableProperty]
@@ -185,7 +234,8 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
         var load = ++_loading;
         Unpick();
         AreaMode = false;
-        ShowCode = false;
+        ShowText = false;
+        (_looks, _kind) = (default, null);
         Clear();
         Zoom = 1;
         Path = path;
@@ -203,6 +253,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
                 }
                 var size = FilePreview.Size(path);
                 var kind = FileInspector.KindOf(path);
+                Post(load, () => _kind = kind);
                 if (kind is InspectorKind.Picture or InspectorKind.Animation or InspectorKind.Video or InspectorKind.Sound or InspectorKind.Model)
                     LoadRecipe(load, path);
                 switch (kind)
@@ -459,7 +510,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
     private double _zoom = 1;
 
     /// <summary>What zooms: pictures, frames, a PDF's pages, a sound, a 3D model, and what is frozen for marking.</summary>
-    public bool CanZoom => Pages is not null || ShowsPicture || Video is not null || Animation is not null || Sound is not null || Model is not null || Frozen is not null;
+    public bool CanZoom => ShowsPages || ShowsPicture || Video is not null || Animation is not null || Sound is not null || Model is not null || Frozen is not null;
 
     /// <summary>Pages are drawn sharp up to 3 times the panel's width; pictures and frames go to their pixels, a sound to its samples.</summary>
     public double MaxZoom => Frozen is not null ? Views.ZoomBox.MaxZoom : Pages is not null ? 3 : Sound is { } sound ? sound.MaxZoom
@@ -491,24 +542,41 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>
     /// Area is on: what the panel shows is a still picture of it (<see cref="Frozen"/>) to drag an area
-    /// over. For a text, whose drags select text, and Windows' previewer, which takes the mouse itself.
+    /// over. Made for a text, whose drags select text, and Windows' previewer, which takes the mouse itself;
+    /// there for any file, as the bar's buttons are the same for every file.
     /// </summary>
     [ObservableProperty]
     private bool _areaMode;
 
-    /// <summary>What shows a text or Windows' previewer: Area can be turned on (in the panel).</summary>
-    public bool CanFreeze => CanPick && (ShellPath is not null || Markdown is not null || Text is not null || Model is not null);
+    /// <summary>Area can be turned on (in the panel) for any file shown (the user, 2026-10-31: for everything but no file).</summary>
+    public bool CanFreeze => CanPick && HasFile;
+
+    /// <summary>Area is always in the panel's bar, greyed with no file open.</summary>
+    public string AreaTip => CanFreeze ? "Freeze the view to drag over a part of it" : "Open a file first";
 
     /// <summary>The panel's view of the file, frozen while Area is on; null otherwise.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsShell), nameof(ShowsMarkdown), nameof(ShowsText), nameof(ShowsModel), nameof(CanZoom), nameof(MaxZoom))]
+    [NotifyPropertyChangedFor(nameof(ShowsShell), nameof(ShowsMarkdown), nameof(ShowsText), nameof(ShowsModel), nameof(ShowsPicture), nameof(ShowsVideo), nameof(ShowsAnimation), nameof(ShowsSound), nameof(ShowsPages), nameof(CanZoom), nameof(MaxZoom))]
     private Bitmap? _frozen;
 
     private RawImage? _frozenPixels;
 
-    public bool ShowsShell => ShellPath is not null && Frozen is null;
+    public bool ShowsShell => ShellPath is not null && !ShowText && Frozen is null;
     public bool ShowsMarkdown => Markdown is not null && Frozen is null;
     public bool ShowsText => Text is not null && Frozen is null;
+    public bool ShowsVideo => Video is not null && Frozen is null;
+    public bool ShowsAnimation => Animation is not null && Frozen is null;
+    public bool ShowsSound => Sound is not null && Frozen is null;
+    public bool ShowsPages => Pages is not null && !ShowText && Frozen is null;
+
+    /// <summary>What plays stops as the view is frozen: the still is the moment Area was turned on.</summary>
+    internal void StopPlaying()
+    {
+        Video?.Pause();
+        Animation?.Pause();
+        Sound?.Pause();
+        Model?.Pause();
+    }
 
     /// <summary>The view frozen (by the panel, which can read it) to mark an area on.</summary>
     internal void Freeze(RawImage pixels)

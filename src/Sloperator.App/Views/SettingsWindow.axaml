@@ -43,9 +43,6 @@
       <TabItem Header="General">
         <ScrollViewer>
           <StackPanel Spacing="4" Margin="16,8,28,24">
-            <TextBlock Classes="h2" Text="Side panel" />
-            <CheckBox IsChecked="{Binding Panels.OpenFileChanges}" Content="Open File changes when the agent changes a file" />
-
             <TextBlock Classes="h2" Text="Notifications" />
             <CheckBox IsChecked="{Binding Notify.WhenDone}" Content="Notify me when done"
                       ToolTip.Tip="A Windows notification when a task is done, stops on an error or waits for your OK, unless you are looking at its window." />
@@ -70,7 +67,7 @@
                 <TextBlock Classes="label" Text="Languages" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" Margin="0,4">
                   <TextBlock Text="{Binding TextRecognition}" VerticalAlignment="Center" />
-                  <Button Classes="ghost" Content="Add a language" Command="{Binding OpenLanguageSettingsCommand}" IsVisible="{Binding !HasTextRecognition}"
+                  <Button Classes="ghost" Content="Add a language" Command="{Binding OpenLanguageSettingsCommand}"
                           ToolTip.Tip="Opens Windows' language settings: a language added there brings its text recognition" />
                 </StackPanel>
               </Grid>

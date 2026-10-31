@@ -378,9 +378,6 @@ public sealed class PanelSettings
 
     /// <summary>Code editor: long lines wrap inside the panel, under their own start, rather than run off its right edge.</summary>
     public bool WrapCode { get; set; } = true;
-
-    /// <summary>File changes opens by itself on the agent's first file change in a chat, unless another panel is open.</summary>
-    public bool OpenFileChanges { get; set; } = true;
 }
 
 /// <summary>What Sloperator tells the user outside its windows.</summary>

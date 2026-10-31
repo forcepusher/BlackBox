@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Sloperator.App.Tests;
 
-/// <summary>An SVG in File inspector: drawn as shapes, so it stays sharp zoomed in, with its source under Code.</summary>
+/// <summary>An SVG in File inspector: drawn as shapes, so it stays sharp zoomed in, with its source under Text; Text and Area for other files.</summary>
 public sealed class SvgInspectorTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("bb-svg-panel-").FullName;
@@ -19,7 +19,7 @@ public sealed class SvgInspectorTests : IDisposable
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
     [Fact]
-    public void An_svg_is_drawn_sharp_at_any_zoom_and_its_source_is_under_code()
+    public void An_svg_is_drawn_sharp_at_any_zoom_and_its_source_is_under_text()
     {
         // A yellow square on dark grey, its left edge half way across a unit: zoomed 8 times, that edge
         // must go straight from one colour to the other, half way across the 8 pixels the unit covers.
@@ -59,17 +59,57 @@ public sealed class SvgInspectorTests : IDisposable
             Assert.Equal(0xFCC21B, pixels(edge + 1, row));
             Assert.Equal(0x202020, pixels(edge - 2, row));
 
-            vm.ShowCode = true;
+            vm.ShowText = true;
             Dispatcher.UIThread.RunJobs();
             Assert.False(box.IsVisible);
             Assert.Contains("<rect x=\"10.5\" y=\"10\"", vm.Text);
             Assert.False(vm.CanZoom);
-            vm.ShowCode = false;
+            vm.ShowText = false;
             Assert.Null(vm.Text);
             Assert.True(vm.CanZoom);
             window.Close();
             return 0;
         });
+    }
+
+    [Fact]
+    public void Text_shows_a_markdown_file_as_written_and_is_greyed_for_code()
+    {
+        var md = Path.Combine(_dir, "notes.md");
+        File.WriteAllText(md, "# Notes\n\n- one\n");
+        var code = Path.Combine(_dir, "tool.ps1");
+        File.WriteAllText(code, "Write-Host hi\n");
+        HeadlessApp.Run(() =>
+        {
+            var vm = new FileInspectorViewModel(new PreviewServices(null, () => null));
+            Assert.False(vm.CanShowText);
+            Assert.Equal("Open a file first", vm.TextTip);
+
+            Load(vm, md, () => vm.Markdown is not null);
+            Assert.True(vm.CanShowText);
+            vm.ShowText = true;
+            Assert.Equal("# Notes\n\n- one\n", vm.Text);
+            Assert.False(vm.ShowsMarkdown);
+            vm.ShowText = false;
+            Assert.Null(vm.Text);
+            Assert.True(vm.ShowsMarkdown);
+
+            Load(vm, code, () => vm.Text is not null);
+            Assert.False(vm.CanShowText);
+            Assert.Equal("Shown as text already", vm.TextTip);
+            return 0;
+        });
+    }
+
+    private static void Load(FileInspectorViewModel vm, string path, Func<bool> loaded)
+    {
+        vm.Show(path);
+        for (var i = 0; i < 200 && !loaded(); i++)
+        {
+            Thread.Sleep(10);
+            Dispatcher.UIThread.RunJobs();
+        }
+        Assert.True(loaded());
     }
 
     /// <summary>A frame's pixels as 0xRRGGBB by x and y.</summary>

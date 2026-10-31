@@ -383,7 +383,7 @@ and the side buttons go through the chat's other pictures and videos, Esc, × or
 picture goes back. The agent's clicks step it aside as they do the chat's window, and its keys go to
 the window under both (before, from the chat they could go to the Video generator window there was then).
 
-**Prompt** in the File inspector panel's bar (see [File inspector](#file-inspector)), for a picture,
+**Prompt metadata** in the File inspector panel, over the file's corner ("Prompt" in the panel's bar until 2026-10-31, when the user found the name unclear and the button no selection; see [File inspector](#file-inspector)), for a picture,
 animation, video, sound or 3D model made with ComfyUI, shows the prompts it was made with and
 the settings that matter for making it again (model, LoRAs with their strength, shift, sampler,
 scheduler, steps, CFG, seed, denoise, size, a song's tempo and key, the pictures it started from),
@@ -1658,7 +1658,7 @@ Servers' lists unlike the dropdowns'):
   panel's line up; the chat's server rows (`Border.bar.fields`) a shade lighter. In them buttons are
   8 apart and 12 from text. The splitters are one `GridSplitter` style (the title bar's colour).
 - **Settings' tabs** (the user, 2026-10-30; it had General and Advanced tabs before 17 October too):
-  General (Side panel, Notifications, Safety, the instructions, Text recognition) and Advanced
+  General (Notifications, Safety, the instructions, Text recognition) and Advanced
   (Screenshot size, MCP servers, Updates). One shared `TabControl` style: headers 20 SemiBold, the
   first one's word 16 in from the window's edge, where each tab's text starts; the Fluent yellow line
   under the picked one. Save with a broken MCP list turns to Advanced. Fluent sets the strip's margin
@@ -1869,8 +1869,9 @@ What they share, and how they keep out of each other's way:
   what another window saved while it was open: its copy took that back in every window's memory): "Ask me first" turned on in one window
   left the other's agent acting without asking. A new window starts with what was saved last.
 - **Chats.** A chat is open in one window at a time: two saving their own runs into one file lost
-  one of them. One another window has open says so in History ("Open in another window", no trash
-  button), and picking it brings that window forward. History rereads the folder whenever it opens,
+  one of them. One another window has open says so in History ("Open in another window", its trash
+  button greyed, "Close it in its window to delete it"; hidden until 2026-10-31, when the user had
+  every row keep the same buttons), and picking it brings that window forward. History rereads the folder whenever it opens,
   for the chats other windows started. One saver writes every window's chats, so a window opening a
   chat another just left waits for its last version.
 - **The screen.** Every window, Video generator, the viewer and a dialog is the process's own, so all of
@@ -2888,8 +2889,9 @@ It is one inline command (`-Command`), which an execution policy never stops (on
 `-ExecutionPolicy Bypass` is passed all the same. Tried on the laptop (30 October 2026) with its OCR
 packs removed: the offer came, the install ran once the user allowed it, and find_text read 139 lines
 in the same run; Settings → General → Text recognition lists the languages Windows reads
-(`ITextReader.Languages`, from `OcrEngine.AvailableRecognizerLanguages`), or "Not installed" with
-Add a language, which opens `ms-settings:regionlanguage`: each language added there brings its OCR. On the click
+(`ITextReader.Languages`, from `OcrEngine.AvailableRecognizerLanguages`), or "Not installed", and beside them
+Add a language, which opens `ms-settings:regionlanguage`: each language added there brings its OCR (shown
+only with none installed until 2026-10-31, when the user wanted adding one always to be an option). On the click
 benchmark (pixels, 3 retries, 30 October 2026) Qwen hit 97 of 114 first and 113 in the end, against
 92/102 and 89/101 in two runs without it (two runs of the same thing differ by about 3 first, and 27
 of 114 trials flip): tables 5/5 (from 2/5), half-covered buttons 5/5 (from 2/5 and 1/5), every
@@ -3123,12 +3125,9 @@ again from History shows it again; a new chat starts empty.
 
 **The panel** (Side panel, File changes; "Diff", then "Code diff", then "Code changes", until the user renamed it on
 2026-10-24 and 2026-10-25) opens on the left of the chat as Video generator does, with the changed files listed on the
-left and their diff beside them. **It opens by itself** on the agent's first file change in a chat (the user,
-2026-10-27): once per chat, so closed it stays closed. A chat whose list already has files (one opened again from
-History) had its turn; a call that changed nothing to show (a failed write) doesn't count, as `Diff()` is read on the
-agent's thread while no change was shown yet. With another panel open (File inspector, Video generator) it doesn't take
-its place, and the chat's turn is spent. Settings → General → Side panel, "Open File changes when the agent changes a file"
-turns it off (`panels.openFileChanges`, on by default). It reads them again 250 ms after a call that may have changed files (a file written in
+left and their diff beside them. It opens only when picked in the Side panel dropdown: from 2026-10-27 it opened by
+itself on the agent's first file change in a chat (with a setting to turn that off), until the user found it
+"flat out bad" (2026-10-31): it widened the window, to the whole screen, in the middle of a task. It reads them again 250 ms after a call that may have changed files (a file written in
 parts is read once), keeping the picked lines picked. Lines are picked with a click,
 Shift+click and Ctrl+click (a hunk's divider picks its lines, a file's name all of it; the rows themselves are never picked) and go into the chat's box as their
 file, captioned "Lines 48-49 · MainWindowViewModel.SidePanel.cs" (the lines first: a long name is
@@ -3227,9 +3226,8 @@ removed lines counted by file and text, as an edit moves every number below it) 
 were too short for the user, 2026-10-27; not the pick's look).
 Watching, the first fresh row is left (its file isn't selected: only a click selects one, the user,
 2026-10-28) where it is in the upper half of the diff, else brought a quarter of the way down. The first read and
-another chat's list light nothing, except when the panel opened on its own at the agent's first change
-(`OpeningOnFirstChange`): that read is the change, so all its added and removed lines light up
-(`Fresh` with no diff before). A read that finds nothing new (the agent's next call often comes
+another chat's list light nothing (until 2026-10-31 a panel opened on its own at the agent's first change
+lit all of its first read). A read that finds nothing new (the agent's next call often comes
 250 ms after, and the first change's own `ChangesUpdated` reads again) keeps the last change's rows
 and their light, the fade going on; before, its new rows replaced the lit ones unlit, so a light
 could go out at once. Only a click on the toggle turns Watch on or off (the user, 2026-10-28): a
@@ -3258,7 +3256,10 @@ changed (not in Committed, which can't tell). The diff's headers say the section
 **Stage, Unstage and Discard** (the user, 2026-10-26: buttons in the rows were "all the way over there
 to the right side clipped" behind long paths; then "I should be able to stage/unstage a selected set of
 lines", "and discard selected lines as well. Redesign the UI"). One action bar over the diff has
-**Stage** and **Unstage** (only where a file is in git) and **Discard**, and beside them what they act
+**Stage**, **Unstage** and **Discard**, always there (until 2026-10-31 the bar showed only once a file
+changed, and Stage and Unstage only where the files are in git; the user asked that the bar not change
+mid-task: outside git the two stay greyed, "Only for files in git", and with no file all three say
+"No changes yet", the empty panel's words under the bar), and beside them what they act
 on: the picked lines ("Line 31 · notes.txt · staged", "12 lines in 3 files"), else the selected file
 ("notes.txt · unstaged"), not one in a folded section. A click on a hunk's divider picks its lines and
 on a file's name all of the file's (Ctrl adds them; the header or @@ row itself is never picked), so
@@ -3305,10 +3306,12 @@ file: a picker in the shown file's folder, listing "Files it shows" first, then 
 `FileInspector.PickerTypes`, then All files, since anything else opens in hex; the user's request,
 2026-10-26, not Open in the default program, which the cards no longer have) and the × that closes it; Show in folder was there too until the user had it taken off (2026-10-25), as the file's card in the chat has it. For a picture, animation, video, sound or 3D model that says
 how it was made (`MediaRecipe.Read`, run beside the file's own load so a large file's wait doesn't
-hold the picture), the bar has **Prompt** too: a toggle that shows its prompts and settings under the
-file, in a section at most half the panel's height (set on resize in `FileInspectorPanel`) that
-scrolls past that; it stays on from one file to the next, and is hidden for a file that says
-nothing. It is in the panel only, not in `FileInspectorView`, so the full-screen viewer's peek at a
+hold the picture), the panel has **Prompt metadata**: a toggle in the corner over the file, left of the zoom buttons, that
+shows its prompts and settings under the file, in a section at most half the panel's height (set on
+resize in `FileInspectorPanel`) that scrolls past that; it stays on from one file to the next, and is
+there only for a file that says how it was made (`ShowsPromptButton`). Until 2026-10-31 it was
+"Prompt" in the panel's bar; the user had it renamed, then moved out of the bar, as it isn't a way to
+select as Text and Area are, the bar's buttons staying the same for every file. It is in the panel only, not in `FileInspectorView`, so the full-screen viewer's peek at a
 document doesn't carry it. A message sent
 while it shows a file carries "File inspector · name" over the bubble and tells the model which file
 is open, so "what does this say" is about it. Which way a file is shown (`FileInspector.KindOf`,
@@ -3322,9 +3325,14 @@ under the panel's bar here and in the full-screen viewer for a card's peek, see 
 - SVG (.svg, a picture everywhere: `ComfyOutput.KindOf` says "image"): drawn by Svg.Skia (`SvgFile`,
   Core; see [SVG](#svg)) as shapes straight onto the `ZoomBox`'s canvas at the size they show
   (`ZoomBox.Drawing`, a custom draw operation), so it is sharp at any zoom, fitted as a picture is in
-  its own units. `Picture` holds it drawn at its own size too, for Copy image. **Code** in the bar (shown
-  for an SVG only, right of Area so Area turning up doesn't move it) shows its source as a text file is
-  shown, lines to select and ask about; it is off for each new file. An area marked on it is cut from it
+  its own units. `Picture` holds it drawn at its own size too, for Copy image. **Text** in the bar shows its source as a text
+  file is shown, lines to select and ask about; it is off for each new file. Until 2026-10-31 this was
+  **Code**, shown for an SVG only; the user then asked for a text selection in its place for every file
+  that has text behind how it looks: Text shows a Markdown file or a CSV as written (`Shown.File`, its
+  lines the file's), a Word, PowerPoint, Excel or PDF file or a web page as its text (`DocumentAsText`,
+  as read_file gives it, `Shown.TextOnly`; Windows' previewer and the PDF pages hidden meanwhile), and
+  is greyed for a text file or code ("Shown as text already") and for a picture, video, sound or 3D
+  model ("This file has no text"). An area marked on it is cut from it
   drawn 2048 pixels along its longer side at least, the model told the place in its units. One Svg.Skia
   can't draw shows as its text.
 - Video: a plain player of the panel's own (`InspectorVideoViewModel`; until 2026-10-25 the chat's
@@ -3426,7 +3434,12 @@ the .docx in Word's previewer showed only the whole-document card.
 frame-by-frame player). A left drag over a PDF's page, a picture or a video's frame marks a box
 (`DocumentArea`, Core: its sides as parts of what it is on, and the page); a click marks nothing and
 unpicks. On a text, whose drags select text, and on Windows' previewer, which takes the mouse in its
-own window, **Area** in the panel's bar (a toggle, shown for those only) freezes the view: it is read
+own window, **Area** in the panel's bar (a toggle at its left with Text, the two ways to select, apart
+from the panel's own buttons at its right, the user, 2026-10-31) freezes the view; it is there for every file
+(greyed with none open: until 2026-10-31 it was shown for those only, then greyed for the rest, then
+the user had it on for everything), so a picture, a video's frame (paused, as an animation, a sound
+or a model playing is), a waveform or a PDF's pages freeze too, the zoom buttons kept out of the
+still: it is read
 off the screen (`WindowPixels`, Platform.Windows: the region of Sloperator's window, its other windows
 over it left out of the capture, as the agent's screenshots do) and shown as a still in a `ZoomBox`
 to drag over; the live previewer's window is hidden meanwhile, as nothing can draw over a native
