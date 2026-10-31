@@ -1331,6 +1331,18 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public void What_the_user_asked_for_goes_in_its_own_folder_in_Documents()
+    {
+        // qwen3.8 wrote a hello world straight into the home folder when the user named no place.
+        var made = Path.Combine("D:", "Docs", "Sloperator");
+        var prompt = SystemPrompt.Build("Test OS", null, "C:\\", "", madeDirectory: made);
+        Assert.Contains($"goes in a folder of its own in {made} (such as {Path.Combine(made, "Hello world")}) when they name no place", prompt);
+        Assert.DoesNotContain("folder of its own", SystemPrompt.Build("Test OS", null, "C:\\", ""));
+        Assert.Equal("Sloperator", Path.GetFileName(AgentSetup.MadeDirectory()));
+        Assert.NotEqual(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Path.GetDirectoryName(AgentSetup.MadeDirectory()));
+    }
+
+    [Fact]
     public async Task A_tool_call_lost_to_a_drop_makes_the_model_write_in_parts()
     {
         // LM Studio sends a call's name first and its arguments only when the call is complete;

@@ -12,12 +12,13 @@ public static class SystemPrompt
     /// <param name="webSearch">Whether web_search and fetch_page are in the tool list.</param>
     /// <param name="toolsDirectory">Where portable programs the agent downloads go (Sloperator's Data/tools), or null to leave it out.</param>
     /// <param name="scratchDirectory">Where helper files the agent makes go (Sloperator's Data/scratch), or null to leave it out.</param>
+    /// <param name="madeDirectory">Where what the agent makes for the user goes when they name no place (Documents\Sloperator), or null to leave it out.</param>
     /// <param name="folderIndex">Whether index_folder is in the tool list.</param>
     /// <param name="control">Whether the mouse and keyboard tools are in the tool list along with the screen's (the user can turn them off in Settings).</param>
     /// <param name="modelServer">Whether model_server is in the tool list.</param>
     public static string Build(string platformName, IReadOnlyList<ScreenSpace>? screens, string workingDirectory, string customInstructions,
         IReadOnlyList<McpServerStatus>? mcpServers = null, bool webSearch = false, string? toolsDirectory = null, string? scratchDirectory = null,
-        bool folderIndex = true, bool control = true, bool modelServer = false, bool findText = true)
+        bool folderIndex = true, bool control = true, bool modelServer = false, bool findText = true, string? madeDirectory = null)
     {
         var screen = screens is { Count: > 0 } ? screens[0] : null;
         var sb = new StringBuilder();
@@ -141,6 +142,12 @@ public static class SystemPrompt
         if (scratchDirectory is not null)
             sb.AppendLine($"- Files you make only to get the task done (scripts, helper files, a reminder's script) go in {scratchDirectory}, not in the user's folders, " +
                           "unless the user asked for them there. What the user asked for (a picture, a video, a document) never goes there.");
+        // Asked for a hello world in JavaScript, qwen3.8 wrote hello.js straight into the home
+        // folder: nothing said where things the user asked for go when they name no place.
+        if (madeDirectory is not null)
+            sb.AppendLine($"- What you make for the user (a document, a picture, a program, a game, a new project) goes in a folder of its own in {madeDirectory} " +
+                          $"(such as {Path.Combine(madeDirectory, "Hello world")}) when they name no place, unless it belongs in a folder or project they are working in. " +
+                          "Give its full path in your answer.");
         // Asked for "a simple snake game i can play", Nemotron left snake_game.py in the home folder
         // and told the user to run "python snake_game.py": a terminal is where many users get stuck.
         sb.AppendLine("- Something you make for the user to use (a game, an app, a tool) should start the way any program does, with a double click " +
