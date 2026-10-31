@@ -715,7 +715,7 @@
           <!-- How to stop it comes first: it is what someone needs once Sloperator has the mouse. Under
                it, in one line as the cards' lines are, how to set it straight without stopping it (the
                user counts it among the things that make Sloperator special) and what it asks before
-               it acts, which follows "Ask me first" in Settings. Its key line reads as the two cards
+               it acts, which follows "Approval" in Settings. Its key line reads as the two cards
                under it do (the user, 2026-10-30: four kinds of line in one card were a mess). -->
           <Border Classes="card">
             <StackPanel Spacing="4">

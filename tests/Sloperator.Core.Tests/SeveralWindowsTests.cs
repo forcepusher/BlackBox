@@ -114,7 +114,7 @@ public class SeveralWindowsTests : IDisposable
         var opened = window.Clone(); // the dialog's copy
         var dialog = opened.Clone();
         dialog.Agent.CustomInstructions = "Answer in French.";
-        // Meanwhile another window's Settings turned "Ask me first" on, and this window took it.
+        // Meanwhile another window's Settings set "Approval" to ask, and this window took it.
         window.Agent.Approval = ApprovalMode.AskAll;
 
         var saved = window.With(opened, dialog);

@@ -160,7 +160,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
         OnPropertyChanged(nameof(ScreenNoteWarns));
     }
 
-    /// <summary>The intro's line on what Sloperator asks before it acts, after "Ask me first" in Settings.</summary>
+    /// <summary>The intro's line on what Sloperator asks before it acts, after "Approval" in Settings.</summary>
     public string ApprovalNote => _settings.Agent.Approval switch
     {
         ApprovalMode.AskAll => "I ask before every action.",

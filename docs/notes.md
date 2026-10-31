@@ -1911,9 +1911,9 @@ What they share, and how they keep out of each other's way:
   window changed since it last read or wrote `settings.json` (a three-way merge, key by key, one
   window at a time): a model picked in one window stayed picked when another closed and saved
   where it was. The server, key, model and context in the top bar are each window's own; what the
-  Settings dialog saves ("Ask me first", the instructions, the MCP servers) goes to every window at
+  Settings dialog saves ("Approval", the instructions, the MCP servers) goes to every window at
   once, from its next task, as in the window it was saved in (what was changed in the dialog, over
-  what another window saved while it was open: its copy took that back in every window's memory): "Ask me first" turned on in one window
+  what another window saved while it was open: its copy took that back in every window's memory): "Approval" set to ask in one window
   left the other's agent acting without asking. A new window starts with what was saved last.
 - **Chats.** A chat is open in one window at a time: two saving their own runs into one file lost
   one of them. One another window has open says so in History ("Open in another window", its trash
@@ -1974,7 +1974,7 @@ all along. The process stayed at 340-510 MB (up and down with the screenshots it
 Settings → General → Notifications → **Notify me when done** (off by default) shows a Windows notification
 when a window's run ends or waits: done (the chat's title over the first line of the last reply, its
 Markdown marks taken out, cut at a word past 140 characters), stopped by an error ("Stopped by an
-error: " and the chat's red line), or waiting for the user's OK under "Ask me first" ("Waiting for
+error: " and the chat's red line), or waiting for the user's OK under "Approval" ("Waiting for
 your OK: " and the call's summary). None for a run the user stopped, for one whose messages sent
 too late start the next run at once, or for a Compact context; none while that window is the active
 one and not minimized, as the user is looking at it. The research behind it: done or needs-input
@@ -2698,6 +2698,10 @@ prints the traceback and exits with 0.
 | `mcp_servers` | Adds, removes and lists MCP servers: a server the agent adds starts at once, its tools join the run, and it is kept in `Data/mcp.json` for later tasks (see below) |
 | `model_server` | The model Sloperator itself runs on: `show` says the server, model and the models it offers; `connect` switches the top bar to another server, key and model, after checking the server answers (see Connecting to a model) |
 | `<server>__<tool>` | Any tool of the MCP servers you or the agent added (see below) |
+
+Settings → General → Safety's first row, **Approval**, picks when the agent asks before acting: "Ask before every action", "Ask before
+shell commands and file changes" or "Never ask" (`agent.approval`). The label read "Ask me first" until
+2026-10-31, which made "Ask me first: Never ask" (the user asked for better wording).
 
 Settings → General → Safety has **Enable screenshots** and **Enable keyboard and mouse control**, both on by
 default (`agent.enableScreenshots`, `agent.enableControl`). Screenshots off takes away `screenshot`,
