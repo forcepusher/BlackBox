@@ -70,7 +70,7 @@
                 <TextBlock Classes="label" Text="Languages" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" Margin="0,4">
                   <TextBlock Text="{Binding TextRecognition}" VerticalAlignment="Center" />
-                  <Button Classes="ghost" Content="Add a language" Command="{Binding OpenLanguageSettingsCommand}" IsVisible="{Binding !HasTextRecognition}"
+                  <Button Classes="ghost" Content="Add a language" Command="{Binding OpenLanguageSettingsCommand}"
                           ToolTip.Tip="Opens Windows' language settings: a language added there brings its text recognition" />
                 </StackPanel>
               </Grid>

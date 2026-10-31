@@ -2865,8 +2865,9 @@ It is one inline command (`-Command`), which an execution policy never stops (on
 `-ExecutionPolicy Bypass` is passed all the same. Tried on the laptop (30 October 2026) with its OCR
 packs removed: the offer came, the install ran once the user allowed it, and find_text read 139 lines
 in the same run; Settings → General → Text recognition lists the languages Windows reads
-(`ITextReader.Languages`, from `OcrEngine.AvailableRecognizerLanguages`), or "Not installed" with
-Add a language, which opens `ms-settings:regionlanguage`: each language added there brings its OCR. On the click
+(`ITextReader.Languages`, from `OcrEngine.AvailableRecognizerLanguages`), or "Not installed", and beside them
+Add a language, which opens `ms-settings:regionlanguage`: each language added there brings its OCR (shown
+only with none installed until 2026-10-31, when the user wanted adding one always to be an option). On the click
 benchmark (pixels, 3 retries, 30 October 2026) Qwen hit 97 of 114 first and 113 in the end, against
 92/102 and 89/101 in two runs without it (two runs of the same thing differ by about 3 first, and 27
 of 114 trials flip): tables 5/5 (from 2/5), half-covered buttons 5/5 (from 2/5 and 1/5), every
