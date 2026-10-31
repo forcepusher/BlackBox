@@ -69,11 +69,25 @@ public static class AgentSetup
             includeControl: agent.Controls, includeFindText: agent.EnableTextRecognition);
         mcpSetup.Registry = registry;
         string Prompt() => SystemPrompt.Build(platform.Name, screens, ctx.WorkingDirectory, agent.CustomInstructions, mcp.Connected, webSearch: true, paths.ToolsDir, paths.ScratchDir,
-            folderIndex, control: agent.Controls, modelServer: modelServer is not null, findText: agent.EnableTextRecognition);
+            folderIndex, control: agent.Controls, modelServer: modelServer is not null, findText: agent.EnableTextRecognition, madeDirectory: MadeDirectory());
         var session = new AgentSession(backend.Client, backend.Options, registry, ctx, Prompt(), history, backend.ContextTokens);
         // A server the agent adds or removes: the prompt then lists the servers as the next
         // message's will, in the same request whose tools change anyway.
         mcpSetup.ToolsChanged = () => session.UsePrompt(Prompt());
         return session;
+    }
+
+    /// <summary>
+    /// Where what the agent makes for the user goes when they name no place: Sloperator in their
+    /// Documents, as Windows reports it (OneDrive often moves Documents, and a path built from the
+    /// home folder would miss it). Where the OS reports none, or the home folder itself, Documents in the home folder.
+    /// </summary>
+    internal static string MadeDirectory()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        if (documents.Length == 0 || string.Equals(Path.TrimEndingDirectorySeparator(documents), Path.TrimEndingDirectorySeparator(home), StringComparison.OrdinalIgnoreCase))
+            documents = Path.Combine(home, "Documents");
+        return Path.Combine(documents, "Sloperator");
     }
 }
