@@ -2633,7 +2633,7 @@ prints the traceback and exits with 0.
 | `screenshot` | Captures a screen scaled down to fit the max screenshot size, on the 32px vision grid; `screen=N` looks at another monitor |
 | `mouse_click` | Clicks at x/y (see below); `modifiers` holds keys through the click, as in Ctrl+click to add to a selection or Shift+click to select a range |
 | `zoom` | A sharp, enlarged picture of the region around x/y, with rulers in screenshot coordinates, to aim at small things (see below) |
-| `capture_result` | A picture of what the agent made for the user: a window (`window`, part of its title), a box (`x`, `y`, `width`, `height`) or the whole screen, with a `caption`; `before` (an earlier capture's number or a picture's path) puts the two side by side as Before and After (see below) |
+| `capture_result` | A picture of what the agent made for the user: a window (`window`, part of its title), a box (`x`, `y`, `width`, `height`) or the whole screen, with a `caption`; `file` shows a picture file instead; `compare` (earlier captures or picture files) with `labels` and `columns` puts them all in one picture, the new one last (see below) |
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Typing as key presses (see below) and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
@@ -2675,19 +2675,28 @@ for this. When the run ends, its last capture also shows in its last reply, unde
 picture preview the card has (name, size, Inspect, a click for full screen), with the caption under it (`ChatEntry.Capture`/`Caption`, so a reopened chat has it). A "done" claim whose only
 calls are looks ends the turn, but not when one of them is `capture_result`.
 
-**Before and after**: each capture says its number (capture-N.png). With `before` the new one is still kept as
-capture-N.png, and the user (and the model) get `capture-N-compared.png`: the two under "Before" and
-"After" labels on the chat's dark grey, at the smaller one's scale (never enlarged), side by side or
-one over the other, whichever comes out nearer 4:3 (the chat shows a picture at most 480 wide, and two
-wide windows side by side were a strip). The prompt asks for a capture before changing something already
-on screen. A `before` that isn't there is an argument error before anything is captured.
-When the two are the same size (the same window or box), what changed is boxed on the After: pixels
-change as ClickCheck counts them (a channel moving by more than 24), gathered in 16 px cells (4 changed
-pixels or more); cells up to one apart make a region, and a region needs 80 changed pixels, so a
-blinking caret (about 40) or a clock's digit gets none; nearby boxes join, at most 6. A box is 2 px of
-the accent between 1 px of #161616, on whole pixels, 3 px out from the change. The model is told how
-many regions changed; that only a few pixels did (a digit, a caret), too few to box, so it zooms in to
-check; or that nothing visible did (a hint the work didn't land).
+**Comparisons**: each capture says its number (capture-N.png). `file` makes a picture file the result
+instead of the screen (an edit, an upscale): copied in as the next capture-N.png at its own size, on
+white where it is transparent, so it outlives the original and can be compared later. `compare` lists
+earlier captures' numbers or picture paths, any number; the new one is still kept as capture-N.png,
+and the user (and the model) get `capture-N-compared.png`: all of them in the order given, the new one
+last, each under its label on the chat's dark grey, at its own pixels (never scaled, so an upscale
+shows its detail; the chat preview stays the standard one, full size a click away). `columns` is how
+many go in a row; without it, the grid whose shape is nearest 4:3. There is no limit on the count or
+the size, until a real problem shows. `labels` are the model's, in the user's language (Before and
+After for two by default, numbers for more), shaped with HarfBuzz in Segoe UI or the font Windows picks
+for a script it lacks (CJK, Hangul), so Arabic joins and runs right to left; a long one is cut with
+"…" to its picture's width. An earlier picture that isn't there, or labels that don't match the count,
+are argument errors before anything is captured. The prompt asks for a capture before changing
+something already on screen.
+Two pictures of the same size (the same window or box) get boxes on the last around what changed: any
+pixel that differs counts (no filter for carets or clocks until real runs show they get in the way),
+gathered in 16 px cells, cells up to one apart in one box, boxes that nearly touch joined, at most 6
+(a scrolled page gave dozens). A box is 2 px of the accent between 1 px of #161616, on whole pixels,
+3 px out from the change. The model is told how many boxes there are, or that the two are identical.
+In one real run (Haiku through OpenRouter, the Q3 budget window, "add a Total row", nothing said about
+pictures, 31 October 2026) the model captured the result twice and took no capture before it started.
+
 
 Models often fumble tool-call syntax, so Sloperator repairs calls on the fly: Qwen XML, Gemma 4 and
 JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…) and misnamed

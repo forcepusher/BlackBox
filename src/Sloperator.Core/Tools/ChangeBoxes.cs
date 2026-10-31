@@ -4,29 +4,19 @@ namespace Sloperator.Core.Tools;
 
 /// <summary>
 /// Where two pictures of the same size differ, as a few boxes: what capture_result marks on the
-/// After of a before and after, so a one-cell change in a big sheet can be found at a glance. A
-/// pixel changes as a click's check counts it (<see cref="ClickCheck.Threshold"/>); changed pixels
-/// are gathered in cells, cells close together make one region, and a region needs more changed
-/// pixels than a blinking caret or a clock's digit has, so neither gets a box.
+/// last of two compared pictures, so a one-cell change in a big sheet can be found at a glance.
+/// Any pixel that differs counts; changed pixels are gathered in cells, and cells close together
+/// make one box.
 /// </summary>
 internal static class ChangeBoxes
 {
     /// <summary>The side of a cell, in pixels.</summary>
     private const int Cell = 16;
 
-    /// <summary>Changed pixels a cell needs: fewer is the fringe of antialiased text.</summary>
-    private const int CellPixels = 4;
-
-    /// <summary>
-    /// Changed pixels a region needs: a caret (about 2x20) or a clock's digit has some 40, a word
-    /// typed into a cell some hundred.
-    /// </summary>
-    private const int RegionPixels = 80;
-
-    /// <summary>Cells with up to this many empty cells between them make one region: a word's letters, a row's cells.</summary>
+    /// <summary>Cells with up to this many unchanged cells between them make one box: a word's letters, a row's cells.</summary>
     private const int Join = 1;
 
-    /// <summary>The most boxes: past that the closest are put together.</summary>
+    /// <summary>The most boxes, the closest put together past it: a scrolled page or edits all over gave dozens.</summary>
     private const int MaxBoxes = 6;
 
     /// <summary>Room left around what changed, in pixels, so the box doesn't sit on it.</summary>
@@ -34,14 +24,12 @@ internal static class ChangeBoxes
 
     /// <summary>
     /// The boxes around what differs between two pictures of <paramref name="width"/>x<paramref name="height"/>
-    /// in BGRA rows without padding, top to bottom; none when nothing visible changed. <paramref name="changed"/>
-    /// is how many pixels changed at all: some, with no box, is a change too small to mark (a caret, a digit).
+    /// in BGRA rows without padding, top to bottom; none when they are the same.
     /// </summary>
-    public static List<SKRectI> Find(ReadOnlySpan<byte> before, ReadOnlySpan<byte> after, int width, int height, out int changed)
+    public static List<SKRectI> Find(ReadOnlySpan<byte> before, ReadOnlySpan<byte> after, int width, int height)
     {
-        changed = 0;
         var (cols, rows) = ((width + Cell - 1) / Cell, (height + Cell - 1) / Cell);
-        var counts = new int[cols * rows];
+        var changed = new bool[cols * rows];
         // Each cell's changed pixels' own bounds, so a box is as tight as what changed.
         var bounds = new SKRectI[cols * rows];
         for (var y = 0; y < height; y++)
@@ -50,30 +38,30 @@ internal static class ChangeBoxes
             for (var x = 0; x < width; x++)
             {
                 var i = row + x * 4;
-                if (Math.Abs(before[i] - after[i]) <= ClickCheck.Threshold && Math.Abs(before[i + 1] - after[i + 1]) <= ClickCheck.Threshold
-                    && Math.Abs(before[i + 2] - after[i + 2]) <= ClickCheck.Threshold)
+                if (before[i] == after[i] && before[i + 1] == after[i + 1] && before[i + 2] == after[i + 2])
                     continue;
-                changed++;
                 var c = y / Cell * cols + x / Cell;
-                bounds[c] = counts[c]++ == 0 ? new SKRectI(x, y, x + 1, y + 1) : Union(bounds[c], new SKRectI(x, y, x + 1, y + 1));
+                var pixel = new SKRectI(x, y, x + 1, y + 1);
+                bounds[c] = changed[c] ? Union(bounds[c], pixel) : pixel;
+                changed[c] = true;
             }
         }
 
-        // Cells close together, as regions.
+        // Cells close together, as one box each.
         var seen = new bool[cols * rows];
-        var regions = new List<(SKRectI Box, int Pixels)>();
+        var boxes = new List<SKRectI>();
         var queue = new Queue<int>();
-        for (var start = 0; start < counts.Length; start++)
+        for (var start = 0; start < changed.Length; start++)
         {
-            if (seen[start] || counts[start] < CellPixels)
+            if (seen[start] || !changed[start])
                 continue;
             seen[start] = true;
             queue.Enqueue(start);
-            var (box, pixels) = (bounds[start], 0);
+            var box = bounds[start];
             while (queue.Count > 0)
             {
                 var c = queue.Dequeue();
-                (box, pixels) = (Union(box, bounds[c]), pixels + counts[c]);
+                box = Union(box, bounds[c]);
                 var (cx, cy) = (c % cols, c / cols);
                 for (var dy = -Join - 1; dy <= Join + 1; dy++)
                     for (var dx = -Join - 1; dx <= Join + 1; dx++)
@@ -82,18 +70,16 @@ internal static class ChangeBoxes
                         if (nx < 0 || ny < 0 || nx >= cols || ny >= rows)
                             continue;
                         var n = ny * cols + nx;
-                        if (seen[n] || counts[n] < CellPixels)
+                        if (seen[n] || !changed[n])
                             continue;
                         seen[n] = true;
                         queue.Enqueue(n);
                     }
             }
-            if (pixels >= RegionPixels)
-                regions.Add((box, pixels));
+            boxes.Add(box);
         }
 
         // Boxes that overlap or nearly touch are one, and past the most, the pair that grows least together.
-        var boxes = regions.Select(r => r.Box).ToList();
         for (var merged = true; merged;)
         {
             merged = false;

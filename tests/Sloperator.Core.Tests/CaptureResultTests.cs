@@ -183,7 +183,7 @@ public class CaptureResultTests : IDisposable
 
         var screens = new[] { new ScreenSpace(Plain, (1600, 896)) };
         Assert.Contains("capture it with capture_result, cropped to what you made", SystemPrompt.Build("Test OS", screens, "C:\\", ""));
-        Assert.Contains("capture it before you start too, and pass that capture as before", SystemPrompt.Build("Test OS", screens, "C:\\", ""));
+        Assert.Contains("capture it before you start too, and pass that capture in compare with the result", SystemPrompt.Build("Test OS", screens, "C:\\", ""));
         Assert.Contains("capture it with capture_result", SystemPrompt.Build("Test OS", screens, "C:\\", "", control: false));
         Assert.DoesNotContain("capture_result", SystemPrompt.Build("Test OS", null, "C:\\", ""));
     }
@@ -198,23 +198,23 @@ public class CaptureResultTests : IDisposable
     }
 
     [Fact]
-    public async Task An_earlier_capture_as_before_puts_the_two_side_by_side_under_labels()
+    public async Task An_earlier_capture_in_compare_goes_beside_the_new_one_under_labels()
     {
         var platform = new FakePlatform { Screens = [Plain], Desktop = Filled(SKColors.Red) };
         var ctx = Ctx(platform);
         var first = await Capture(ctx, Box(100, 100, 300, 200));
         Assert.Contains("as capture 1, 300x200", first.Text);
-        Assert.Contains("pass before=1", first.Text);
+        Assert.Contains("pass compare=[1]", first.Text);
 
         platform.Desktop = Filled(SKColors.Blue);
-        var result = await Capture(ctx, new JsonObject { ["x"] = 100, ["y"] = 100, ["width"] = 300, ["height"] = 200, ["before"] = "1", ["caption"] = "Red to blue" });
+        var result = await Capture(ctx, new JsonObject { ["x"] = 100, ["y"] = 100, ["width"] = 300, ["height"] = 200, ["compare"] = new JsonArray(1), ["caption"] = "Red to blue" });
 
-        // The after alone is kept too, as capture 2; the user gets the two together.
+        // The new one alone is kept too, as capture 2; the user gets the two together.
         Assert.True(File.Exists(Path.Combine(_chat, "capture-2.png")));
         var both = Assert.Single(result.Files!);
         Assert.Equal(Path.Combine(_chat, "capture-2-compared.png"), both);
         Assert.Contains("after capture 1", result.Text);
-        Assert.Contains("Before and After", result.Text);
+        Assert.Contains("labelled \"Before\", \"After\"", result.Text);
         using (var png = SKBitmap.Decode(both))
         {
             // Two 300x200 pictures: side by side (616x240) is nearer 4:3 than one over the other (300x496).
@@ -228,26 +228,116 @@ public class CaptureResultTests : IDisposable
         // The model sees the comparison too.
         Assert.Equal((616, 240), SizeOf(result.Image!));
         Assert.Equal("Capture the result at (100, 100), 300x200, beside capture 1",
-            new CaptureResultTool().Describe(new JsonObject { ["x"] = 100, ["y"] = 100, ["width"] = 300, ["height"] = 200, ["before"] = "capture 1" }));
+            new CaptureResultTool().Describe(new JsonObject { ["x"] = 100, ["y"] = 100, ["width"] = 300, ["height"] = 200, ["compare"] = "capture 1" }));
+    }
+
+    /// <summary>A white picture of the size, as a capture's pixels.</summary>
+    private static RawImage White(int width, int height)
+    {
+        var pixels = new byte[width * height * 4];
+        Array.Fill(pixels, (byte)255);
+        return new RawImage(width, height, pixels);
+    }
+
+    private static (int Width, int Height) Composed(int? columns, params RawImage[] pictures)
+    {
+        using var image = CaptureCompare.Compose(pictures.Select((p, i) => (p, $"{i + 1}")).ToList(), columns: columns);
+        return (image.Width, image.Height);
     }
 
     [Fact]
-    public async Task Wide_pictures_go_one_over_the_other_and_sizes_are_matched()
+    public void Pictures_go_in_the_grid_nearest_4_to_3_each_at_its_own_pixels()
     {
-        var platform = new FakePlatform { Screens = [Plain], Desktop = Filled(SKColors.Red) };
-        var ctx = Ctx(platform);
-        await Capture(ctx, Box(0, 0, 800, 200));
-        var stacked = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 800, ["height"] = 200, ["before"] = "capture-1.png" });
-        // Side by side would be 1616x240; one over the other, 800x496, is nearer 4:3.
-        Assert.Equal((800, 496), SizeOf(File.ReadAllBytes(stacked.Files![0])));
-
-        // A larger before is brought down to the after's scale, never the after enlarged: 400x300 next to 200x150 is 200x150.
-        await Capture(ctx, Box(0, 0, 400, 300));
-        var matched = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 200, ["height"] = 150, ["before"] = 3 });
-        Assert.Equal((416, 190), SizeOf(File.ReadAllBytes(matched.Files![0])));
+        // Each picture under a 40 px label band, 16 px apart. Two wide ones: one over the other (800x496), not a strip (1616x240).
+        Assert.Equal((800, 496), Composed(null, White(800, 200), White(800, 200)));
+        // Sizes differ: neither is scaled, an upscale shows its detail.
+        Assert.Equal((616, 340), Composed(null, White(400, 300), White(200, 150)));
+        // Three and four: two across.
+        Assert.Equal((616, 496), Composed(null, White(300, 200), White(300, 200), White(300, 200)));
+        Assert.Equal((616, 496), Composed(null, White(300, 200), White(300, 200), White(300, 200), White(300, 200)));
+        // Nine: three by three, however many there are.
+        Assert.Equal((932, 752), Composed(null, Enumerable.Range(0, 9).Select(_ => White(300, 200)).ToArray()));
     }
 
-    /// <summary>A white page of BGRA rows with dark rectangles on it, as a sheet's cells or a caret.</summary>
+    [Fact]
+    public async Task The_model_can_choose_how_many_go_in_a_row()
+    {
+        Assert.Equal((300, 752), Composed(1, White(300, 200), White(300, 200), White(300, 200)));
+        Assert.Equal((932, 240), Composed(3, White(300, 200), White(300, 200), White(300, 200)));
+
+        var platform = new FakePlatform { Screens = [Plain], Desktop = Filled(SKColors.Red) };
+        var ctx = Ctx(platform);
+        await Capture(ctx, Box(0, 0, 300, 200));
+        await Capture(ctx, Box(0, 0, 300, 200));
+        // More columns than pictures: all in one row.
+        var row = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["compare"] = new JsonArray(1, 2), ["columns"] = 10 });
+        Assert.Equal((932, 240), SizeOf(File.ReadAllBytes(row.Files![0])));
+        var stacked = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["compare"] = new JsonArray(1, 2), ["columns"] = 1 });
+        Assert.Equal((300, 752), SizeOf(File.ReadAllBytes(stacked.Files![0])));
+        Assert.Contains("1 or more", (await Assert.ThrowsAsync<ToolArgumentException>(() =>
+            Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["compare"] = new JsonArray(1), ["columns"] = 0 }))).Message);
+    }
+
+    [Fact]
+    public async Task Captures_and_files_mix_under_the_models_labels_in_any_script()
+    {
+        var platform = new FakePlatform { Screens = [Plain], Desktop = Filled(SKColors.Blue) };
+        var ctx = Ctx(platform);
+        await Capture(ctx, Box(0, 0, 300, 200));
+        var design = Png("design.png", 300, 200, SKColors.Red);
+        var result = await Capture(ctx, new JsonObject
+        {
+            ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200,
+            ["compare"] = new JsonArray("1", design), ["labels"] = new JsonArray("Было", "Макет", "Стало"),
+        });
+        Assert.Contains("after capture 1, design.png", result.Text);
+        Assert.Contains("labelled \"Было\", \"Макет\", \"Стало\"", result.Text);
+        Assert.Contains("only boxed between two pictures", result.Text);
+        using (var three = SKBitmap.Decode(result.Files![0]))
+        {
+            // Two across: the design is second, top right.
+            Assert.Equal((616, 496), (three.Width, three.Height));
+            Assert.Equal(SKColors.Red, three.GetPixel(316 + 150, 140));
+        }
+
+        // Each script in a font that has it, shaped: no empty boxes for missing characters.
+        foreach (var label in new[] { "Было", "変更前", "修改后", "قبل", "이전", "Πριν" })
+        {
+            using var shaped = CaptureCompare.Shape(label, 20);
+            Assert.True(shaped.Width > 0, label);
+            Assert.DoesNotContain((ushort)0, shaped.Glyphs);
+        }
+        // A long one is cut to fit its picture, with "…".
+        using (var cut = CaptureCompare.Label(new string('x', 200), 20, 120))
+        {
+            Assert.EndsWith("…", cut.Text);
+            Assert.True(cut.Width <= 120);
+        }
+    }
+
+    [Fact]
+    public async Task Labels_and_earlier_pictures_that_dont_fit_are_explained_before_anything_is_captured()
+    {
+        var platform = new FakePlatform { Screens = [Plain] };
+        var ctx = Ctx(platform);
+        Assert.Contains("Nothing has been captured yet", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["compare"] = "1" }))).Message);
+        Assert.Empty(platform.Captures);
+
+        await Capture(ctx, []);
+        await Capture(ctx, []);
+        Assert.Contains("Its captures: 1, 2.", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["compare"] = "#7" }))).Message);
+        Assert.Contains("There is no picture at", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["compare"] = new JsonArray(@"C:\nowhere\old.png") }))).Message);
+        Assert.Contains("3 in all", (await Assert.ThrowsAsync<ToolArgumentException>(() =>
+            Capture(ctx, new JsonObject { ["compare"] = new JsonArray(1, 2), ["labels"] = new JsonArray("Old", "New") }))).Message);
+        Assert.Contains("labels go with compare", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["labels"] = new JsonArray("Only") }))).Message);
+        Assert.Equal(2, platform.Captures.Count);
+
+        // A list a model wrote as a string is read as the list.
+        var listed = await Capture(ctx, new JsonObject { ["compare"] = "[1, 2]" });
+        Assert.Contains("after capture 1, capture 2", listed.Text);
+    }
+
+    /// <summary>A white page of BGRA rows with dark rectangles on it, as a sheet's cells.</summary>
     private static byte[] Page(int width, int height, params SKRectI[] dark)
     {
         var pixels = new byte[width * height * 4];
@@ -264,20 +354,18 @@ public class CaptureResultTests : IDisposable
     {
         // A number typed into one cell of a sheet: its digits are a few dark strokes close together.
         var after = Page(400, 300, new SKRectI(200, 100, 204, 114), new SKRectI(208, 100, 212, 114), new SKRectI(216, 100, 220, 114), new SKRectI(224, 100, 228, 114));
-        var box = Assert.Single(ChangeBoxes.Find(Page(400, 300), after, 400, 300, out _));
+        var box = Assert.Single(ChangeBoxes.Find(Page(400, 300), after, 400, 300));
         Assert.Equal(new SKRectI(197, 97, 231, 117), box);
     }
 
     [Fact]
-    public void A_caret_blink_or_antialiasing_noise_gives_no_box()
+    public void Any_pixel_that_differs_counts_and_the_same_pictures_have_none()
     {
-        var caret = Page(400, 300, new SKRectI(50, 50, 52, 70));
-        Assert.Empty(ChangeBoxes.Find(Page(400, 300), caret, 400, 300, out _));
-        // A slight shift in colour all over (another antialiasing, a theme's tint) is under the threshold.
-        var tinted = Page(400, 300);
-        for (var i = 0; i < tinted.Length; i += 4)
-            tinted[i] = 240;
-        Assert.Empty(ChangeBoxes.Find(Page(400, 300), tinted, 400, 300, out _));
+        Assert.Empty(ChangeBoxes.Find(Page(400, 300), Page(400, 300), 400, 300));
+        // One pixel, a shade off: a box too.
+        var shade = Page(400, 300);
+        shade[(50 * 400 + 60) * 4] = 254;
+        Assert.Equal(new SKRectI(57, 47, 64, 54), Assert.Single(ChangeBoxes.Find(Page(400, 300), shade, 400, 300)));
     }
 
     [Fact]
@@ -285,43 +373,33 @@ public class CaptureResultTests : IDisposable
     {
         // A paragraph's words: one box. Two edits at opposite corners: two.
         var words = Enumerable.Range(0, 12).Select(i => new SKRectI(40 + i % 6 * 30, 40 + i / 6 * 20, 60 + i % 6 * 30, 52 + i / 6 * 20)).ToArray();
-        Assert.Single(ChangeBoxes.Find(Page(400, 300), Page(400, 300, words), 400, 300, out _));
-        Assert.Equal(2, ChangeBoxes.Find(Page(400, 300), Page(400, 300, new SKRectI(10, 10, 40, 30), new SKRectI(350, 260, 390, 290)), 400, 300, out _).Count);
-        // Changes everywhere (a page scrolled): no confetti of boxes.
-        var everywhere = Enumerable.Range(0, 100).Select(i => new SKRectI(i % 10 * 40, i / 10 * 30, i % 10 * 40 + 12, i / 10 * 30 + 10)).ToArray();
-        Assert.InRange(ChangeBoxes.Find(Page(400, 300), Page(400, 300, everywhere), 400, 300, out _).Count, 1, 6);
+        Assert.Single(ChangeBoxes.Find(Page(400, 300), Page(400, 300, words), 400, 300));
+        Assert.Equal(2, ChangeBoxes.Find(Page(400, 300), Page(400, 300, new SKRectI(10, 10, 40, 30), new SKRectI(350, 260, 390, 290)), 400, 300).Count);
+        // Changes everywhere (a page scrolled): a few boxes, not dozens.
+        var everywhere = Enumerable.Range(0, 100).Select(i => new SKRectI(i % 10 * 40, i / 10 * 30, i % 10 * 40 + 6, i / 10 * 30 + 4)).ToArray();
+        Assert.InRange(ChangeBoxes.Find(Page(400, 300), Page(400, 300, everywhere), 400, 300).Count, 1, 6);
     }
 
     [Fact]
-    public async Task The_model_is_told_how_many_regions_changed_or_that_nothing_did()
+    public async Task The_model_is_told_how_many_boxes_there_are_or_that_the_two_are_identical()
     {
         var platform = new FakePlatform { Screens = [Plain], Desktop = Filled(SKColors.White) };
         var ctx = Ctx(platform);
         await Capture(ctx, Box(0, 0, 300, 200));
-        var same = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["before"] = 1 });
-        Assert.Contains("No visible change between them", same.Text);
+        var same = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["compare"] = 1 });
+        Assert.Contains("The two are identical", same.Text);
 
-        // One digit changed (4,200 to 4,300): too few pixels for a box, but not "no change".
-        var digit = Filled(SKColors.White);
-        for (var y = 50; y < 60; y++)
-            for (var x = 70; x < 73; x++)
-                digit.Bgra[(y * digit.Width + x) * 4] = 0;
-        platform.Desktop = digit;
-        var small = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["before"] = 1 });
-        Assert.Contains("Only a few pixels changed, too few to box", small.Text);
-        Assert.DoesNotContain("No visible change", small.Text);
-
-        // A cell filled in: one box, accent-coloured, on the After only.
+        // A cell filled in: one box, accent-coloured, on the last picture only.
         var desktop = Filled(SKColors.White);
         for (var y = 80; y < 100; y++)
             for (var x = 100; x < 160; x++)
                 desktop.Bgra[(y * desktop.Width + x) * 4 + 1] = 0;
         platform.Desktop = desktop;
-        var changed = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["before"] = 1 });
-        Assert.Contains("1 changed region is boxed on the After", changed.Text);
+        var changed = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["compare"] = 1 });
+        Assert.Contains("1 box marks what changed, on the last", changed.Text);
         using (var both = SKBitmap.Decode(changed.Files![0]))
         {
-            // Side by side: the After starts at 316, under a 40 px band. The box is 3 px out from the cell, 2 px of the accent.
+            // Side by side: the last starts at 316, under a 40 px band. The box is 3 px out from the cell, 2 px of the accent.
             var accent = new SKColor(0xFC, 0xC2, 0x1B);
             Assert.Equal(accent, both.GetPixel(316 + 97, 40 + 90));
             Assert.Equal(accent, both.GetPixel(316 + 96, 40 + 90));
@@ -329,44 +407,93 @@ public class CaptureResultTests : IDisposable
             Assert.DoesNotContain(Enumerable.Range(0, 300), x => Enumerable.Range(40, 200).Any(y => both.GetPixel(x, y) == accent));
         }
 
-        // A before of another size: nothing is marked.
+        // An earlier picture of another size: nothing is marked.
         await Capture(ctx, Box(0, 0, 200, 100));
-        var other = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["before"] = 5 });
+        var other = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["compare"] = 4 });
         Assert.Contains("differ in size, so what changed isn't marked", other.Text);
     }
 
-    [Fact]
-    public async Task A_picture_file_can_be_the_before()
+    /// <summary>A PNG of one colour in the test's own folder, its path.</summary>
+    private string Png(string name, int width, int height, SKColor color)
     {
-        var platform = new FakePlatform { Screens = [Plain], Desktop = Filled(SKColors.Blue) };
-        var ctx = Ctx(platform);
         Directory.CreateDirectory(_chat);
-        var design = Path.Combine(_chat, "design.png");
-        using (var bitmap = new SKBitmap(300, 200))
-        {
-            bitmap.Erase(SKColors.Red);
-            using var png = bitmap.Encode(SKEncodedImageFormat.Png, 100);
-            File.WriteAllBytes(design, png.ToArray());
-        }
-        var result = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["before"] = design });
-        Assert.Contains("after design.png", result.Text);
-        using var both = SKBitmap.Decode(result.Files![0]);
-        Assert.Equal(SKColors.Red, both.GetPixel(150, 140));
+        var path = Path.Combine(_chat, name);
+        using var bitmap = new SKBitmap(width, height);
+        bitmap.Erase(color);
+        using var png = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+        File.WriteAllBytes(path, png.ToArray());
+        return path;
     }
 
     [Fact]
-    public async Task A_before_that_isnt_there_is_explained_before_anything_is_captured()
+    public async Task A_picture_file_can_be_the_result()
     {
+        // An upscale the model made: kept at its own size, 1:1, as the next capture; the screen isn't touched.
         var platform = new FakePlatform { Screens = [Plain] };
         var ctx = Ctx(platform);
-        Assert.Contains("Nothing has been captured yet", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["before"] = "1" }))).Message);
+        var upscale = Png("upscale.png", 3000, 2000, SKColors.Red);
+        var result = await Capture(ctx, new JsonObject { ["file"] = upscale, ["caption"] = "Upscaled 4x" });
         Assert.Empty(platform.Captures);
+        var kept = Assert.Single(result.Files!);
+        Assert.Equal(Path.Combine(_chat, "capture-1.png"), kept);
+        Assert.Equal((3000, 2000), SizeOf(File.ReadAllBytes(kept)));
+        Assert.Contains("Took the picture upscale.png as capture 1, 3000x2000", result.Text);
+        // The model's copy within a screenshot's size.
+        var (width, height) = SizeOf(result.Image!);
+        Assert.True(width <= ctx.GetScreenSpace().ImageWidth && height <= ctx.GetScreenSpace().ImageHeight, $"{width}x{height}");
+        Assert.Equal("Show the result: upscale.png", new CaptureResultTool().Describe(new JsonObject { ["file"] = upscale }));
 
-        await Capture(ctx, []);
-        await Capture(ctx, []);
-        Assert.Contains("Its captures: 1, 2.", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["before"] = "#7" }))).Message);
-        Assert.Contains("There is no picture at", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["before"] = @"C:\nowhere\old.png" }))).Message);
-        Assert.Equal(2, platform.Captures.Count);
+        // The original can go: the copy is the chat's.
+        File.Delete(upscale);
+        Assert.True(File.Exists(kept));
+    }
+
+    [Fact]
+    public async Task A_picture_file_compared_with_a_file_or_a_capture()
+    {
+        var platform = new FakePlatform { Screens = [Plain], Desktop = Filled(SKColors.Red) };
+        var ctx = Ctx(platform);
+        var old = Png("old.png", 300, 200, SKColors.Red);
+        var edited = Png("new.png", 300, 200, SKColors.Blue);
+
+        var files = await Capture(ctx, new JsonObject { ["file"] = edited, ["compare"] = old });
+        Assert.EndsWith("capture-1-compared.png", files.Files![0]);
+        Assert.Contains("after old.png", files.Text);
+        Assert.Contains("1 box marks what changed", files.Text);
+        using (var both = SKBitmap.Decode(files.Files[0]))
+        {
+            Assert.Equal(SKColors.Red, both.GetPixel(150, 140));
+            Assert.Equal(SKColors.Blue, both.GetPixel(316 + 150, 140));
+        }
+
+        // A screen capture (capture 2) first, the file last.
+        await Capture(ctx, Box(0, 0, 300, 200));
+        var mixed = await Capture(ctx, new JsonObject { ["file"] = edited, ["compare"] = 2 });
+        Assert.Contains("after capture 2", mixed.Text);
+
+        // An upscale beside its original: different sizes, each at its own pixels, nothing boxed, and the model told why.
+        var big = Png("big.png", 1200, 800, SKColors.Blue);
+        var upscaled = await Capture(ctx, new JsonObject { ["file"] = big, ["compare"] = old });
+        Assert.Contains("differ in size, so what changed isn't marked", upscaled.Text);
+    }
+
+    [Fact]
+    public async Task A_file_that_cant_be_shown_is_explained()
+    {
+        var platform = new FakePlatform { Screens = [Plain], Windows = [new("Paint", new ScreenRect(0, 0, 300, 200))] };
+        var ctx = Ctx(platform);
+        var picture = Png("p.png", 10, 10, SKColors.Red);
+        Assert.Contains("not more", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["file"] = picture, ["window"] = "Paint" }))).Message);
+        Assert.Contains("not more", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["file"] = picture, ["x"] = 0, ["y"] = 0, ["width"] = 9, ["height"] = 9 }))).Message);
+        Assert.Contains("There is no picture at", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["file"] = Path.Combine(_chat, "gone.png") }))).Message);
+        var notes = Path.Combine(_chat, "notes.txt");
+        File.WriteAllText(notes, "hello");
+        Assert.Contains("isn't a picture", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["file"] = notes }))).Message);
+        var fake = Path.Combine(_chat, "fake.png");
+        File.WriteAllText(fake, "not a png");
+        Assert.Contains("could not be read as a picture", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["file"] = fake }))).Message);
+        Assert.Empty(platform.Captures);
+        Assert.False(File.Exists(Path.Combine(_chat, "capture-1.png")));
     }
 
     [Fact]

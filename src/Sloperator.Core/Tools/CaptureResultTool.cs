@@ -12,7 +12,7 @@ namespace Sloperator.Core.Tools;
 /// screen. In test chats no model ever showed its finished work in its final reply: there was no
 /// tool for it, and the screen an action left is folded on its card. The user gets it as a PNG at
 /// the screen's own resolution, kept with the chat; the model sees the same crop, to check it.
-/// With an earlier capture as <c>before</c>, the user gets the two side by side, labelled.
+/// With earlier captures or picture files in <c>compare</c>, the user gets them all in one, labelled.
 /// </summary>
 public sealed partial class CaptureResultTool : Tool
 {
@@ -24,7 +24,8 @@ public sealed partial class CaptureResultTool : Tool
         "Capture what you made for the user: a picture of a window or of a box on the screen goes in your answer, and you see it too. " +
         "Use it when you're done, cropped to the work (its window, or a box around the cells, the dialog, the drawing); " +
         "leave both out only when the whole screen is the point. To show a change, capture it before you start too, " +
-        "and pass that capture's number as before with the result: the user gets the two side by side.";
+        "and pass that capture's number in compare with the result: the user gets them side by side. " +
+        "To show a picture file you made (an edit, an upscale), pass it as file instead of capturing the screen.";
     public override ToolRisk Risk => ToolRisk.ReadOnly;
     public override JsonObject Parameters => Schema(
         ("window", Str("Part of the title of the window to capture, e.g. \"Paint\" or \"Budget.xlsx\""), false),
@@ -33,17 +34,21 @@ public sealed partial class CaptureResultTool : Tool
         ("width", Num("The box's width, in screenshot coordinates"), false),
         ("height", Num("The box's height, in screenshot coordinates"), false),
         ("caption", Str("One line for the user, shown under the picture"), false),
-        ("before", Str("An earlier capture's number (each capture says its number), or the path of a picture: shown beside this one as before and after"), false));
+        ("file", Str("A picture file to show as the result instead of the screen"), false),
+        ("compare", StrArray("Earlier captures' numbers (each capture says its number) or picture files' paths, shown before this one in this order"), false),
+        ("labels", StrArray("Short labels, one per picture with this one last, in the user's language, e.g. [\"Before\", \"After\"] or [\"Light\", \"Dark\"]. Default: Before and After for two, numbers for more"), false),
+        ("columns", Int("How many compared pictures go in a row: 1 stacks them, their number puts them all side by side. Default: the layout nearest 4:3"), false));
 
     public override string Describe(JsonObject args)
     {
-        var what = GetString(args, "window") is { Length: > 0 } window ? $"Capture the result: {window.Trim()}"
+        var what = GetString(args, "file") is { Length: > 0 } file ? $"Show the result: {Path.GetFileName(file.Trim())}"
+            : GetString(args, "window") is { Length: > 0 } window ? $"Capture the result: {window.Trim()}"
             : HasBox(args) ? string.Create(CultureInfo.InvariantCulture,
                 $"Capture the result at ({GetNumber(args, "x")}, {GetNumber(args, "y")}), {GetNumber(args, "width")}x{GetNumber(args, "height")}")
             : "Capture the result: the whole screen";
-        return GetString(args, "before")?.Trim() is { Length: > 0 } before
-            ? what + (CaptureNumber(before) is { } n ? $", beside capture {n}" : $", beside {Path.GetFileName(before)}")
-            : what;
+        var compare = Items(args, "compare");
+        return compare.Count == 0 ? what
+            : what + ", beside " + string.Join(", ", compare.Select(c => CaptureNumber(c) is { } n ? $"capture {n}" : Path.GetFileName(c)));
     }
 
     private static bool HasBox(JsonObject args) => new[] { "x", "y", "width", "height" }.Any(k => args[k] is not null);
@@ -51,46 +56,58 @@ public sealed partial class CaptureResultTool : Tool
     public override Task<ToolResult> ExecuteAsync(JsonObject args, ToolContext ctx, CancellationToken ct)
     {
         var window = GetString(args, "window")?.Trim();
+        var picture = GetString(args, "file")?.Trim() is { Length: > 0 } given ? given : null;
+        if (picture is not null && (window is { Length: > 0 } || HasBox(args)))
+            throw new ToolArgumentException("Give one of file, window or a box (x, y, width, height), not more.");
         if (window is { Length: > 0 } && HasBox(args))
             throw new ToolArgumentException("Give either window or a box (x, y, width, height), not both.");
-        var (region, screen, what) = window is { Length: > 0 } ? WindowRegion(ctx, window)
+        var folder = ctx.ChatDirectory ?? Path.Combine(ctx.ScratchDirectory ?? Path.GetTempPath(), "captures");
+        // A picture file the model made goes in as it is, at its own size; the screen is captured.
+        var shownFile = picture is null ? null : PicturePath(picture, ctx);
+        var (region, screen, what) = shownFile is not null ? (default, ctx.CurrentScreen, $"the picture {Path.GetFileName(shownFile)}")
+            : window is { Length: > 0 } ? WindowRegion(ctx, window)
             : HasBox(args) ? BoxRegion(ctx, args)
             : (ctx.GetScreenSpace().Screen, ctx.CurrentScreen, "the screen");
-        var folder = ctx.ChatDirectory ?? Path.Combine(ctx.ScratchDirectory ?? Path.GetTempPath(), "captures");
-        // Read before anything is captured: a before that isn't there is the model's to fix first.
-        using var before = Before(GetString(args, "before")?.Trim(), folder, ctx);
+        // Read before anything is captured: an earlier picture that isn't there is the model's to fix first.
+        var earlier = Items(args, "compare").Select(c => Earlier(c, folder, ctx)).ToList();
+        var labels = Labels(args, earlier.Count);
+        var columns = GetNumber(args, "columns") is { } wanted
+            ? wanted < 1 ? throw new ToolArgumentException("columns is how many pictures go in a row: 1 or more.") : (int)Math.Min(wanted, earlier.Count + 1)
+            : (int?)null;
 
         // Fresh, without the pointer: the click marker and the log are never in a capture.
-        var frame = ctx.Platform.Screen.Capture(region, includeCursor: false);
+        var frame = shownFile is not null ? Read(shownFile) : ctx.Platform.Screen.Capture(region, includeCursor: false);
+        var took = shownFile is not null ? "Took" : "Captured";
         using var image = Image(frame, out var handle);
         try
         {
             var (file, number) = SaveNext(image, folder);
             var caption = GetString(args, "caption")?.Trim();
             var captioned = caption is { Length: > 0 } ? $", captioned \"{caption}\"" : "";
-            if (before is null)
+            if (earlier.Count == 0)
             {
-                var text = $"Captured {what} as capture {number}, {frame.Width}x{frame.Height}. " +
+                var text = $"{took} {what} as capture {number}, {frame.Width}x{frame.Height}. " +
                            $"The user sees it at full size in the chat, the last you capture under your final reply{captioned}. " +
-                           $"If it doesn't show what they asked for, fix that and capture it again. Taken before a change, pass before={number} " +
-                           "when you capture the result, to show the two side by side.";
+                           $"If it doesn't show what they asked for, fix that and capture it again. Taken before a change, pass compare=[{number}] " +
+                           "when you capture the result, to show them side by side.";
                 return Task.FromResult(new ToolResult(text, ForModel(image, ctx.GetScreenSpace(screen)), ImageCaption: "What the user now sees of your work:", Files: [file]));
             }
-            // Marked only where the two line up pixel for pixel: the same window or box, the same size.
-            var (marks, changed) = before.Picture.Width == frame.Width && before.Picture.Height == frame.Height ? Changes(before.Picture, frame) : (null, 0);
-            using var both = Compose(before.Picture, image, marks);
+            // Changes are boxed only between two pictures that line up pixel for pixel: the same window or box, the same size.
+            var two = earlier.Count == 1 && earlier[0].Picture.Width == frame.Width && earlier[0].Picture.Height == frame.Height;
+            var marks = two ? ChangeBoxes.Find(earlier[0].Picture.Bgra, frame.Bgra, frame.Width, frame.Height) : null;
+            using var all = CaptureCompare.Compose([.. earlier.Select((e, i) => (e.Picture, labels[i])), (frame, labels[^1])], marks, columns);
             var compared = Path.Combine(folder, $"capture-{number}-compared.png");
-            using (var png = both.Encode(SKEncodedImageFormat.Png, 100))
+            using (var png = all.Encode(SKEncodedImageFormat.Png, 100))
             using (var stream = File.Create(compared))
                 png.SaveTo(stream);
-            var shown = $"Captured {what} as capture {number}, {frame.Width}x{frame.Height}, and put it after {before.Name}: " +
-                        $"the user sees the two side by side, labelled Before and After, the last you capture under your final reply{captioned}. " +
-                        (marks is null ? "They differ in size, so what changed isn't marked. "
-                            : marks.Count == 0 && changed > 0 ? "Only a few pixels changed, too few to box (a character or two, a caret, a clock): zoom in to check your change landed. "
-                            : marks.Count == 0 ? "No visible change between them: if you changed something there, it didn't land, or it is outside what you captured. "
-                            : $"{marks.Count} changed {(marks.Count == 1 ? "region is" : "regions are")} boxed on the After. ") +
+            var shown = $"{took} {what} as capture {number}, {frame.Width}x{frame.Height}, and put it after {string.Join(", ", earlier.Select(e => e.Name))}: " +
+                        $"the user sees them in one picture, labelled {string.Join(", ", labels.Select(l => $"\"{l}\""))}, the last you capture under your final reply{captioned}. " +
+                        (earlier.Count > 1 ? "What changed is only boxed between two pictures. "
+                            : marks is null ? "They differ in size, so what changed isn't marked. "
+                            : marks.Count == 0 ? "The two are identical. "
+                            : $"{marks.Count} {(marks.Count == 1 ? "box marks" : "boxes mark")} what changed, on the last. ") +
                         "If the change doesn't show, fix that and capture it again.";
-            return Task.FromResult(new ToolResult(shown, ForModel(both, ctx.GetScreenSpace(screen)), ImageCaption: "What the user now sees of your work, before and after:", Files: [compared]));
+            return Task.FromResult(new ToolResult(shown, ForModel(all, ctx.GetScreenSpace(screen)), ImageCaption: "What the user now sees of your work, compared:", Files: [compared]));
         }
         finally
         {
@@ -142,48 +159,101 @@ public sealed partial class CaptureResultTool : Tool
         return new ScreenRect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
     }
 
-    // ---- the picture before ---------------------------------------------------------------------------
+    // ---- earlier pictures -------------------------------------------------------------------------------
 
-    /// <summary>The picture to show as before, and what the model calls it ("capture 2", a file's name).</summary>
-    private sealed class Earlier(string name, SKBitmap picture) : IDisposable
-    {
-        public string Name { get; } = name;
-        public SKBitmap Picture { get; } = picture;
-        public void Dispose() => Picture.Dispose();
-    }
+    /// <summary>An earlier picture to compare with, and what the model calls it ("capture 2", a file's name).</summary>
+    private sealed record Shown(string Name, RawImage Picture);
 
     /// <summary>"2", "capture 2", "capture-2.png", "#2": the number of an earlier capture; null for anything else (a path).</summary>
-    private static int? CaptureNumber(string before) =>
-        CaptureName().Match(before) is { Success: true } m && int.TryParse(m.Groups[1].Value, CultureInfo.InvariantCulture, out var n) ? n : null;
+    private static int? CaptureNumber(string given) =>
+        CaptureName().Match(given) is { Success: true } m && int.TryParse(m.Groups[1].Value, CultureInfo.InvariantCulture, out var n) ? n : null;
 
     [GeneratedRegex(@"^(?:capture[\s_-]*)?#?(\d+)(?:\.png)?$", RegexOptions.IgnoreCase)]
     private static partial Regex CaptureName();
 
-    /// <summary>The picture <paramref name="before"/> names: an earlier capture in <paramref name="folder"/>, or a picture file; null for none.</summary>
-    private static Earlier? Before(string? before, string folder, ToolContext ctx)
+    /// <summary>
+    /// A list argument as strings: an array of strings or numbers, one value, or an array a model
+    /// wrote as a string ("[1, 2]"). Blank items are left out.
+    /// </summary>
+    private static List<string> Items(JsonObject args, string key)
     {
-        if (before is not { Length: > 0 })
-            return null;
-        string path, name;
-        if (CaptureNumber(before) is { } number)
+        var node = args[key];
+        if (node is JsonValue v && v.TryGetValue<string>(out var s) && s.TrimStart().StartsWith('['))
         {
-            path = Path.Combine(folder, $"capture-{number}.png");
-            name = $"capture {number}";
+            try { node = JsonNode.Parse(s); }
+            catch (System.Text.Json.JsonException) { }
+        }
+        IEnumerable<JsonNode?> items = node switch { JsonArray a => a, null => Array.Empty<JsonNode?>(), _ => new[] { node } };
+        return items.Select(n => n is JsonValue value && value.TryGetValue<string>(out var text) ? text : n?.ToJsonString())
+            .Select(t => t?.Trim()).Where(t => !string.IsNullOrEmpty(t)).Select(t => t!).ToList();
+    }
+
+    /// <summary>The labels the model gave, one per picture with the new one last, or the defaults; an argument error for a count that doesn't match.</summary>
+    private static List<string> Labels(JsonObject args, int earlier)
+    {
+        var given = Items(args, "labels");
+        if (given.Count == 0)
+            return CaptureCompare.DefaultLabels(earlier + 1);
+        if (earlier == 0)
+            throw new ToolArgumentException("labels go with compare: pass the earlier pictures in compare, then one label for each and one for this capture.");
+        if (given.Count != earlier + 1)
+            throw new ToolArgumentException($"Give one label per picture, {earlier + 1} in all with this capture's last (you gave {given.Count}), or leave labels out.");
+        return given.Select(CaptureCompare.Tidy).ToList();
+    }
+
+    /// <summary>The picture <paramref name="given"/> names: an earlier capture in <paramref name="folder"/>, or a picture file.</summary>
+    private static Shown Earlier(string given, string folder, ToolContext ctx)
+    {
+        if (CaptureNumber(given) is { } number)
+        {
+            var path = Path.Combine(folder, $"capture-{number}.png");
             if (!File.Exists(path))
             {
                 var taken = Captures(folder);
                 throw new ToolArgumentException($"There is no capture {number} in this chat. " +
                     (taken.Count == 0 ? "Nothing has been captured yet: capture it before you change it." : $"Its captures: {string.Join(", ", taken)}."));
             }
+            return new Shown($"capture {number}", Read(path));
         }
-        else
+        var file = ctx.ResolvePath(given);
+        if (!File.Exists(file))
+            throw new ToolArgumentException($"There is no picture at {file}. Pass an earlier capture's number or a picture's path.");
+        return new Shown(Path.GetFileName(file), Read(file));
+    }
+
+    /// <summary>The full path of a picture file the model gave as the result; an argument error for one that isn't there or isn't a picture.</summary>
+    private static string PicturePath(string given, ToolContext ctx)
+    {
+        var path = ctx.ResolvePath(given);
+        if (!File.Exists(path))
+            throw new ToolArgumentException($"There is no picture at {path}.");
+        if (!Picture.Handles(path))
+            throw new ToolArgumentException($"{Path.GetFileName(path)} isn't a picture: give a PNG, JPEG, GIF, BMP, WebP or ICO file.");
+        return path;
+    }
+
+    /// <summary>
+    /// A picture file at its own size, on white where it is transparent (as read_file shows one), as a
+    /// capture's pixels; an argument error for one that can't be read.
+    /// </summary>
+    private static RawImage Read(string path)
+    {
+        using var decoded = PictureFile.Decode(path) ?? throw new ToolArgumentException($"{path} could not be read as a picture (damaged, or not what its name says).");
+        using var surface = SKSurface.Create(new SKImageInfo(decoded.Width, decoded.Height, SKColorType.Bgra8888, SKAlphaType.Premul));
+        surface.Canvas.Clear(SKColors.White);
+        using (var image = SKImage.FromBitmap(decoded))
+            surface.Canvas.DrawImage(image, 0, 0, SKSamplingOptions.Default);
+        var pixels = new byte[decoded.Width * decoded.Height * 4];
+        var handle = System.Runtime.InteropServices.GCHandle.Alloc(pixels, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
         {
-            path = ctx.ResolvePath(before);
-            name = Path.GetFileName(path);
-            if (!File.Exists(path))
-                throw new ToolArgumentException($"There is no picture at {path}. Pass an earlier capture's number or a picture's path.");
+            surface.ReadPixels(new SKImageInfo(decoded.Width, decoded.Height, SKColorType.Bgra8888, SKAlphaType.Premul), handle.AddrOfPinnedObject(), decoded.Width * 4, 0, 0);
         }
-        return new Earlier(name, PictureFile.Decode(path) ?? throw new ToolArgumentException($"{path} could not be read as a picture."));
+        finally
+        {
+            handle.Free();
+        }
+        return new RawImage(decoded.Width, decoded.Height, pixels);
     }
 
     /// <summary>The numbers of the captures in <paramref name="folder"/>, in order.</summary>
@@ -212,82 +282,6 @@ public sealed partial class CaptureResultTool : Tool
             }
             catch (IOException) when (File.Exists(path)) { }
         }
-    }
-
-    /// <summary>Where the after differs from the before, of the same size, and how many pixels changed at all (see <see cref="ChangeBoxes"/>).</summary>
-    private static (List<SKRectI> Boxes, int Changed) Changes(SKBitmap before, RawImage after)
-    {
-        using var bgra = before.ColorType == SKColorType.Bgra8888 && before.RowBytes == before.Width * 4 ? null : before.Copy(SKColorType.Bgra8888);
-        var boxes = ChangeBoxes.Find((bgra ?? before).GetPixelSpan(), after.Bgra, after.Width, after.Height, out var changed);
-        return (boxes, changed);
-    }
-
-    /// <summary>
-    /// Before and after in one picture, each under its label, at one scale (the smaller one's,
-    /// never enlarged): side by side, or one over the other, whichever comes out nearer 4:3, as the
-    /// chat shows a picture at most 480 wide and two wide windows side by side came out a strip.
-    /// </summary>
-    /// <param name="marks">Boxes on the After around what changed, in its own pixels; none for null or empty.</param>
-    internal static SKImage Compose(SKBitmap before, SKImage after, IReadOnlyList<SKRectI>? marks = null)
-    {
-        // The band and gap grow with the pictures, so a label on a 4K capture reads like one on a small one.
-        var unit = Math.Max(1.0, Math.Max(after.Width, after.Height) / 1600.0);
-        var (band, gap) = ((int)Math.Round(40 * unit), (int)Math.Round(16 * unit));
-
-        var height = Math.Min(before.Height, after.Height);
-        var (wideBefore, wideAfter) = (Scaled(before.Width, before.Height, height), Scaled(after.Width, after.Height, height));
-        var (sideW, sideH) = (wideBefore + gap + wideAfter, band + height);
-        var width = Math.Min(before.Width, after.Width);
-        var (tallBefore, tallAfter) = (Scaled(before.Height, before.Width, width), Scaled(after.Height, after.Width, width));
-        var (stackW, stackH) = (width, band + tallBefore + gap + band + tallAfter);
-        var sideBySide = Off43(sideW, sideH) <= Off43(stackW, stackH);
-
-        using var surface = SKSurface.Create(new SKImageInfo(sideBySide ? sideW : stackW, sideBySide ? sideH : stackH, SKColorType.Bgra8888, SKAlphaType.Premul));
-        var canvas = surface.Canvas;
-        canvas.Clear(new SKColor(0x16, 0x16, 0x16));
-        using var typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold) ?? SKTypeface.Default;
-        using var font = new SKFont(typeface, (float)(20 * unit)) { Edging = SKFontEdging.Antialias, Subpixel = true };
-        using var ink = new SKPaint { Color = SKColors.White, IsAntialias = true };
-        using var beforeImage = SKImage.FromBitmap(before);
-
-        void Draw(SKImage picture, string label, float x, float y, float w, float h)
-        {
-            canvas.DrawText(label, x, y + band - (float)(13 * unit), SKTextAlign.Left, font, ink);
-            canvas.DrawImage(picture, new SKRect(x, y + band, x + w, y + band + h), Sampling.High(picture.Width, (int)w));
-        }
-        if (sideBySide)
-        {
-            Draw(beforeImage, "Before", 0, 0, wideBefore, height);
-            Draw(after, "After", wideBefore + gap, 0, wideAfter, height);
-            Mark(wideBefore + gap, band);
-        }
-        else
-        {
-            Draw(beforeImage, "Before", 0, 0, width, tallBefore);
-            Draw(after, "After", 0, band + tallBefore + gap, width, tallAfter);
-            Mark(0, band + tallBefore + gap + band);
-        }
-        return surface.Snapshot();
-
-        // Marks only come with two pictures of one size, drawn at that size: their pixels are the After's.
-        // 2 px of the accent, on whole pixels, between 1 px of near-black, to show on light and on dark.
-        void Mark(int x, int y)
-        {
-            if (marks is not { Count: > 0 })
-                return;
-            var line = 2 * (int)Math.Round(unit);
-            using var dark = new SKPaint { Color = new SKColor(0x16, 0x16, 0x16), Style = SKPaintStyle.Stroke, StrokeWidth = line + 2 * (int)Math.Round(unit), IsAntialias = false };
-            using var accent = new SKPaint { Color = new SKColor(0xFC, 0xC2, 0x1B), Style = SKPaintStyle.Stroke, StrokeWidth = line, IsAntialias = false };
-            foreach (var m in marks)
-            {
-                var r = new SKRect(x + m.Left, y + m.Top, x + m.Right, y + m.Bottom);
-                canvas.DrawRect(r, dark);
-                canvas.DrawRect(r, accent);
-            }
-        }
-
-        static int Scaled(int side, int other, int otherTo) => Math.Max(1, (int)Math.Round((double)side * otherTo / other));
-        static double Off43(int w, int h) => Math.Abs(Math.Log((double)w / h / (4.0 / 3)));
     }
 
     /// <summary>
