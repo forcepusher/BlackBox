@@ -213,37 +213,6 @@
       </DockPanel>
     </Border>
 
-    <!-- A bar along the foot, as the File inspector's and the Code editor's (2026-10-31): play and where the
-         playhead is, the zoom (out, back to 100%, in), what the panel did (else how the timeline is used: nothing
-         showed the right-click menu was there), and how long the video is. Its buttons are always there, greyed
-         where they don't apply. -->
-    <Border DockPanel.Dock="Bottom" Classes="bar slim foot" Padding="8,4">
-      <DockPanel>
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-          <Button Classes="ghost icon small" Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the sound lines with each clip's frames from the playhead"
-                  AutomationProperties.Name="Play the storyboard">
-            <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" />
-          </Button>
-          <TextBlock Classes="muted" Text="{Binding PlayTime}" FontSize="12" FontFeatures="+tnum" VerticalAlignment="Center" Margin="12,0" AutomationProperties.Name="Playhead" />
-          <StackPanel Orientation="Horizontal" Spacing="4">
-            <Button Classes="ghost icon small act" Command="{Binding ZoomOutCommand}" ToolTip.ShowOnDisabled="True"
-                    ToolTip.Tip="{Binding ZoomOutTip}" AutomationProperties.Name="Zoom out">
-              <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
-            </Button>
-            <Button Classes="ghost small act" MinWidth="48" HorizontalContentAlignment="Center" Command="{Binding ZoomResetCommand}" Content="{Binding ZoomText}"
-                    ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding ZoomResetTip}" AutomationProperties.Name="Zoom to 100%" />
-            <Button Classes="ghost icon small act" Command="{Binding ZoomInCommand}" ToolTip.ShowOnDisabled="True"
-                    ToolTip.Tip="{Binding ZoomInTip}" AutomationProperties.Name="Zoom in">
-              <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-            </Button>
-          </StackPanel>
-        </StackPanel>
-        <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding LengthText}" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0" />
-        <TextBlock Classes="muted" Text="{Binding StatusOrHint}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="12,0"
-                   ToolTip.Tip="{Binding StatusOrHint}" />
-      </DockPanel>
-    </Border>
-
     <!-- The timeline, where the video is worked on: References, the clips and the sound lines, under one scroll.
          Right-click a row to create there; drop files on it to copy them in. -->
     <Border DockPanel.Dock="Bottom" Background="{StaticResource BbBar}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">
@@ -463,6 +432,38 @@
             </Panel>
           </ScrollViewer>
         </Grid>
+      </DockPanel>
+    </Border>
+
+    <!-- A bar over the timeline, between it and the viewer (the user, 2026-10-31: play on top, as a video
+         editor has it; at the panel's foot it was far from the viewer), drawn as the File inspector's and the
+         Code editor's bars: play and where the playhead is, the zoom (out, back to 100%, in), what the panel
+         did (else how the timeline is used: nothing showed the right-click menu was there), and how long the
+         video is. Its buttons are always there, greyed where they don't apply. -->
+    <Border DockPanel.Dock="Bottom" Classes="bar slim foot" Padding="8,4">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button Classes="ghost icon small" Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the sound lines with each clip's frames from the playhead"
+                  AutomationProperties.Name="Play the storyboard">
+            <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" />
+          </Button>
+          <TextBlock Classes="muted" Text="{Binding PlayTime}" FontSize="12" FontFeatures="+tnum" VerticalAlignment="Center" Margin="12,0" AutomationProperties.Name="Playhead" />
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <Button Classes="ghost icon small act" Command="{Binding ZoomOutCommand}" ToolTip.ShowOnDisabled="True"
+                    ToolTip.Tip="{Binding ZoomOutTip}" AutomationProperties.Name="Zoom out">
+              <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
+            </Button>
+            <Button Classes="ghost small act" MinWidth="48" HorizontalContentAlignment="Center" Command="{Binding ZoomResetCommand}" Content="{Binding ZoomText}"
+                    ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding ZoomResetTip}" AutomationProperties.Name="Zoom to 100%" />
+            <Button Classes="ghost icon small act" Command="{Binding ZoomInCommand}" ToolTip.ShowOnDisabled="True"
+                    ToolTip.Tip="{Binding ZoomInTip}" AutomationProperties.Name="Zoom in">
+              <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+            </Button>
+          </StackPanel>
+        </StackPanel>
+        <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding LengthText}" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0" />
+        <TextBlock Classes="muted" Text="{Binding StatusOrHint}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="12,0"
+                   ToolTip.Tip="{Binding StatusOrHint}" />
       </DockPanel>
     </Border>
 

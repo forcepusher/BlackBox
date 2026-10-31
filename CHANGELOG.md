@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Video generator looks like the other side panels: how the piece shown was made sits in a column
   beside the viewer that is always there, so the picture no longer jumps with every pick; play, the
-  playhead's time, the zoom (− / % / +) and the status line are in a bar under the timeline; the play
+  playhead's time, the zoom (− / % / +) and the status line are in one bar over the timeline; the play
   buttons and the clips' edges are grey rather than yellow; Make the video, + Sound line, Use this
   version and the zoom buttons stay in place and are greyed, with a tip saying why, when they can't be used.
 - Video generator's **Make the video** is a grey button like the others in its bar, no longer lit
