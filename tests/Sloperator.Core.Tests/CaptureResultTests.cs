@@ -183,7 +183,8 @@ public class CaptureResultTests : IDisposable
 
         var screens = new[] { new ScreenSpace(Plain, (1600, 896)) };
         Assert.Contains("capture it with capture_result, cropped to what you made", SystemPrompt.Build("Test OS", screens, "C:\\", ""));
-        Assert.Contains("capture it before you start too, and pass that capture in compare with the result", SystemPrompt.Build("Test OS", screens, "C:\\", ""));
+        Assert.Contains("capture it with capture_result before your first change: you'll pass it in compare with the result at the end", SystemPrompt.Build("Test OS", screens, "C:\\", ""));
+        Assert.DoesNotContain("before your first change", SystemPrompt.Build("Test OS", screens, "C:\\", "", control: false));
         Assert.Contains("capture it with capture_result", SystemPrompt.Build("Test OS", screens, "C:\\", "", control: false));
         Assert.DoesNotContain("capture_result", SystemPrompt.Build("Test OS", null, "C:\\", ""));
     }

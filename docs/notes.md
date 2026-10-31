@@ -2687,11 +2687,15 @@ the size, until a real problem shows. `labels` are the model's, in the user's la
 After for two by default, numbers for more), shaped with HarfBuzz in Segoe UI or the font Windows picks
 for a script it lacks (CJK, Hangul), so Arabic joins and runs right to left; a long one is cut with
 "…" to its picture's width. An earlier picture that isn't there, or labels that don't match the count,
-are argument errors before anything is captured. The prompt asks for a capture before changing
-something already on screen.
+are argument errors before anything is captured.
 There are no boxes around what changed: the user asked for the pictures alone (31 October 2026).
-In one real run (Haiku through OpenRouter, the Q3 budget window, "add a Total row", nothing said about
-pictures, 31 October 2026) the model captured the result twice and took no capture before it started.
+The before picture is asked for at the start, in its own rule right after "Start GUI tasks with a
+screenshot" ("When the task changes something already on screen …, capture it with capture_result
+before your first change"), and first in the tool's description. Said only in the "check the result"
+rule, which models read when finishing, Haiku took one in 0 of 2 runs (the Q3 budget window, "add a
+Total row", nothing said about pictures, 31 October 2026). As its own start-of-task rule: Haiku 2 of 3,
+Qwen 3.8 3 of 3, each of those ending with the comparison in its final reply; a file-only task
+(Haiku) captured nothing.
 
 
 Models often fumble tool-call syntax, so Sloperator repairs calls on the fly: Qwen XML, Gemma 4 and

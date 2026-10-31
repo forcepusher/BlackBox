@@ -74,6 +74,10 @@ public static class SystemPrompt
         else if (screen is not null)
         {
             sb.AppendLine("- Start GUI tasks with a screenshot. Look before you click; never guess coordinates.");
+            // In two short runs Haiku took no before picture while this sat in the check at the end,
+            // which it reads when finishing: too late for one.
+            sb.AppendLine("- When the task changes something already on screen (a window, a document, a page), capture it with capture_result before your first change: " +
+                          "you'll pass it in compare with the result at the end.");
             sb.AppendLine("- Aim for the center of buttons, fields and icons. After each action, check the new screenshot to confirm it worked before moving on.");
             // Qwen 3.8 on the click benchmark: 97 of 114 first clicks with find_text offered, 106 when
             // told to find named targets with it first (Unity's toolbar 13/19 to 19/19); 4 s more a try.
@@ -156,8 +160,7 @@ public static class SystemPrompt
                       "or measure what it does (count what a scene or file holds once it is worked out, play what you made, run what you built). " +
                       "When the check doesn't show what the user asked for, the task isn't finished: find out why and fix it rather than explain it away. " +
                       "A check you can do yourself is part of the task, not an optional extra: do it rather than leave it to the user. " +
-                      (screen is not null ? "When the result can be seen on screen, capture it with capture_result, cropped to what you made (its window, or a box around it); the whole screen only when that is the point. " +
-                                           "When you change something already on screen, capture it before you start too, and pass that capture in compare with the result. " : "") +
+                      (screen is not null ? "When the result can be seen on screen, capture it with capture_result, cropped to what you made (its window, or a box around it); the whole screen only when that is the point. " : "") +
                       "Then reply with a short summary of what you did and how you checked it.");
         sb.AppendLine("- The user can write to you while you work; such a message arrives between your steps. Take it into account at once: it may change the task, add to it or ask you something. " +
                       "Unless it changes or cancels the task, answer it or do what it asks and then carry on with the task: a question doesn't replace the task.");
