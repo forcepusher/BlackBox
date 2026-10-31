@@ -201,20 +201,21 @@
       <Panel Grid.Column="2">
         <TextBlock Classes="muted" IsVisible="{Binding !HasFiles}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="360" TextAlignment="Center"
                    Text="{Binding EmptyText}" />
-        <DockPanel IsVisible="{Binding HasFiles}">
+        <DockPanel>
           <!-- Stage, Unstage and Discard act on the picked lines, else the selected file; what that is
-               shows beside them. Stage and Unstage only where a file is in git. -->
+               shows beside them. All three always there, greyed with nothing to act on (no file yet, or
+               Stage and Unstage outside git), so the bar doesn't change mid-task. -->
           <Border DockPanel.Dock="Top" Classes="bar" Padding="8">
             <DockPanel>
               <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8">
-                <Button Classes="ghost small act" Command="{Binding StageCommand}" IsVisible="{Binding ShowGit}" IsEnabled="{Binding CanStage}"
+                <Button Classes="ghost small act" Command="{Binding StageCommand}" IsEnabled="{Binding CanStage}"
                         ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding StageTip}" AutomationProperties.Name="Stage">
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
                     <TextBlock Text="Stage" VerticalAlignment="Center" />
                   </StackPanel>
                 </Button>
-                <Button Classes="ghost small act" Command="{Binding UnstageCommand}" IsVisible="{Binding ShowGit}" IsEnabled="{Binding CanUnstage}"
+                <Button Classes="ghost small act" Command="{Binding UnstageCommand}" IsEnabled="{Binding CanUnstage}"
                         ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding UnstageTip}" AutomationProperties.Name="Unstage">
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
@@ -233,7 +234,7 @@
             </DockPanel>
           </Border>
           <!-- Every row of the diff; clicked lines are picked into the chat's box. A right-click on a file's name gives the file's menu. -->
-          <ListBox x:Name="DiffList" Classes="diff" Classes.wrap="{Binding Wrap}" ItemsSource="{Binding Rows}" Selection="{Binding Selection}" SelectionMode="Multiple" ContextRequested="OnFileMenu"
+          <ListBox x:Name="DiffList" Classes="diff" Classes.wrap="{Binding Wrap}" IsVisible="{Binding HasFiles}" ItemsSource="{Binding Rows}" Selection="{Binding Selection}" SelectionMode="Multiple" ContextRequested="OnFileMenu"
                    AutomationProperties.Name="Diff">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:DiffRow">

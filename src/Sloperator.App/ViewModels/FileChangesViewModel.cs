@@ -625,8 +625,8 @@ public sealed partial class FileChangesViewModel : ObservableObject, ISidePanel
 
     private List<(DiffFileItem File, IReadOnlyCollection<(int? Old, int? New)>? Lines)> Targets(GitAct act) => Targets().Where(t => Takes(act, t.File)).ToList();
 
-    /// <summary>Stage and Unstage show only where a file is in git.</summary>
-    public bool ShowGit => _diff?.InGit == true;
+    /// <summary>Whether the files are in git: outside it, Stage and Unstage stay greyed and say why.</summary>
+    public bool InGit => _diff?.InGit == true;
 
     public bool CanStage => Targets(GitAct.Stage).Count > 0;
     public bool CanUnstage => Targets(GitAct.Unstage).Count > 0;
@@ -674,9 +674,9 @@ public sealed partial class FileChangesViewModel : ObservableObject, ISidePanel
         (false, var files) => $"{files.Count} files",
     };
 
-    public string StageTip => CanStage ? $"Stage {What} in git" : "Pick unstaged changes first";
+    public string StageTip => CanStage ? $"Stage {What} in git" : !HasFiles ? "No changes yet" : !InGit ? "Only for files in git" : "Pick unstaged changes first";
 
-    public string UnstageTip => CanUnstage ? $"Unstage {What}: the file on disk stays as it is" : "Pick staged lines, or select a staged file, to unstage them";
+    public string UnstageTip => CanUnstage ? $"Unstage {What}: the file on disk stays as it is" : !HasFiles ? "No changes yet" : !InGit ? "Only for files in git" : "Pick staged lines, or select a staged file, to unstage them";
 
     /// <summary>What Discard puts back, or why it can't.</summary>
     public string DiscardTip
@@ -685,7 +685,8 @@ public sealed partial class FileChangesViewModel : ObservableObject, ISidePanel
         {
             var targets = Targets(GitAct.Discard);
             if (targets.Count == 0)
-                return Targets().Any(t => t.File.Section == GitSection.Committed) ? "Committed changes can't be discarded here"
+                return !HasFiles ? "No changes yet"
+                    : Targets().Any(t => t.File.Section == GitSection.Committed) ? "Committed changes can't be discarded here"
                     : Targets().Count > 0 ? "Unstage these first"
                     : "Pick unstaged changes first";
             if (targets is [{ Lines: null, File.IsNew: true }])
@@ -698,7 +699,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, ISidePanel
     /// <summary>The action bar says again what it acts on and what each button does.</summary>
     private void ActionsChanged()
     {
-        foreach (var name in (string[])[nameof(ShowGit), nameof(CanStage), nameof(CanUnstage), nameof(CanDiscard), nameof(Target), nameof(StageTip), nameof(UnstageTip), nameof(DiscardTip)])
+        foreach (var name in (string[])[nameof(InGit), nameof(CanStage), nameof(CanUnstage), nameof(CanDiscard), nameof(Target), nameof(StageTip), nameof(UnstageTip), nameof(DiscardTip)])
             OnPropertyChanged(name);
     }
 
