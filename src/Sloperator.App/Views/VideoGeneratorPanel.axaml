@@ -213,18 +213,13 @@
       </DockPanel>
     </Border>
 
-    <!-- A bar along the foot, as the File inspector's and the Code editor's (2026-10-31): play and where the
-         playhead is, the zoom (out, back to 100%, in), what the panel did (else how the timeline is used: nothing
-         showed the right-click menu was there), and how long the video is. Its buttons are always there, greyed
-         where they don't apply. -->
+    <!-- A bar along the foot, as the File inspector's and the Code editor's (2026-10-31): the zoom (out, back
+         to 100%, in), what the panel did (else how the timeline is used: nothing showed the right-click menu
+         was there), and how long the video is. Its buttons are always there, greyed where they don't apply.
+         Play is on the ruler's row. -->
     <Border DockPanel.Dock="Bottom" Classes="bar slim foot" Padding="8,4">
       <DockPanel>
         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-          <Button Classes="ghost icon small" Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the sound lines with each clip's frames from the playhead"
-                  AutomationProperties.Name="Play the storyboard">
-            <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" />
-          </Button>
-          <TextBlock Classes="muted" Text="{Binding PlayTime}" FontSize="12" FontFeatures="+tnum" VerticalAlignment="Center" Margin="12,0" AutomationProperties.Name="Playhead" />
           <StackPanel Orientation="Horizontal" Spacing="4">
             <Button Classes="ghost icon small act" Command="{Binding ZoomOutCommand}" ToolTip.ShowOnDisabled="True"
                     ToolTip.Tip="{Binding ZoomOutTip}" AutomationProperties.Name="Zoom out">
@@ -255,7 +250,17 @@
           <!-- The rows' names stay put; what is right of them scrolls as one. -->
           <Border BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,1,0">
             <StackPanel>
-              <Border Height="26" />
+              <!-- Play and where the playhead is, on the ruler's row (the user, 2026-10-31: play on top, level
+                   with the timeline's seconds), left of 0:00. Play is 32 square as the panel's × and yellow, the one
+                   lit button in the panel (the user, the same day: grey and small, it wasn't noticed), so the row
+                   is 40, as the ruler beside it. -->
+              <StackPanel Height="40" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
+                <Button Classes="primary icon" Command="{Binding PlayStripCommand}" VerticalAlignment="Center"
+                        ToolTip.Tip="Play the sound lines with each clip's frames from the playhead" AutomationProperties.Name="Play the storyboard">
+                  <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" Foreground="{StaticResource BbOnAccent}" />
+                </Button>
+                <TextBlock Classes="muted" Text="{Binding PlayTime}" FontSize="12" FontFeatures="+tnum" VerticalAlignment="Center" AutomationProperties.Name="Playhead" />
+              </StackPanel>
               <Border Height="92">
                 <TextBlock Text="References" Margin="10,10,6,0" />
               </Border>
@@ -287,7 +292,7 @@
                         PointerWheelChanged="OnTimelineWheel" Background="Transparent" BringIntoViewOnFocusChange="False" ContextRequested="OnRowMenu">
             <Panel Width="{Binding TimelineWidth}" HorizontalAlignment="Left" ClipToBounds="True">
               <StackPanel>
-                <views:VideoRuler x:Name="Ruler" Height="26" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:VideoGeneratorViewModel.Lead}" />
+                <views:VideoRuler x:Name="Ruler" Height="40" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:VideoGeneratorViewModel.Lead}" />
 
                 <!-- References: a card each, image files, video files and generated images; the dashed card makes a new one. -->
                 <Panel Height="92" Tag="references" Background="Transparent">

@@ -33,10 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings → Safety: the dropdown for when Sloperator asks before acting is labelled
   **Tool call approval** (it read "Ask me first", next to choices like "Never ask").
 - Video generator looks like the other side panels: how the piece shown was made sits in a column
-  beside the viewer that is always there, so the picture no longer jumps with every pick; play, the
-  playhead's time, the zoom (− / % / +) and the status line are in a bar under the timeline; the play
-  buttons and the clips' edges are grey rather than yellow; Make the video, + Sound line, Use this
-  version and the zoom buttons stay in place and are greyed, with a tip saying why, when they can't be used.
+  beside the viewer that is always there, so the picture no longer jumps with every pick; play and the
+  playhead's time sit beside the timeline's seconds, the zoom (− / % / +) and the status line in a bar
+  under the timeline; the viewer's play buttons and the clips' edges are grey rather than yellow; Make the
+  video, + Sound line, Use this version and the zoom buttons stay in place and are greyed, with a tip
+  saying why, when they can't be used.
 - Video generator's **Make the video** is a grey button like the others in its bar, no longer lit
   yellow all the time.
 - The zoom buttons under the File inspector, Code editor and Video generator stay in place as you
