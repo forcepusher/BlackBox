@@ -99,6 +99,8 @@
     <!-- Code in the Code editor panel (CodeView): what AvaloniaEdit's highlighting names comments, strings,
          numbers, keywords, types, calls, preprocessor lines and names (attributes, properties, variables),
          one colour each for every language, readable on the dark background; the rest is BbCode. -->
+    <!-- What the agent just changed, lit a moment (the Code editor's Watch). -->
+    <SolidColorBrush x:Key="BbFresh" Color="#40FCC21B" />
     <SolidColorBrush x:Key="BbSyntaxComment" Color="#6A9955" />
     <SolidColorBrush x:Key="BbSyntaxString" Color="#CE9178" />
     <SolidColorBrush x:Key="BbSyntaxNumber" Color="#B5CEA8" />

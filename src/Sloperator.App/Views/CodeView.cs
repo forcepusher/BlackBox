@@ -14,7 +14,87 @@ namespace Sloperator.App.Views;
 /// </summary>
 public sealed class CodeView : TextEditor
 {
+    public CodeView() => TextArea.TextView.BackgroundRenderers.Add(_light);
+
     protected override Type StyleKeyOverride => typeof(TextEditor);
+
+    private readonly ChangeLight _light = new();
+
+    /// <summary>
+    /// Lines the agent just changed (first to last, from 1): lit in the accent (<c>BbFresh</c>), the light
+    /// fading over 2 s after 4 s, as File changes lights its fresh rows; the first left where it is in the
+    /// upper half of the view, else brought a quarter of the way down, as File changes does.
+    /// </summary>
+    public void Light(IReadOnlyList<(int From, int To)> lines)
+    {
+        if (Document is not { } document || lines.Count == 0)
+            return;
+        _light.Light(TextArea.TextView, document, lines);
+        var first = Math.Clamp(lines.Min(l => l.From), 1, document.LineCount);
+        // Once the file just opened is laid out.
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            var top = TextArea.TextView.GetVisualTopByDocumentLine(first);
+            if (top < VerticalOffset || top > VerticalOffset + ViewportHeight / 2)
+                ScrollToVerticalOffset(Math.Max(0, top - ViewportHeight / 4));
+        }, Avalonia.Threading.DispatcherPriority.Background);
+    }
+
+    /// <summary>The lit lines, drawn under the text as whole rows; their places follow edits made after.</summary>
+    private sealed class ChangeLight : IBackgroundRenderer
+    {
+        private readonly List<(AvaloniaEdit.Document.TextAnchor From, AvaloniaEdit.Document.TextAnchor To)> _lines = [];
+        private readonly Avalonia.Threading.DispatcherTimer _fade = new() { Interval = TimeSpan.FromMilliseconds(50) };
+        private TextView? _view;
+        private DateTime _litAt;
+        private double _opacity;
+
+        public ChangeLight() => _fade.Tick += (_, _) =>
+        {
+            var seconds = (DateTime.UtcNow - _litAt).TotalSeconds;
+            _opacity = seconds < 4 ? 1 : Math.Max(0, 1 - (seconds - 4) / 2);
+            if (_opacity == 0)
+            {
+                _fade.Stop();
+                _lines.Clear();
+            }
+            _view?.InvalidateLayer(KnownLayer.Background);
+        };
+
+        public KnownLayer Layer => KnownLayer.Background;
+
+        public void Light(TextView view, AvaloniaEdit.Document.TextDocument document, IReadOnlyList<(int From, int To)> lines)
+        {
+            _view = view;
+            _lines.Clear();
+            foreach (var (from, to) in lines)
+            {
+                var first = document.GetLineByNumber(Math.Clamp(from, 1, document.LineCount));
+                var last = document.GetLineByNumber(Math.Clamp(to, from, document.LineCount));
+                _lines.Add((document.CreateAnchor(first.Offset), document.CreateAnchor(last.Offset)));
+            }
+            _litAt = DateTime.UtcNow;
+            _opacity = 1;
+            _fade.Start();
+            view.InvalidateLayer(KnownLayer.Background);
+        }
+
+        public void Draw(TextView textView, DrawingContext drawingContext)
+        {
+            if (_opacity <= 0 || _lines.Count == 0 || textView.Document is not { } document
+                || Application.Current?.FindResource("BbFresh") is not ISolidColorBrush fresh)
+                return;
+            var brush = new SolidColorBrush(fresh.Color, _opacity);
+            foreach (var line in textView.VisualLines)
+            {
+                var number = line.FirstDocumentLine.LineNumber;
+                if (!_lines.Any(l => !l.From.IsDeleted && number >= l.From.Line && number <= l.To.Line))
+                    continue;
+                var top = line.VisualTop - textView.VerticalOffset;
+                drawingContext.FillRectangle(brush, new Rect(0, top, textView.Bounds.Width, line.Height));
+            }
+        }
+    }
 
     protected override IVisualLineTransformer CreateColorizer(IHighlightingDefinition highlightingDefinition) => new DarkColorizer(highlightingDefinition);
 

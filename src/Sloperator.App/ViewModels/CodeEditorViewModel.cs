@@ -64,6 +64,9 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
             _diskTimer!.Stop();
             _ = OnDiskChangedAsync();
         });
+        _watch = chat.Panels.WatchCode;
+        // A change made before the panel opened isn't followed: only the agent's next one.
+        (_followedList, _followedNumber) = (chat.Changes, chat.Changes.LastChange?.Number ?? 0);
         _chat.ChangesUpdated += OnChangesUpdated;
         _ = FollowChatAsync();
     }
@@ -109,6 +112,86 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
             folder = null;
         if (!string.Equals(folder, Folder, StringComparison.OrdinalIgnoreCase))
             ShowFolder(folder);
+        await FollowAgentAsync(again: false);
+    }
+
+    // ---- Watch: following the agent's edits -----------------------------------------------------
+
+    /// <summary>Watch (the user, 2026-10-31, as File changes has it): the file the agent edits opens at the lines it changed, lit a moment. Kept in settings.</summary>
+    [ObservableProperty]
+    private bool _watch;
+
+    partial void OnWatchChanged(bool value)
+    {
+        _chat.Panels.WatchCode = value;
+        _chat.SavePanels();
+        // Turned on, it goes to the agent's last change and lights it again.
+        if (value)
+            _ = FollowAgentAsync(again: true);
+    }
+
+    /// <summary>The chat's list of changes, and the number of its last call followed (see <see cref="Core.Diffs.FileChanges.LastChange"/>).</summary>
+    private Core.Diffs.FileChanges _followedList;
+
+    private int _followedNumber;
+
+    /// <summary>Raised to light lines the agent changed (first to last, numbered from 1) and bring the first into view.</summary>
+    internal event Action<IReadOnlyList<(int From, int To)>>? Lit;
+
+    /// <summary>
+    /// Watching: the file of the agent's new write_file or edit_file call (with <paramref name="again"/>,
+    /// its last one) opens, scrolled to what the chat changed in it, lit. The open file's new text is lit
+    /// as it is read (<see cref="ReadOpenFileAgainAsync"/>). Only a text file in the folder shown: one
+    /// elsewhere would take the tree from the folder the user chose.
+    /// </summary>
+    private async Task FollowAgentAsync(bool again)
+    {
+        var changes = _chat.Changes;
+        if (!ReferenceEquals(changes, _followedList))
+            (_followedList, _followedNumber) = (changes, 0);
+        if (changes.LastChange is not { } last || !again && last.Number == _followedNumber)
+            return;
+        _followedNumber = last.Number;
+        var path = last.Path;
+        if (!Watch || Folder is not { } folder || !IsIn(path, folder) || !await Task.Run(() => File.Exists(path) && Core.Documents.FileInspector.IsText(path)) || _closed)
+            return;
+        if (string.Equals(path, OpenPath, StringComparison.OrdinalIgnoreCase))
+        {
+            if (again)
+                await LightChatChangesAsync(path);
+            else
+                await ReadOpenFileAgainAsync();
+            return;
+        }
+        await OpenAsync(path);
+        if (string.Equals(path, OpenPath, StringComparison.OrdinalIgnoreCase))
+            await LightChatChangesAsync(path);
+    }
+
+    /// <summary>The lines the agent added or changed in the file in this chat, lit: what File changes shows of it.</summary>
+    private async Task LightChatChangesAsync(string path)
+    {
+        var changes = _chat.Changes;
+        var diff = await Task.Run(changes.Diff);
+        if (!string.Equals(path, OpenPath, StringComparison.OrdinalIgnoreCase)
+            || diff.Files.FirstOrDefault(f => string.Equals(diff.FullPath(f), path, StringComparison.OrdinalIgnoreCase)) is not { } file)
+            return;
+        if (Runs(file.Lines.Where(l => l.Kind == Core.Diffs.DiffLineKind.Added).Select(l => l.New ?? 0).Where(n => n > 0)) is { Count: > 0 } runs)
+            Lit?.Invoke(runs);
+    }
+
+    /// <summary>Line numbers as runs of consecutive ones: 4, 5, 6, 9 as 4-6 and 9-9.</summary>
+    public static List<(int From, int To)> Runs(IEnumerable<int> lines)
+    {
+        var runs = new List<(int From, int To)>();
+        foreach (var line in lines.Distinct().Order())
+        {
+            if (runs.Count > 0 && runs[^1].To == line - 1)
+                runs[^1] = (runs[^1].From, line);
+            else
+                runs.Add((line, line));
+        }
+        return runs;
     }
 
     /// <summary>Open folder, or a folder dropped on the panel: the chat's folder from now on, kept with it.</summary>
@@ -248,7 +331,7 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
     /// <summary>Changed on disk (by the agent, another program) while it had edits here not saved: Save keeps those, Reload takes the disk's.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FileStatus))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ReloadCommand))]
     private bool _changedOnDisk;
 
     /// <summary>Saving failed: why.</summary>
@@ -318,6 +401,9 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         _file = null;
         Document = null;
         FileProblem = null;
+        IsUnsaved = false;
+        ChangedOnDisk = false;
+        SaveProblem = null;
     }
 
     private void CloseFile()
@@ -370,7 +456,7 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
     }
 
     /// <summary>Reload: the file as it is on disk, in place of the edits not saved.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(ChangedOnDisk))]
     private async Task ReloadAsync()
     {
         if (_file is not { } file || Document is not { } document || await file.ReadAgainAsync(CancellationToken.None) is not { } text || Document != document)
@@ -407,12 +493,19 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
             ChangedOnDisk = true;
             return;
         }
-        Replace(document, text);
+        var (start, length) = Replace(document, text);
         document.UndoStack.MarkAsOriginalFile();
+        // Watching, the new lines are lit (a deletion: the line where it was).
+        if (Watch)
+        {
+            var from = document.GetLineByOffset(start);
+            var end = document.GetLineByOffset(start + length);
+            Lit?.Invoke([(from.LineNumber, end.LineNumber > from.LineNumber && end.Offset == start + length ? end.LineNumber - 1 : end.LineNumber)]);
+        }
     }
 
-    /// <summary>Only what differs replaced, so the caret, the selection and the view before it stay.</summary>
-    public static void Replace(TextDocument document, string text)
+    /// <summary>Only what differs replaced, so the caret, the selection and the view before it stay. Returns where the new text went in, and how long it is.</summary>
+    public static (int Start, int Length) Replace(TextDocument document, string text)
     {
         var old = document.Text;
         var start = 0;
@@ -422,6 +515,7 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         while (end < old.Length - start && end < text.Length - start && old[^(end + 1)] == text[^(end + 1)])
             end++;
         document.Replace(start, old.Length - start - end, text.Substring(start, text.Length - start - end));
+        return (start, text.Length - start - end);
     }
 
     // ---- what is selected, into the chat's box ---------------------------------------------------

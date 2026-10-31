@@ -136,6 +136,7 @@ public class CodeEditorFilesTests : IDisposable
         var other = Make("elsewhere/notes.txt", "a\n");
         var changes = new FileChanges();
         Assert.Null(changes.Project());
+        Assert.Null(changes.LastChange);
 
         // As the agent writes them: the file read before the call, the change noted after it.
         foreach (var (path, text) in new[] { (first, "class Ship { int Lives; }\n"), (other, "b\n") })
@@ -148,5 +149,7 @@ public class CodeEditorFilesTests : IDisposable
         }
 
         Assert.Equal(Path.Combine(_root, "game"), changes.Project());
+        // Watch goes to the file of the last call, numbered so a new call tells from one followed already.
+        Assert.Equal((Path.GetFullPath(other), 2), changes.LastChange);
     }
 }

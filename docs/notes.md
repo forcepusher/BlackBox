@@ -3512,6 +3512,22 @@ take it out of the box. Checked in the app (2026-10-31, a stand-in model keeping
 numbered; Ship.cs changed on disk while open showed the new lines in place, and a file added in src came
 into the tree under it.
 
+**Watch** (the user, 2026-10-31: "a watch button as well just like file changes panel does"): a toggle
+in the top bar, on by default and kept in settings.json (`panels.watchCode`; File changes' is
+`watchChanges`). Each write_file or edit_file call notes its file and a number in the chat's list
+(`FileChanges.LastChange`), and with Watch on the panel follows the new one (not one made before it
+opened): a text file in the folder shown opens, its tree row shown, at what the chat changed in it (the
+added lines of its File changes diff); the open file, read again from disk, at the lines that differ from
+what it showed (`Replace` gives where the new text went in). Those lines are lit in `BbFresh` (the accent
+at 25%, File changes' fresh rows' colour), the light fading over 2 s after 4 s, as File changes', and the
+first is left where it is in the upper half of the view, else brought a quarter of the way down
+(`CodeView.Light`, a background renderer under the text whose lines follow later edits). A file outside
+the folder isn't followed: it would take the tree from the folder the user chose. Turned on, Watch goes
+to the agent's last change and lights it again. Every button of the panel's bars is there from the start
+and greyed while it has nothing to do (the user, 2026-10-31: bar buttons never come and go mid-task):
+Watch, and Save and Reload over the file even with none open. Checked in the app with a stand-in agent
+(2026-10-31): with Game.cs open, its edit_file on Ship.cs opened Ship.cs with the three lines it added lit.
+
 ### Web search
 A local model's memory of APIs is where it slips most (qwen3.8 writes Unity's `KeyCode.Left`, which
 doesn't exist, for `KeyCode.LeftArrow`), so the agent can look things up. Told to whenever it wasn't

@@ -175,7 +175,7 @@ public sealed class FileChanges
                 if (InOwnData(full, ctx))
                     return null;
                 Remember(full);
-                return new Call(this);
+                return new Call(this, full);
             }
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or IOException or UnauthorizedAccessException) { }
@@ -192,13 +192,14 @@ public sealed class FileChanges
             .Any(data => path.StartsWith(data + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>A call that may change a file, until it has ended.</summary>
-    public sealed class Call(FileChanges changes)
+    public sealed class Call(FileChanges changes, string path)
     {
-        /// <summary>The list is kept; then the panel reads it again.</summary>
+        /// <summary>The list is kept; then the panels read it again.</summary>
         public Task EndAsync()
         {
             try
             {
+                changes.Ended(path);
                 changes.Save();
                 changes.Changed?.Invoke(changes);
             }
@@ -208,6 +209,28 @@ public sealed class FileChanges
             }
             return Task.CompletedTask;
         }
+    }
+
+    /// <summary>
+    /// The file the agent's last write_file or edit_file call was on, and how many such calls there
+    /// have been in the list's life (so a panel tells a new one from the one it followed already);
+    /// null before any. The Code editor's Watch goes to it.
+    /// </summary>
+    public (string Path, int Number)? LastChange
+    {
+        get
+        {
+            lock (_gate)
+                return _lastChange;
+        }
+    }
+
+    private (string Path, int Number)? _lastChange;
+
+    private void Ended(string path)
+    {
+        lock (_gate)
+            _lastChange = (path, (_lastChange?.Number ?? 0) + 1);
     }
 
     /// <summary>A file the agent is about to change: what it holds now, unless that is known already for this turn.</summary>

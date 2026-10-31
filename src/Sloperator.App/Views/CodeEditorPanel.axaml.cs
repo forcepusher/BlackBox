@@ -77,12 +77,14 @@ public partial class CodeEditorPanel : UserControl
         {
             _vm.PropertyChanged -= OnVmChanged;
             _vm.LetGoOfSelection -= LetGoOfSelection;
+            _vm.Lit -= Editor.Light;
         }
         _vm = DataContext as CodeEditorViewModel;
         if (_vm is not null)
         {
             _vm.PropertyChanged += OnVmChanged;
             _vm.LetGoOfSelection += LetGoOfSelection;
+            _vm.Lit += Editor.Light;
         }
         ShowDocument();
     }

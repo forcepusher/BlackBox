@@ -142,12 +142,18 @@ public sealed class CodeEditorTests : IDisposable
         var document = new TextDocument("one\ntwo\nthree\n");
         var caret = document.CreateAnchor(5);
 
-        CodeEditorViewModel.Replace(document, "one\ntwo\nTHREE\nfour\n");
+        var (start, length) = CodeEditorViewModel.Replace(document, "one\ntwo\nTHREE\nfour\n");
 
         Assert.Equal("one\ntwo\nTHREE\nfour\n", document.Text);
+        // What Watch lights: from the first character that differs to the last.
+        Assert.Equal("THREE\nfour", document.GetText(start, length));
         Assert.Equal(5, caret.Offset);
         Assert.False(caret.IsDeleted);
     }
+
+    [Fact]
+    public void The_lines_watch_lights_go_in_runs() =>
+        Assert.Equal([(4, 6), (9, 9), (12, 13)], CodeEditorViewModel.Runs([13, 4, 5, 6, 9, 12, 5]));
 
     [Theory]
     [InlineData("Game.cs", "C#")]
