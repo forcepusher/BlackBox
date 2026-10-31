@@ -1,0 +1,18 @@
+Brightest pixel of each empty field's hint (past the caret), physical px at 125%.
+rest = cursor away; hover = real cursor on the field; focused = clicked, cursor away; focused+hover = clicked, cursor on it.
+Server address and MCP box were emptied through UI Automation first (which leaves them focused on develop,
+so their develop "rest" is the focused colour).
+
+branch (1c012ca)
+server         rest #808080  hover #808080  focused #808080  focused+hover #808080
+api-key        rest #808080  hover #808080  focused #808080  focused+hover #808080
+chat-box       rest #606060  hover #606060  focused #606060  focused+hover #606060
+instructions   rest #808080  hover #808080  focused #808080  focused+hover #808080
+mcp            rest #808080  hover #808080  focused #808080  focused+hover #808080
+
+develop (aa8e763)
+server         rest #494949  hover #494949  focused #494949  focused+hover #494949
+api-key        rest #818181  hover #494949  focused #494949  focused+hover #494949
+chat-box       rest #606060  hover #606060  focused #606060  focused+hover #606060
+instructions   rest #818181  hover #494949  focused #494949  focused+hover #494949
+mcp            rest #494949  hover #494949  focused #494949  focused+hover #494949

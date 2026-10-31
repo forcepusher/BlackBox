@@ -1,0 +1,278 @@
+﻿00-start-centre.txt                Text      Sloperator                 x   46 y   10 box 1-40      branch  -1.00  develop -1.00
+00-start-centre.txt                Button    Saved servers              x  473 y  112 box 112-152   branch  -0.51  develop -0.51
+00-start-centre.txt                Text      Servers                    x  489 y  121 box 113-151   branch  -0.51  develop -0.51
+00-start-centre.txt                Text      Model                      x   21 y  172 box none      branch  +0.59  develop +0.59
+00-start-centre.txt                Text      Context                    x  633 y  172 box none      branch  +0.96  develop +0.96
+00-start-centre.txt                Button    Line up                    x 1106 y  212 box 212-232   branch  +0.87  develop +0.91
+00-start-centre.txt                Text      stops me at any time, in a x  296 y  260 box 244-293   branch  +2.04  develop +2.04
+00-start-centre.txt                Text      Type to correct me; I paus x  173 y  288 box 244-320   branch +13.94  develop +13.44
+00-start-centre.txt                Text      Use any app                x  218 y  495 box 479-554   branch -10.95  develop -11.45
+00-start-centre.txt                Text      Pictures, video and sound  x  627 y  495 box 479-554   branch -10.96  develop -11.46
+00-start-centre.txt                Text      I can see screen, use keyb x  218 y  522 box 479-554   branch +13.46  develop +12.96
+00-start-centre.txt                Text      With ComfyUI, which I inst x  627 y  522 box 479-554   branch +13.44  develop +12.94
+00-start-centre.txt                Text      Game development           x  218 y  587 box 571-646   branch -10.96  develop -11.46
+00-start-centre.txt                Text      Get what a job needs       x  627 y  587 box 571-646   branch -10.96  develop -11.46
+00-start-centre.txt                Text      Unity, Unreal, Godot or an x  218 y  614 box 571-646   branch +13.44  develop +12.94
+00-start-centre.txt                Text      I install programs and the x  627 y  614 box 571-646   branch +13.44  develop +12.94
+00-start-centre.txt                Text      Work on servers            x  218 y  678 box 663-738   branch -10.93  develop -11.43
+00-start-centre.txt                Text      Documents                  x  627 y  678 box 663-738   branch -10.60  develop -11.10
+00-start-centre.txt                Text      I set up and fix servers o x  218 y  706 box 663-738   branch +13.43  develop +12.93
+00-start-centre.txt                Text      Word, Excel, PDF, etc. No  x  627 y  706 box 663-738   branch +13.44  develop +12.94
+00-start-centre.txt                Text      Look things up             x  218 y  771 box 755-827   branch  -9.50  develop -8.00
+00-start-centre.txt                Text      Chat for you               x  627 y  771 box 755-827   branch  -9.46  develop -7.96
+00-start-centre.txt                Text      I search the web when I'm  x  218 y  798 box 755-827   branch +14.94  develop +16.44
+00-start-centre.txt                Text      I can reply for you in any x  627 y  798 box 755-827   branch +14.94  develop +16.44
+00-start-centre.txt                Text      What should I do on your c x  367 y  911 box none      branch  +0.56  develop +0.56
+00-start-centre.txt                Text      I may use your keyboard an x  276 y  944 box none      branch  +1.11  develop +1.11
+00-start-centre.txt                Button    Line down                  x 1106 y  953 box 953-973   branch  +0.75  develop <=0.5
+00-start-centre.txt                Edit                                 x   82 y  993 box 993-1034  branch  +1.10  develop +1.00
+00-start-centre.txt                Button    Send                       x 1014 y  994 box 994-1034  branch  +0.51  develop +0.51
+01-file-changes-centre.txt         Text      Check the **UI** please -  x   46 y   10 box 1-40      branch  -0.98  develop -0.98
+01-file-changes-centre.txt         Button    Wrap                       x  775 y   51 box 51-91     branch  -0.58  develop -0.58
+01-file-changes-centre.txt         Button    Output                     x 1112 y   51 box 51-93     branch  -1.50  develop -1.50
+01-file-changes-centre.txt         Text      Wrap                       x  819 y   60 box 52-90     branch  -0.58  develop -0.58
+01-file-changes-centre.txt         ListItem  notes.md                   x    1 y  102 box 102-132   branch  +0.52  develop +0.52
+01-file-changes-centre.txt         Text      notes.md                   x   11 y  107 box none      branch  +0.87  develop +0.87
+01-file-changes-centre.txt         Button    Saved servers              x 1368 y  112 box 112-152   branch  -0.51  develop -0.51
+01-file-changes-centre.txt         Text      Servers                    x 1384 y  121 box 113-151   branch  -0.51  develop -0.51
+01-file-changes-centre.txt         Text      07:58:34 · model 337 ms    x 1096 y  123 box none      branch  -1.00  develop <=0.5
+01-file-changes-centre.txt         Button    Thoughts                   x 1096 y  149 box 149-199   branch  +7.50  develop +7.50
+01-file-changes-centre.txt         ListItem  notes.md, added · +5       x  293 y  153 box 153-197   branch  +6.65  develop +6.65
+01-file-changes-centre.txt         Text      Thoughts                   x 1117 y  163 box 179-180   branch  -0.73  develop -0.75
+01-file-changes-centre.txt         Text      notes.md                   x  305 y  171 box 165-197   branch  +0.93  develop +0.93
+01-file-changes-centre.txt         Text      added · +5                 x  394 y  172 box 165-197   branch  +0.61  develop +0.61
+01-file-changes-centre.txt         Text      Model                      x 1096 y  172 box none      branch  +0.59  develop +0.59
+01-file-changes-centre.txt         Text      Context                    x 1528 y  172 box none      branch  +0.96  develop +0.96
+01-file-changes-centre.txt         Text      The notes are written; I'l x 1097 y  199 box 213-255   branch -16.50  develop -16.50
+01-file-changes-centre.txt         Button    Line up                    x 1881 y  212 box 212-232   branch  +0.87  develop +0.91
+01-file-changes-centre.txt         Text      1                          x  300 y  217 box none      branch  -1.83  develop -1.33
+01-file-changes-centre.txt         Text      0                          x  300 y  217 box none      branch  -1.83  develop -1.33
+01-file-changes-centre.txt         Text      +                          x  309 y  217 box 219-228   branch  +2.00  develop +2.00
+01-file-changes-centre.txt         Text      +                          x  309 y  217 box 219-228   branch  +2.00  develop +2.00
+01-file-changes-centre.txt         Text      # Notes                    x  323 y  217 box none      branch  -1.93  develop -1.43
+01-file-changes-centre.txt         Text      2                          x  300 y  237 box none      branch  -2.00  develop -2.50
+01-file-changes-centre.txt         Text      0                          x  300 y  237 box none      branch  -2.00  develop -2.50
+01-file-changes-centre.txt         Text      +                          x  309 y  237 box 246-248   branch  -1.50  develop -1.50
+01-file-changes-centre.txt         Text      +                          x  309 y  237 box 246-248   branch  -1.50  develop -1.50
+01-file-changes-centre.txt         Text      0                          x  300 y  277 box none      branch  -2.30  develop -2.80
+01-file-changes-centre.txt         Text      4                          x  300 y  277 box none      branch  -2.30  develop -2.80
+01-file-changes-centre.txt         Text      +                          x  309 y  277 box 286-287   branch  -1.00  develop -1.00
+01-file-changes-centre.txt         Text      +                          x  309 y  277 box 286-287   branch  -1.00  develop -1.00
+01-file-changes-centre.txt         Text      0                          x  300 y  297 box none      branch  -2.00  develop -2.50
+01-file-changes-centre.txt         Text      5                          x  300 y  297 box none      branch  -2.00  develop -2.50
+01-file-changes-centre.txt         Text      +                          x  309 y  297 box 306-307   branch  -1.00  develop <=0.5
+01-file-changes-centre.txt         Text      +                          x  309 y  297 box 306-307   branch  -1.00  develop <=0.5
+01-file-changes-centre.txt         Text      - a point                  x  323 y  297 box none      branch  -2.00  develop -2.50
+01-file-changes-centre.txt         Text      •                          x 1096 y  305 box none      branch  +1.38  develop +1.38
+01-file-changes-centre.txt         Text      Looked at a picture, a GIF x 1111 y  333 box none      branch  -1.00  develop -1.00
+01-file-changes-centre.txt         Text      •                          x 1096 y  369 box none      branch  +1.38  develop +1.38
+01-file-changes-centre.txt         Button    Copy                       x 1735 y  415 box 415-445   branch  +0.54  develop +0.54
+01-file-changes-centre.txt         Text      powershell                 x 1112 y  422 box 411-485   branch -16.50  develop -16.50
+01-file-changes-centre.txt         Text      echo hi                    x 1082 y  445 box 411-485   branch +10.50  develop +10.50
+01-file-changes-centre.txt         Text      3                          x 1207 y  534 box 535-569   branch  -0.53  develop -0.53
+01-file-changes-centre.txt         Text      doc.pdf                    x 1149 y  872 box 862-925   branch -10.95  develop -10.95
+01-file-changes-centre.txt         Text      659 bytes                  x 1149 y  894 box 862-925   branch +11.02  develop +11.02
+01-file-changes-centre.txt         Text      Worked for 3.6 s           x 1420 y  933 box 926-984   branch -11.39  develop <=0.5
+01-file-changes-centre.txt         Button    Line down                  x 1881 y  953 box 953-973   branch  +0.75  develop +0.55
+01-file-changes-centre.txt         Edit                                 x 1152 y  993 box 993-1034  branch  +1.00  develop +1.00
+01-file-changes-centre.txt         Button    Send                       x 1794 y  994 box 994-1034  branch  +0.51  develop +0.51
+02-history-1-centre.txt            Button    Check the **UI** please    x    1 y    6 box 6-66      branch -11.50  develop -11.50
+02-history-1-centre.txt            Text      Check the **UI** please    x   16 y   14 box 6-66      branch -11.50  develop -11.50
+02-history-1-centre.txt            Text      07:58                      x   16 y   38 box 6-66      branch +11.52  develop <=0.5
+03-servers-1-centre.txt            Button    http://localhost:5361/v1   x    1 y    6 box 6-66      branch -11.28  develop -11.28
+03-servers-1-centre.txt            Text      http://localhost:5361/v1   x   16 y   14 box 6-66      branch -11.46  develop -11.46
+03-servers-1-centre.txt            Text      qwen3-ui-test              x   16 y   38 box 6-66      branch +11.96  develop +11.96
+03-servers-1-centre.txt            Button    http://192.168.1.20:1234/v x    1 y   66 box 66-126    branch -11.59  develop -11.59
+03-servers-1-centre.txt            Text      http://192.168.1.20:1234/v x   16 y   74 box 66-131    branch -14.00  develop -14.00
+03-servers-1-centre.txt            Text      qwen3.8-27b                x   16 y   97 box 66-131    branch  +9.02  develop +9.02
+04-side-panel-list-1-centre.txt    Text      None                       x   16 y   14 box 1-44      branch  +1.99  develop +1.99
+04-side-panel-list-1-centre.txt    Text      File changes               x   16 y   51 box 44-103    branch -11.00  develop -11.00
+04-side-panel-list-1-centre.txt    Text      Files the agent changed    x   16 y   74 box 44-103    branch +11.10  develop +11.10
+04-side-panel-list-1-centre.txt    ListItem  File inspector             x    1 y  102 box 102-162   branch  +1.63  develop +1.63
+05-chat-end-centre.txt             Text      Check the **UI** please -  x   46 y   10 box 1-40      branch  -0.98  develop -0.98
+05-chat-end-centre.txt             Text      30 bytes                   x   90 y   10 box 20-21     branch  -1.00  develop -1.00
+05-chat-end-centre.txt             Button    Output                     x   37 y   51 box 51-93     branch  -1.50  develop -1.50
+05-chat-end-centre.txt             Button    Saved servers              x  293 y  112 box 112-152   branch  -0.51  develop -0.51
+05-chat-end-centre.txt             Text      Servers                    x  309 y  121 box 113-151   branch  -0.51  develop -0.51
+05-chat-end-centre.txt             Text      07:58:34 · model 337 ms    x   21 y  123 box none      branch  -1.00  develop <=0.5
+05-chat-end-centre.txt             Button    Thoughts                   x   21 y  149 box 149-199   branch  +7.50  develop +7.50
+05-chat-end-centre.txt             Text      Thoughts                   x   42 y  163 box 179-180   branch  -0.73  develop -0.75
+05-chat-end-centre.txt             Text      Model                      x   21 y  172 box none      branch  +0.59  develop +0.59
+05-chat-end-centre.txt             Text      Context                    x  453 y  172 box none      branch  +0.96  develop +0.96
+05-chat-end-centre.txt             Text      The notes are written; I'l x   22 y  199 box 213-255   branch -16.50  develop -16.50
+05-chat-end-centre.txt             Button    Line up                    x  806 y  212 box 212-232   branch  +0.87  develop +0.91
+05-chat-end-centre.txt             Text      •                          x   21 y  305 box none      branch  +1.38  develop +1.38
+05-chat-end-centre.txt             Text      Looked at a picture, a GIF x   36 y  333 box none      branch  -1.00  develop -1.00
+05-chat-end-centre.txt             Text      •                          x   21 y  369 box none      branch  +1.38  develop +1.38
+05-chat-end-centre.txt             Button    Copy                       x  660 y  415 box 415-445   branch  +0.54  develop +0.54
+05-chat-end-centre.txt             Text      powershell                 x   37 y  422 box 411-485   branch -16.50  develop -16.50
+05-chat-end-centre.txt             Text      echo hi                    x    7 y  445 box 411-485   branch +10.50  develop +10.50
+05-chat-end-centre.txt             Text      3                          x  132 y  534 box 535-569   branch  -0.53  develop -0.53
+05-chat-end-centre.txt             Text      doc.pdf                    x   74 y  872 box 862-925   branch -10.95  develop -10.95
+05-chat-end-centre.txt             Text      659 bytes                  x   74 y  894 box 862-925   branch +11.02  develop +11.02
+05-chat-end-centre.txt             Text      Worked for 3.6 s           x  345 y  933 box 926-984   branch -11.39  develop <=0.5
+05-chat-end-centre.txt             Button    Line down                  x  806 y  953 box 953-973   branch  +0.75  develop +0.55
+05-chat-end-centre.txt             Edit                                 x   77 y  993 box 993-1034  branch  +1.00  develop +1.00
+05-chat-end-centre.txt             Button    Send                       x  719 y  994 box 994-1034  branch  +0.51  develop +0.51
+06-chat-top-centre.txt             Text      Check the **UI** please -  x   46 y   10 box 1-40      branch  -0.98  develop -0.98
+06-chat-top-centre.txt             Button    Saved servers              x  293 y  112 box 112-152   branch  -0.51  develop -0.51
+06-chat-top-centre.txt             Text      Servers                    x  309 y  121 box 113-151   branch  -0.51  develop -0.51
+06-chat-top-centre.txt             Text      Model                      x   21 y  172 box none      branch  +0.59  develop +0.59
+06-chat-top-centre.txt             Text      Context                    x  453 y  172 box none      branch  +0.96  develop +0.96
+06-chat-top-centre.txt             Button    Line up                    x  806 y  212 box 212-232   branch  +0.87  develop +0.91
+06-chat-top-centre.txt             Text      07:58:31                   x  725 y  227 box 213-251   branch  +5.52  develop <=0.5
+06-chat-top-centre.txt             Text      07:58:32 · model 376 ms    x   21 y  308 box none      branch  +0.52  develop <=0.5
+06-chat-top-centre.txt             Text      Run a command · Say hi     x  142 y  358 box 343-390   branch  +2.00  develop +2.00
+06-chat-top-centre.txt             Text      07:58:32 ·                 x  535 y  358 box 343-390   branch  +1.02  develop <=0.5
+06-chat-top-centre.txt             Text      Done in 186 ms             x  611 y  358 box 343-390   branch  +1.00  develop <=0.5
+06-chat-top-centre.txt             Text      run_shell                  x   47 y  360 box 358-378   branch  -1.00  develop -1.50
+06-chat-top-centre.txt             Text      echo hi                    x   38 y  391 box 391-431   branch  -1.00  develop -1.00
+06-chat-top-centre.txt             Text      Read C:\Repos\Sloperator\. x  142 y  565 box 550-618   branch  -8.50  develop -8.50
+06-chat-top-centre.txt             Text      07:58:33 ·                 x  543 y  565 box 550-618   branch  -9.48  develop <=0.5
+06-chat-top-centre.txt             Text      Done in 18 ms              x  620 y  565 box 550-618   branch  -9.50  develop <=0.5
+06-chat-top-centre.txt             Text      read_file                  x   47 y  567 box 565-585   branch  -1.00  develop -1.50
+06-chat-top-centre.txt             Button    Line down                  x  806 y  953 box 953-973   branch  +0.75  develop +0.55
+06-chat-top-centre.txt             Edit                                 x   77 y  993 box 993-1034  branch  +1.00  develop +1.00
+06-chat-top-centre.txt             Button    Send                       x  719 y  994 box 994-1034  branch  +0.51  develop +0.51
+06-chat-top-centre.txt             Text      pic.png                    x   48 y 1013 box 985-1045  branch  +2.04  develop +2.03
+06-chat-top-centre.txt             Button    Show in folder             x  497 y 1020 box 1020-1050 branch +10.50  develop +10.50
+06-chat-top-centre.txt             Text      640x400, 58 KB             x   48 y 1037 box 1046-1066 branch  -5.50  develop -5.50
+07-chat-middle-centre.txt          Text      Check the **UI** please -  x   46 y   10 box 1-40      branch  -0.98  develop -0.98
+07-chat-middle-centre.txt          Button    Output                     x   37 y   55 box 55-97     branch  +3.06  develop +3.06
+07-chat-middle-centre.txt          Button    Saved servers              x  293 y  112 box 112-152   branch  -0.51  develop -0.51
+07-chat-middle-centre.txt          Text      Servers                    x  309 y  121 box 113-151   branch  -0.51  develop -0.51
+07-chat-middle-centre.txt          Text      07:58:33                   x   97 y  136 box 130-151   branch  -3.46  develop <=0.5
+07-chat-middle-centre.txt          Text      Model                      x   21 y  172 box none      branch  +0.59  develop +0.59
+07-chat-middle-centre.txt          Text      Context                    x  453 y  172 box none      branch  +0.96  develop +0.96
+07-chat-middle-centre.txt          Text      07:58:33 · model 306 ms    x   21 y  178 box none      branch  -4.39  develop <=0.5
+07-chat-middle-centre.txt          Button    Line up                    x  806 y  212 box 212-232   branch  +0.87  develop +0.91
+07-chat-middle-centre.txt          Text      Read C:\Repos\Sloperator\. x  142 y  228 box 214-282   branch  -8.50  develop -8.50
+07-chat-middle-centre.txt          Text      07:58:33 ·                 x  540 y  228 box 214-282   branch  -9.48  develop <=0.5
+07-chat-middle-centre.txt          Text      Done in 34 ms              x  617 y  228 box 214-282   branch  -9.50  develop <=0.5
+07-chat-middle-centre.txt          Text      read_file                  x   47 y  230 box 229-249   branch  -1.00  develop -1.50
+07-chat-middle-centre.txt          Button    Output                     x   37 y  726 box 726-768   branch  +0.97  develop +0.97
+07-chat-middle-centre.txt          Text      Read C:\Repos\Sloperator\. x  142 y  850 box 835-903   branch  -8.50  develop -8.50
+07-chat-middle-centre.txt          Text      07:58:33 ·                 x  531 y  850 box 835-903   branch  -9.48  develop <=0.5
+07-chat-middle-centre.txt          Text      Done in 339 ms             x  608 y  850 box 835-903   branch  -9.48  develop <=0.5
+07-chat-middle-centre.txt          Text      read_file                  x   47 y  852 box 850-870   branch  -1.00  develop -1.50
+07-chat-middle-centre.txt          Button    Line down                  x  806 y  953 box 953-973   branch  +0.75  develop +0.55
+07-chat-middle-centre.txt          Text      07:58:34 · model 321 ms    x   21 y  976 box 951-999   branch +14.50  develop <=0.5
+07-chat-middle-centre.txt          Edit                                 x   77 y  993 box 993-1034  branch  +1.00  develop +1.00
+07-chat-middle-centre.txt          Button    Send                       x  719 y  994 box 994-1034  branch  +0.51  develop +0.51
+07-chat-middle-centre.txt          Text      Done in 28 ms              x  618 y 1026 box 985-1045  branch +13.71  develop <=0.5
+07-chat-middle-centre.txt          Text      write_file                 x   47 y 1028 box 1046-1066 branch -10.50  develop -10.30
+09-inspector-png-centre.txt        Text      Check the **UI** please -  x   46 y   10 box 1-40      branch  -0.98  develop -0.98
+09-inspector-png-centre.txt        Button    Output                     x 1112 y   51 box 51-93     branch  -1.50  develop -1.50
+09-inspector-png-centre.txt        Text      pic.png                    x   21 y   60 box 41-101    branch  -0.85  develop -0.85
+09-inspector-png-centre.txt        Text      640x400, 58 KB             x  100 y   61 box 41-101    branch  +0.52  develop +0.52
+09-inspector-png-centre.txt        Button    Saved servers              x 1368 y  112 box 112-152   branch  -0.51  develop -0.51
+09-inspector-png-centre.txt        Text      Servers                    x 1384 y  121 box 113-151   branch  -0.51  develop -0.51
+09-inspector-png-centre.txt        Text      07:58:34 · model 337 ms    x 1096 y  123 box none      branch  -1.00  develop <=0.5
+09-inspector-png-centre.txt        Button    Thoughts                   x 1096 y  149 box 149-199   branch  +7.50  develop +7.50
+09-inspector-png-centre.txt        Text      Thoughts                   x 1117 y  163 box 179-180   branch  -0.73  develop -0.75
+09-inspector-png-centre.txt        Text      Model                      x 1096 y  172 box none      branch  +0.59  develop +0.59
+09-inspector-png-centre.txt        Text      Context                    x 1528 y  172 box none      branch  +0.96  develop +0.96
+09-inspector-png-centre.txt        Text      The notes are written; I'l x 1097 y  199 box 213-255   branch -16.50  develop -16.50
+09-inspector-png-centre.txt        Button    Line up                    x 1881 y  212 box 212-232   branch  +0.87  develop +0.91
+09-inspector-png-centre.txt        Text      •                          x 1096 y  305 box none      branch  +1.38  develop +1.38
+09-inspector-png-centre.txt        Text      Looked at a picture, a GIF x 1111 y  333 box none      branch  -1.00  develop -1.00
+09-inspector-png-centre.txt        Text      •                          x 1096 y  369 box none      branch  +1.38  develop +1.38
+09-inspector-png-centre.txt        Button    Copy                       x 1735 y  415 box 415-445   branch  +0.54  develop +0.54
+09-inspector-png-centre.txt        Text      powershell                 x 1112 y  422 box 411-485   branch -16.50  develop -16.50
+09-inspector-png-centre.txt        Text      echo hi                    x 1082 y  445 box 411-485   branch +10.50  develop +10.50
+09-inspector-png-centre.txt        Text      3                          x 1207 y  534 box 535-569   branch  -0.53  develop -0.53
+09-inspector-png-centre.txt        Text      doc.pdf                    x 1149 y  872 box 862-925   branch -10.95  develop -10.95
+09-inspector-png-centre.txt        Text      659 bytes                  x 1149 y  894 box 862-925   branch +11.02  develop +11.02
+09-inspector-png-centre.txt        Text      Worked for 3.6 s           x 1420 y  933 box 926-984   branch -11.39  develop <=0.5
+09-inspector-png-centre.txt        Button    Line down                  x 1881 y  953 box 953-973   branch  +0.75  develop +0.55
+09-inspector-png-centre.txt        Edit                                 x 1152 y  993 box 993-1034  branch  +1.00  develop +1.00
+09-inspector-png-centre.txt        Button    Send                       x 1794 y  994 box 994-1034  branch  +0.51  develop +0.51
+10-inspector-gif-centre.txt        Text      Check the **UI** please -  x   46 y   10 box 1-40      branch  -0.98  develop -0.98
+10-inspector-gif-centre.txt        Button    Output                     x 1112 y   51 box 51-93     branch  -1.50  develop -1.50
+10-inspector-gif-centre.txt        Text      anim.gif                   x   21 y   60 box 41-101    branch  -0.84  develop -0.84
+10-inspector-gif-centre.txt        Button    Saved servers              x 1368 y  112 box 112-152   branch  -0.51  develop -0.51
+10-inspector-gif-centre.txt        Text      Servers                    x 1384 y  121 box 113-151   branch  -0.51  develop -0.51
+10-inspector-gif-centre.txt        Text      07:58:34 · model 337 ms    x 1096 y  123 box none      branch  -1.00  develop <=0.5
+10-inspector-gif-centre.txt        Button    Thoughts                   x 1096 y  149 box 149-199   branch  +7.50  develop +7.50
+10-inspector-gif-centre.txt        Text      Thoughts                   x 1117 y  163 box 179-180   branch  -0.73  develop -0.75
+10-inspector-gif-centre.txt        Text      Model                      x 1096 y  172 box none      branch  +0.59  develop +0.59
+10-inspector-gif-centre.txt        Text      Context                    x 1528 y  172 box none      branch  +0.96  develop +0.96
+10-inspector-gif-centre.txt        Text      The notes are written; I'l x 1097 y  199 box 213-255   branch -16.50  develop -16.50
+10-inspector-gif-centre.txt        Button    Line up                    x 1881 y  212 box 212-232   branch  +0.87  develop +0.91
+10-inspector-gif-centre.txt        Text      •                          x 1096 y  305 box none      branch  +1.38  develop +1.38
+10-inspector-gif-centre.txt        Text      Looked at a picture, a GIF x 1111 y  333 box none      branch  -1.00  develop -1.00
+10-inspector-gif-centre.txt        Text      •                          x 1096 y  369 box none      branch  +1.38  develop +1.38
+10-inspector-gif-centre.txt        Button    Copy                       x 1735 y  415 box 415-445   branch  +0.54  develop +0.54
+10-inspector-gif-centre.txt        Text      powershell                 x 1112 y  422 box 411-485   branch -16.50  develop -16.50
+10-inspector-gif-centre.txt        Text      echo hi                    x 1082 y  445 box 411-485   branch +10.50  develop +10.50
+10-inspector-gif-centre.txt        Text      3                          x 1207 y  534 box 535-569   branch  -0.53  develop -0.53
+10-inspector-gif-centre.txt        Text      doc.pdf                    x 1149 y  872 box 862-925   branch -10.95  develop -10.95
+10-inspector-gif-centre.txt        Text      659 bytes                  x 1149 y  894 box 862-925   branch +11.02  develop +11.02
+10-inspector-gif-centre.txt        Text      Worked for 3.6 s           x 1420 y  933 box 926-984   branch -11.39  develop <=0.5
+10-inspector-gif-centre.txt        Button    Line down                  x 1881 y  953 box 953-973   branch  +0.75  develop +0.55
+10-inspector-gif-centre.txt        Edit                                 x 1152 y  993 box 993-1034  branch  +1.00  develop +1.00
+10-inspector-gif-centre.txt        Button    Send                       x 1794 y  994 box 994-1034  branch  +0.51  develop +0.51
+10-inspector-gif-centre.txt        Button    A frame back               x   16 y  999 box 999-1039  branch  +1.00  develop +1.00
+10-inspector-gif-centre.txt        Button    Play                       x   61 y  999 box 999-1039  branch  +0.99  develop +0.99
+10-inspector-gif-centre.txt        Button    A frame on                 x  106 y  999 box 999-1039  branch  +1.00  develop +1.00
+10-inspector-gif-centre.txt        Text      Frame 1 / 6 · 0.000 s      x  901 y 1009 box none      branch  +0.53  develop +0.53
+11-inspector-pdf-centre.txt        Text      Check the **UI** please -  x   46 y   10 box 1-40      branch  -0.98  develop -0.98
+11-inspector-pdf-centre.txt        Button    Output                     x 1112 y   51 box 51-93     branch  -1.50  develop -1.50
+11-inspector-pdf-centre.txt        Button    Saved servers              x 1368 y  112 box 112-152   branch  -0.51  develop -0.51
+11-inspector-pdf-centre.txt        Text      Servers                    x 1384 y  121 box 113-151   branch  -0.51  develop -0.51
+11-inspector-pdf-centre.txt        Text      07:58:34 · model 337 ms    x 1096 y  123 box none      branch  -1.00  develop <=0.5
+11-inspector-pdf-centre.txt        Button    Thoughts                   x 1096 y  149 box 149-199   branch  +7.50  develop +7.50
+11-inspector-pdf-centre.txt        Text      Thoughts                   x 1117 y  163 box 179-180   branch  -0.73  develop -0.75
+11-inspector-pdf-centre.txt        Text      Model                      x 1096 y  172 box none      branch  +0.59  develop +0.59
+11-inspector-pdf-centre.txt        Text      Context                    x 1528 y  172 box none      branch  +0.96  develop +0.96
+11-inspector-pdf-centre.txt        Text      The notes are written; I'l x 1097 y  199 box 213-255   branch -16.50  develop -16.50
+11-inspector-pdf-centre.txt        Button    Line up                    x 1881 y  212 box 212-232   branch  +0.87  develop +0.91
+11-inspector-pdf-centre.txt        Text      •                          x 1096 y  305 box none      branch  +1.38  develop +1.38
+11-inspector-pdf-centre.txt        Text      Looked at a picture, a GIF x 1111 y  333 box none      branch  -1.00  develop -1.00
+11-inspector-pdf-centre.txt        Text      •                          x 1096 y  369 box none      branch  +1.38  develop +1.38
+11-inspector-pdf-centre.txt        Button    Copy                       x 1735 y  415 box 415-445   branch  +0.54  develop +0.54
+11-inspector-pdf-centre.txt        Text      powershell                 x 1112 y  422 box 411-485   branch -16.50  develop -16.50
+11-inspector-pdf-centre.txt        Text      echo hi                    x 1082 y  445 box 411-485   branch +10.50  develop +10.50
+11-inspector-pdf-centre.txt        Text      3                          x 1207 y  534 box 535-569   branch  -0.53  develop -0.53
+11-inspector-pdf-centre.txt        Text      doc.pdf                    x 1149 y  872 box 862-925   branch -10.95  develop -10.95
+11-inspector-pdf-centre.txt        Text      659 bytes                  x 1149 y  894 box 862-925   branch +11.02  develop +11.02
+11-inspector-pdf-centre.txt        Text      Worked for 3.6 s           x 1420 y  933 box 926-984   branch -11.39  develop <=0.5
+11-inspector-pdf-centre.txt        Button    Line down                  x 1881 y  953 box 953-973   branch  +0.75  develop +0.55
+11-inspector-pdf-centre.txt        Edit                                 x 1152 y  993 box 993-1034  branch  +1.00  develop +1.00
+11-inspector-pdf-centre.txt        Button    Send                       x 1794 y  994 box 994-1034  branch  +0.51  develop +0.51
+13-after-viewer-centre.txt         Text      Check the **UI** please -  x   46 y   10 box 1-40      branch  -0.98  develop -0.98
+13-after-viewer-centre.txt         Button    Output                     x 1112 y   51 box 51-93     branch  -1.50  develop -1.50
+13-after-viewer-centre.txt         Button    Saved servers              x 1368 y  112 box 112-152   branch  -0.51  develop -0.51
+13-after-viewer-centre.txt         Text      Servers                    x 1384 y  121 box 113-151   branch  -0.51  develop -0.51
+13-after-viewer-centre.txt         Text      07:58:34 · model 337 ms    x 1096 y  123 box none      branch  -1.00  develop <=0.5
+13-after-viewer-centre.txt         Button    Thoughts                   x 1096 y  149 box 149-199   branch  +7.50  develop +7.50
+13-after-viewer-centre.txt         Text      Thoughts                   x 1117 y  163 box 179-180   branch  -0.73  develop -0.75
+13-after-viewer-centre.txt         Text      Model                      x 1096 y  172 box none      branch  +0.59  develop +0.59
+13-after-viewer-centre.txt         Text      Context                    x 1528 y  172 box none      branch  +0.96  develop +0.96
+13-after-viewer-centre.txt         Text      The notes are written; I'l x 1097 y  199 box 213-255   branch -16.50  develop -16.50
+13-after-viewer-centre.txt         Button    Line up                    x 1881 y  212 box 212-232   branch  +0.87  develop +0.91
+13-after-viewer-centre.txt         Text      •                          x 1096 y  305 box none      branch  +1.38  develop +1.38
+13-after-viewer-centre.txt         Text      Looked at a picture, a GIF x 1111 y  333 box none      branch  -1.00  develop -1.00
+13-after-viewer-centre.txt         Text      •                          x 1096 y  369 box none      branch  +1.38  develop +1.38
+13-after-viewer-centre.txt         Button    Copy                       x 1735 y  415 box 415-445   branch  +0.54  develop +0.54
+13-after-viewer-centre.txt         Text      powershell                 x 1112 y  422 box 411-485   branch -16.50  develop -16.50
+13-after-viewer-centre.txt         Text      echo hi                    x 1082 y  445 box 411-485   branch +10.50  develop +10.50
+13-after-viewer-centre.txt         Text      3                          x 1207 y  534 box 535-569   branch  -0.53  develop -0.53
+13-after-viewer-centre.txt         Text      doc.pdf                    x 1149 y  872 box 862-925   branch -10.95  develop -10.95
+13-after-viewer-centre.txt         Text      659 bytes                  x 1149 y  894 box 862-925   branch +11.02  develop +11.02
+13-after-viewer-centre.txt         Text      Worked for 3.6 s           x 1420 y  933 box 926-984   branch -11.39  develop <=0.5
+13-after-viewer-centre.txt         Button    Line down                  x 1881 y  953 box 953-973   branch  +0.75  develop +0.55
+13-after-viewer-centre.txt         Edit                                 x 1152 y  993 box 993-1034  branch  +1.00  develop +1.00
+13-after-viewer-centre.txt         Button    Send                       x 1794 y  994 box 994-1034  branch  +0.51  develop +0.51
+hints\settings-advanced-centre.txt Text      Sloperator settings        x   46 y   10 box 1-40      branch  -0.54  develop -0.54
+hints\settings-advanced-centre.txt TabItem   General                    x    6 y   41 box 41-101    branch  -1.07  develop -1.07
+hints\settings-advanced-centre.txt TabItem   Advanced                   x  131 y   41 box 41-101    branch  +7.85  develop +7.85
+hints\settings-advanced-centre.txt Text      Screenshot size            x   21 y  174 box none      branch  +0.60  develop +0.10
+hints\settings-advanced-centre.txt Button    Check for updates          x   21 y  691 box 691-731   branch  +0.55  develop -0.45
+hints\settings-advanced-centre.txt Text      Up to date                 x  221 y  701 box none      branch  +0.98  develop +0.48
+hints\settings-advanced-centre.txt Button    Save                       x  807 y  866 box 866-906   branch  -0.51  develop -0.51
+hints\settings-general-centre.txt  Text      Sloperator settings        x   46 y   10 box 1-40      branch  -0.54  develop -0.54
+hints\settings-general-centre.txt  TabItem   General                    x    6 y   41 box 41-101    branch  +7.86  develop +7.86
+hints\settings-general-centre.txt  TabItem   Advanced                   x  131 y   41 box 41-101    branch  -1.12  develop -1.12
+hints\settings-general-centre.txt  Text      English (United States)    x  221 y  766 box 735-804   branch  +7.04  develop +7.04
+hints\settings-general-centre.txt  Button    Save                       x  807 y  866 box 866-906   branch  -0.51  develop -0.51

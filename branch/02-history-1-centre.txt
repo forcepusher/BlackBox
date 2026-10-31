@@ -1,0 +1,9 @@
+﻿
+Type   Name                     X  Y Box   Caps CapH Tall  Last Glyphs Bg    
+----   ----                     -  - ---   ---- ---- ----  ---- ------ --    
+Button Check the **UI** please  1  6 6-66 -11.5   13    6  0.22     19 453E29
+Text   Check the **UI** please 16 14 6-66 -11.5   13    8  -9.8     20 453E29
+Text   07:58                   16 38 6-66 11.52   11    3 11.53      4 453E29
+
+
+

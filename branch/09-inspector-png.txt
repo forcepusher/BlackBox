@@ -1,0 +1,52 @@
+﻿Button    Close                          x 1843 y    0 w  58 h 40
+Button    Maximize                       x 1785 y    0 w  58 h 40
+Button    Minimize                       x 1727 y    0 w  58 h 40
+Button    Close the tool                 x 1011 y   51 w  40 h 40
+Button    Open file                      x  961 y   51 w  40 h 40
+Button    Zoom out                       x  904 y 1009 w  30 h 30
+Button    Zoom to fit                    x  939 y 1009 w  60 h 30
+Button    Zoom in                        x 1004 y 1009 w  31 h 30
+Thumb                                    x 1069 y   41 w   8 h1025
+ComboBox  Side panel                     x 1119 y   51 w 172 h 40
+Button    History                        x 1384 y   51 w 116 h 40
+Button    New chat                       x 1510 y   51 w 111 h 40
+Button    New window                     x 1631 y   51 w 139 h 40
+Button    Settings                       x 1780 y   51 w 101 h 40
+Button    Saved servers                  x 1368 y  112 w 140 h 40
+Edit                                     x 1153 y  112 w 205 h 40
+Edit                                     x 1595 y  112 w 236 h 40
+Button    Show API key                   x 1841 y  112 w  40 h 40
+ComboBox  Effort                         x 1368 y  162 w 140 h 40
+ComboBox  Model                          x 1153 y  162 w 205 h 40
+CheckBox  Auto                           x 1807 y  162 w  74 h 40
+Edit                                     x 1723 y  162 w  74 h 40
+Slider                                   x 1595 y  151 w 118 h 62
+Button                                   x 1595 y  170 w  66 h 25
+Button                                   x 1685 y  170 w  28 h 25
+Thumb                                    x 1660 y  170 w  25 h 25
+Button    Output                         x 1112 y-1829 w 682 h 42
+Button    pic.png                        x 1123 y-1642 w 600 h375
+Button    Inspect                        x 1468 y-1251 w  94 h 30
+Button    Show in folder                 x 1572 y-1251 w 151 h 30
+Button    Output                         x 1112 y-1193 w 682 h 42
+Button    anim.gif                       x 1123 y -956 w 600 h360
+Button    Inspect                        x 1468 y -579 w  94 h 30
+Button    Show in folder                 x 1572 y -579 w 151 h 30
+Button    Output                         x 1112 y -522 w 682 h 43
+Button    Output                         x 1112 y -345 w 682 h 42
+Button    notes.md                       x 1123 y -158 w 377 h136
+Button    Inspect                        x 1469 y   -6 w  94 h 29
+Button    Show in folder                 x 1573 y   -6 w 150 h 29
+Button    Output                         x 1112 y   51 w 682 h 42
+Button    Thoughts                       x 1096 y  149 w 715 h 50
+Button    Copy                           x 1735 y  415 w  70 h 30
+Button    doc.pdf                        x 1107 y  635 w 377 h227
+Button    Inspect                        x 1453 y  878 w  94 h 30
+Button    Show in folder                 x 1557 y  878 w 151 h 30
+Button    Line up                        x 1881 y  212 w  20 h 20
+Button    Page up                        x 1881 y  232 w  20 h542
+Thumb     Position                       x 1883 y  773 w  15 h181
+Button    Line down                      x 1881 y  953 w  20 h 20
+Button    Attach files                   x 1107 y  994 w  40 h 40
+Edit                                     x 1152 y  993 w 582 h 41
+Button    Send                           x 1794 y  994 w  76 h 40

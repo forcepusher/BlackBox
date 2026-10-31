@@ -1,0 +1,87 @@
+﻿== UIA box vs drawn edges, branch (DTop/DBottom: drawn minus UIA; Mid: the middle's move)
+00-start                   Button   Send                   UIA 994-1034 drawn 995-1035 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+01-file-changes            Button   Output                 UIA 51-93 drawn 51-91 DTop 0 DBottom -2 Mid -1.0 | develop DTop 0 DBottom -2 Mid -1.0
+01-file-changes            Button   Thoughts               UIA 149-199 drawn 151-201 DTop +2 DBottom +2 Mid +2.0 | develop DTop +2 DBottom +2 Mid +2.0
+01-file-changes            Button   Copy                   UIA 415-445 drawn 416-446 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+01-file-changes            Button   Send                   UIA 994-1034 drawn 995-1035 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+05-chat-end                Button   Output                 UIA 51-93 drawn 51-91 DTop 0 DBottom -2 Mid -1.0 | develop DTop 0 DBottom -2 Mid -1.0
+05-chat-end                Button   Thoughts               UIA 149-199 drawn 151-201 DTop +2 DBottom +2 Mid +2.0 | develop DTop +2 DBottom +2 Mid +2.0
+05-chat-end                Button   Copy                   UIA 415-445 drawn 416-446 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+05-chat-end                Button   Send                   UIA 994-1034 drawn 995-1035 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+06-chat-top                Button   Output                 UIA 441-484 drawn 443-483 DTop +2 DBottom -1 Mid +0.5 | develop DTop +2 DBottom -1 Mid +0.5
+06-chat-top                Button   Inspect                UIA 1020-1050 drawn 1021-1046 DTop +1 DBottom -4 Mid -1.5 | develop DTop +1 DBottom -4 Mid -1.5
+06-chat-top                Button   Show in folder         UIA 1020-1050 drawn 1021-1046 DTop +1 DBottom -4 Mid -1.5 | develop DTop +1 DBottom -4 Mid -1.5
+06-chat-top                Button   Send                   UIA 994-1034 drawn 995-1035 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+07-chat-middle             Button   Output                 UIA 726-768 drawn 728-768 DTop +2 DBottom 0 Mid +1.0 | develop DTop +2 DBottom 0 Mid +1.0
+07-chat-middle             Button   Send                   UIA 994-1034 drawn 995-1035 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+09-inspector-png           Button   Zoom out               UIA 1009-1039 drawn 1011-1039 DTop +2 DBottom 0 Mid +1.0 | develop DTop +2 DBottom 0 Mid +1.0
+09-inspector-png           Button   Zoom to fit            UIA 1009-1039 drawn 1011-1039 DTop +2 DBottom 0 Mid +1.0 | develop DTop +2 DBottom 0 Mid +1.0
+09-inspector-png           Button   Zoom in                UIA 1009-1039 drawn 1011-1039 DTop +2 DBottom 0 Mid +1.0 | develop DTop +2 DBottom 0 Mid +1.0
+09-inspector-png           Button   Output                 UIA 51-93 drawn 51-91 DTop 0 DBottom -2 Mid -1.0 | develop DTop 0 DBottom -2 Mid -1.0
+09-inspector-png           Button   Thoughts               UIA 149-199 drawn 151-201 DTop +2 DBottom +2 Mid +2.0 | develop DTop +2 DBottom +2 Mid +2.0
+09-inspector-png           Button   Copy                   UIA 415-445 drawn 416-446 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+09-inspector-png           Button   Send                   UIA 994-1034 drawn 995-1035 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+10-inspector-gif           Button   Zoom out               UIA 926-956 drawn 928-956 DTop +2 DBottom 0 Mid +1.0 | develop DTop +2 DBottom 0 Mid +1.0
+10-inspector-gif           Button   Zoom to fit            UIA 926-956 drawn 928-956 DTop +2 DBottom 0 Mid +1.0 | develop DTop +2 DBottom 0 Mid +1.0
+10-inspector-gif           Button   Zoom in                UIA 926-956 drawn 928-956 DTop +2 DBottom 0 Mid +1.0 | develop DTop +2 DBottom 0 Mid +1.0
+10-inspector-gif           Button   A frame back           UIA 999-1039 drawn 1000-1040 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+10-inspector-gif           Button   Play                   UIA 999-1039 drawn 1000-1040 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+10-inspector-gif           Button   A frame on             UIA 999-1039 drawn 1000-1040 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+10-inspector-gif           Button   Output                 UIA 51-93 drawn 51-91 DTop 0 DBottom -2 Mid -1.0 | develop DTop 0 DBottom -2 Mid -1.0
+10-inspector-gif           Button   Thoughts               UIA 149-199 drawn 151-201 DTop +2 DBottom +2 Mid +2.0 | develop DTop +2 DBottom +2 Mid +2.0
+10-inspector-gif           Button   Copy                   UIA 415-445 drawn 416-446 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+10-inspector-gif           Button   Send                   UIA 994-1034 drawn 995-1035 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+11-inspector-pdf           Button   Zoom out               UIA 1009-1039 drawn 1011-1039 DTop +2 DBottom 0 Mid +1.0 | develop DTop +2 DBottom 0 Mid +1.0
+11-inspector-pdf           Button   Zoom to fit            UIA 1009-1039 drawn 1011-1039 DTop +2 DBottom 0 Mid +1.0 | develop DTop +2 DBottom 0 Mid +1.0
+11-inspector-pdf           Button   Zoom in                UIA 1009-1039 drawn 1011-1039 DTop +2 DBottom 0 Mid +1.0 | develop DTop +2 DBottom 0 Mid +1.0
+11-inspector-pdf           Button   Output                 UIA 51-93 drawn 51-91 DTop 0 DBottom -2 Mid -1.0 | develop DTop 0 DBottom -2 Mid -1.0
+11-inspector-pdf           Button   Thoughts               UIA 149-199 drawn 151-201 DTop +2 DBottom +2 Mid +2.0 | develop DTop +2 DBottom +2 Mid +2.0
+11-inspector-pdf           Button   Copy                   UIA 415-445 drawn 416-446 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+11-inspector-pdf           Button   Send                   UIA 994-1034 drawn 995-1035 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+13-after-viewer            Button   Zoom out               UIA 1009-1039 drawn 1011-1039 DTop +2 DBottom 0 Mid +1.0 | develop DTop +2 DBottom 0 Mid +1.0
+13-after-viewer            Button   Zoom to fit            UIA 1009-1039 drawn 1011-1039 DTop +2 DBottom 0 Mid +1.0 | develop DTop +2 DBottom 0 Mid +1.0
+13-after-viewer            Button   Zoom in                UIA 1009-1039 drawn 1011-1039 DTop +2 DBottom 0 Mid +1.0 | develop DTop +2 DBottom 0 Mid +1.0
+13-after-viewer            Button   Output                 UIA 51-93 drawn 51-91 DTop 0 DBottom -2 Mid -1.0 | develop DTop 0 DBottom -2 Mid -1.0
+13-after-viewer            Button   Thoughts               UIA 149-199 drawn 151-201 DTop +2 DBottom +2 Mid +2.0 | develop DTop +2 DBottom +2 Mid +2.0
+13-after-viewer            Button   Copy                   UIA 415-445 drawn 416-446 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+13-after-viewer            Button   Send                   UIA 994-1034 drawn 995-1035 DTop +1 DBottom +1 Mid +1.0 | develop DTop +1 DBottom +1 Mid +1.0
+hints\settings-advanced    Button   Check for updates      UIA 691-731 drawn 692-732 DTop +1 DBottom +1 Mid +1.0 | develop DTop 0 DBottom 0 Mid 0
+
+== Text more than 0.5 px off the drawn middle on the branch but not on develop (+ = low)
+
+== Same, on develop but not on the branch
+00-start                   Edit                            develop -0.58 branch -0.5
+01-file-changes            Edit                            develop -0.58 branch -0.5
+05-chat-end                Edit                            develop -0.58 branch -0.5
+06-chat-top                Edit                            develop -0.58 branch -0.5
+07-chat-middle             Edit                            develop -0.58 branch -0.5
+09-inspector-png           Edit                            develop -0.58 branch -0.5
+10-inspector-gif           Edit                            develop -0.58 branch -0.5
+11-inspector-pdf           Edit                            develop -0.58 branch -0.5
+13-after-viewer            Edit                            develop -0.58 branch -0.5
+
+== Off by more than 0.5 px on both (branch / develop)
+00-start                   Button   Saved servers          branch -0.51 develop -0.51
+01-file-changes            Button   Wrap                   branch -0.58 develop -0.58
+01-file-changes            Button   Saved servers          branch -0.51 develop -0.51
+01-file-changes            Button   Thoughts               branch +5.50 develop +5.50
+05-chat-end                Button   Saved servers          branch -0.51 develop -0.51
+05-chat-end                Button   Thoughts               branch +5.50 develop +5.50
+06-chat-top                Button   Saved servers          branch -0.51 develop -0.51
+06-chat-top                Button   Inspect                branch -9.00 develop -9.00
+07-chat-middle             Button   Saved servers          branch -0.51 develop -0.51
+07-chat-middle             Button   Output                 branch +3.06 develop +3.06
+09-inspector-png           Button   Zoom out               branch -0.93 develop -0.93
+09-inspector-png           Button   Saved servers          branch -0.51 develop -0.51
+09-inspector-png           Button   Thoughts               branch +5.50 develop +5.50
+10-inspector-gif           Button   Zoom out               branch -0.93 develop -0.93
+10-inspector-gif           Button   Saved servers          branch -0.51 develop -0.51
+10-inspector-gif           Button   Thoughts               branch +5.50 develop +5.50
+11-inspector-pdf           Button   Zoom out               branch -0.93 develop -0.93
+11-inspector-pdf           Button   Saved servers          branch -0.51 develop -0.51
+11-inspector-pdf           Button   Thoughts               branch +5.50 develop +5.50
+13-after-viewer            Button   Zoom out               branch -0.93 develop -0.93
+13-after-viewer            Button   Saved servers          branch -0.51 develop -0.51
+13-after-viewer            Button   Thoughts               branch +5.50 develop +5.50
+hints\settings-advanced    Button   Save                   branch -0.51 develop -0.51
+hints\settings-general     Button   Save                   branch -0.51 develop -0.51

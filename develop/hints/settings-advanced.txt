@@ -1,0 +1,22 @@
+﻿Button    Close                          x  843 y    0 w  58 h 40
+Button    Maximize                       x  785 y    0 w  58 h 40
+Button    Minimize                       x  727 y    0 w  57 h 40
+Text      Sloperator settings            x   46 y   10 w 671 h 19
+Button    Cancel                         x  707 y  866 w  90 h 40
+Button    Save                           x  807 y  866 w  74 h 40
+Text      Saved to C:\Repos\Sloperator\. x   21 y  876 w 671 h 19
+TabItem   General                        x    6 y   41 w 125 h 60
+TabItem   Advanced                       x  131 y   41 w 153 h 60
+Text      Screenshots                    x   21 y  126 w 845 h 24
+Text      Screenshot size                x   21 y  175 w 200 h 19
+ComboBox  Screenshot size                x  221 y  165 w 645 h 40
+Text      Up to 1080p tall               x  238 y  174 w 588 h 21
+Text      Taller screens are scaled down x   21 y  215 w 845 h 19
+Text      MCP servers                    x   21 y  254 w 845 h 24
+Text      Tools from other programs, lik x   21 y  288 w 845 h 18
+Edit                                     x   21 y  322 w 845 h250
+Text      Updates                        x   21 y  592 w 845 h 24
+Text      Version 1.2.0                  x   21 y  626 w 845 h 19
+CheckBox  Check automatically            x   21 y  650 w 203 h 40
+Button    Check for updates              x   21 y  695 w 185 h 40
+Text      Up to date                     x  221 y  705 w  75 h 19

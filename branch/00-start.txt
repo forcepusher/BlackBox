@@ -1,0 +1,27 @@
+﻿Button    Close                          x 1068 y    0 w  58 h 40
+Button    Maximize                       x 1010 y    0 w  58 h 40
+Button    Minimize                       x  952 y    0 w  57 h 40
+ComboBox  Side panel                     x   44 y   51 w 146 h 40
+Button    History                        x  609 y   51 w 115 h 40
+Button    New chat                       x  734 y   51 w 111 h 40
+Button    New window                     x  856 y   51 w 139 h 40
+Button    Settings                       x 1005 y   51 w 101 h 40
+Button    Saved servers                  x  473 y  112 w 140 h 40
+Edit                                     x   78 y  112 w 385 h 40
+Edit                                     x  700 y  112 w 356 h 40
+Button    Show API key                   x 1066 y  112 w  40 h 40
+ComboBox  Effort                         x  473 y  162 w 140 h 40
+ComboBox  Model                          x   78 y  162 w 385 h 40
+CheckBox  Auto                           x 1032 y  162 w  74 h 40
+Edit                                     x  948 y  162 w  74 h 40
+Slider                                   x  700 y  151 w 238 h 62
+Button                                   x  700 y  170 w 150 h 25
+Button                                   x  874 y  170 w  64 h 25
+Thumb                                    x  849 y  170 w  25 h 25
+Button    Line up                        x 1106 y  212 w  20 h 20
+Button    Page down                      x 1106 y  838 w  20 h115
+Thumb     Position                       x 1108 y  232 w  15 h608
+Button    Line down                      x 1106 y  953 w  20 h 20
+Button    Attach files                   x   37 y  994 w  40 h 40
+Edit                                     x   82 y  993 w 922 h 41
+Button    Send                           x 1014 y  994 w  76 h 40

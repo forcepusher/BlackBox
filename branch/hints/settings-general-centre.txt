@@ -1,0 +1,22 @@
+﻿
+Type     Name                         X   Y Box      Caps CapH Tall  Last Glyphs Bg    
+----     ----                         -   - ---      ---- ---- ----  ---- ------ --    
+Text     Sloperator settings         46  10 1-40    -0.54 10.1    6  0.49     18 101010
+TabItem  General                      6  41 41-101   7.86 36.3    1            1 161616
+TabItem  Advanced                   131  41 41-101  -1.12 18.4    3 -1.12      8 161616
+CheckBox Open File changes when the  21 159 159-199  -0.5   13   12  1.16     39 161616
+Text     Notifications               21 219 none    -0.39 13.8    6  1.38     12 161616
+CheckBox Notify me when done         21 252 252-292  -0.5   13    5  1.16     16 161616
+Text     Safety                      21 312 none    -0.28 13.8    1  1.25      3 161616
+CheckBox Enable keyboard and mouse   21 445 445-485 -0.45 13.1    8   1.2     28 161616
+Text     Things Sloperator should a  21 505 none    -0.48   14   11   1.1     31 161616
+Text     Text recognition            21 683 none    -0.46   14    5  1.28     13 161616
+CheckBox Use text recognition        21 716 716-756 -0.13 12.4    6  1.02     17 161616
+Text     English (United States)    221 766 735-804  7.04 13.1   11  7.95     21 161616
+Text     Languages                   21 767 none        0   11    1  1.49      9 161616
+Text     Makes model's clicks more   21 798 none     0.09 10.8   19  4.58     57 161616
+Button   Save                       807 866 866-906 -0.51 12.5    1  1.14      4 FCC21B
+Text     Saved to C:\Repos\Sloperat  21 876 856-916 -0.41 10.8   21  0.95     71 161616
+
+
+

@@ -1,0 +1,78 @@
+﻿
+Type     Name                          X   Y Box        Caps CapH Tall   Last Glyphs Bg    
+----     ----                          -   - ---        ---- ---- ----   ---- ------ --    
+Text     Check the **UI** please -    46  10 1-40      -0.98   11   11   0.42     31 101010
+Button   Wrap                        775  51 51-91     -0.58 12.5    1   2.86      5 FCC21B
+Button   Output                     1112  51 51-93      -1.5   13   13   0.14     35 252525
+Button   New window                 1631  51 51-91      -0.5   13    3   1.14      8 252525
+Button   Settings                   1780  51 51-91     -0.11 12.5    4   1.19      8 252525
+Text     Wrap                        819  60 52-90     -0.58 12.5    1   2.86      4 FCC21B
+Text     File changes               1136  60 52-90      -0.5   13    4   1.21     11 252525
+Text     History                    1400  60 52-90      -0.5   13    3   2.87      6 252525
+Text     Pick lines or files to ask   21  61 41-101    -0.41 10.8   20   4.08     50 161616
+Text     Output                     1133  61 52-90      -0.5   13   12   1.06     33 252525
+Text     Connected                  1379  65 52-90      0.13 11.7    3   0.91      6 252525
+ListItem notes.md                      1 102 102-132    0.52   11    3   0.52     10 161616
+Text     notes.md                     11 107 none       0.87 10.4    2   0.16      8 161616
+Text     +5                          259 107 none       0.28  6.6    1   0.52      2 161616
+Button   Saved servers              1368 112 112-152   -0.51 13.3    1   0.06      7 252525
+Text     Servers                    1384 121 113-151   -0.51 13.3    1   1.19      6 252525
+Text     Server                     1096 122 none       0.03 11.1    1   1.43      6 191919
+Text     API key                    1528 122 none       0.15 10.7    4   2.94      5 191919
+Text     07:58:34 · model 337 ms    1096 123 none         -1   13    6   0.55     19 111111
+Button   Thoughts                   1096 149 149-199     7.5   13   11   7.48     39 191919
+ListItem notes.md, added · +5        293 153 153-197    6.65 10.9    6   6.54     15 161616
+Edit                                1723 162 162-202   -0.45 13.1    4  -0.53      4 111111
+CheckBox Auto                       1807 162 162-202   -0.09 12.4    2   1.19      5 191919
+Text     Thoughts                   1117 163 179-180   -0.73 12.4    1  -0.73     36 191919
+Text     notes.md                    305 171 165-197    0.93 10.4    2   0.12      7 1E1E1E
+Text     Medium                     1385 171 163-201    -0.5   13    3   1.09      6 252525
+Text     added · +5                  394 172 165-197    0.61 10.8    4   0.53      8 1E1E1E
+Text     Model                      1096 172 none       0.59 10.8    3    0.5      5 191919
+Text     Context                    1528 172 none       0.96 10.1    3   0.96      7 191919
+Text     The notes are written; I'l 1097 199 213-255   -16.5   33   31 -16.53     37 191919
+Button   Line up                    1881 212 212-232    0.87  4.8    1             1 161616
+ListItem 1 + # Notes                 293 214 214-234    0.07  9.9    3    1.5      7 1D2A21
+Text     1                           300 217 none      -1.83  9.7    1             1 1D2A21
+Text     0                           300 217 none      -1.83  9.7    1             1 1D2A21
+Text     +                           309 217 219-228       2    7    1             1 1D2A21
+Text     +                           309 217 219-228       2    7    1             1 1D2A21
+Text     # Notes                     323 217 none      -1.93  9.9    2   -0.5      5 1D2A21
+ListItem 2 +                         293 234 234-254       0   10    1    1.5      2 1D2A21
+Text     2                           300 237 none         -2   10    1             1 1D2A21
+Text     0                           300 237 none         -2   10    1             1 1D2A21
+Text     +                           309 237 246-248    -1.5    7    1             1 1D2A21
+Text     +                           309 237 246-248    -1.5    7    1             1 1D2A21
+ListItem 3 + One line.               293 254 254-274       0   10    4      4     10 1D2A21
+Text     One line.                   323 257 214-314       0   10    3      4      8 1D2A21
+Text     Here is what I did:        1081 258 none          0   13    8   1.82     13 161616
+Text     0                           300 277 none       -2.3  8.9    1             1 1D2A21
+Text     4                           300 277 none       -2.3  8.9    1             1 1D2A21
+Text     +                           309 277 286-287      -1    7    1             1 1D2A21
+Text     +                           309 277 286-287      -1    7    1             1 1D2A21
+ListItem 5 + - a point               293 294 294-314       0   10    2   0.87      9 1D2A21
+Text     0                           300 297 none         -2   10    1             1 1D2A21
+Text     5                           300 297 none         -2   10    1             1 1D2A21
+Text     +                           309 297 306-307      -1    7    1             1 1D2A21
+Text     +                           309 297 306-307      -1    7    1             1 1D2A21
+Text     - a point                   323 297 none         -2   10    1  -1.13      7 1D2A21
+Text     •                          1096 305 none       1.38  5.1    1             1 161616
+Text     Looked at a picture, a GIF 1111 333 none         -1   13   13     -1     27 161616
+Text     Wrote the notes            1111 364 none       0.37 12.4    5   1.69     11 161616
+Text     •                          1096 369 none       1.38  5.1    1             1 161616
+Button   Copy                       1735 415 415-445    0.54   11    1   3.42      4 1E1E1E
+Text     powershell                 1112 422 411-485   -16.5   11    3  -16.5      9 1E1E1E
+Text     echo hi                    1082 445 411-485    10.5   11    3   10.5      6 161616
+Text     File                       1097 499 499-534       0   13    3   1.73      4 262626
+Text     Lines                      1207 499 499-534       0   13    2    1.7      5 262626
+Text     3                          1207 534 535-569   -0.53 13.3    1             1 2A2A2A
+Text     doc.pdf                    1149 872 862-925  -10.95 13.1    3 -11.34      7 262626
+Button   Show in folder             1557 878 878-908    -0.5   13    6   1.02     11 252525
+Text     659 bytes                  1149 894 862-925   11.02   11    5  12.47      8 262626
+Text     Worked for 3.6 s           1420 933 926-984  -11.39 10.8    6 -10.03     11 161616
+Button   Line down                  1881 953 953-973    0.75  4.7    1             1 161616
+Edit                                1152 993 993-1034      1   13   13    1.9     57 1E1E1E
+Button   Send                       1794 994 994-1034   0.51   13    2    0.4      4 252525
+
+
+

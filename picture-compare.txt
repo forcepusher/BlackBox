@@ -1,0 +1,7 @@
+Pictures, develop vs branch 1c012ca, exact (any channel differing), physical px.
+inspector PNG at Fit       20,100 1030x890:  14948 px differ, max 13, mean 1.7  (within x136-935 y334-833; same as round 2)
+inspector GIF frame        20,100 1030x800:    404 px differ, max  8, mean 5.5  (the scaled-up square's edge pixels, x422-474 y521-573; same as round 2)
+inspector PDF page         20,100 1030x900:      0 px differ
+chat PNG preview           48,629  600x338:   5064 px differ, max  2, mean 1.0  (same as round 2)
+chat GIF preview           48,293  600x360:      0 px differ in the 07 shot; 6 distinct frames paired from the bursts (gif-burst-N.png): 0 px each
+chat PDF peek              32,635  377x227:   2154 px differ, max 66, mean 15.1 (glyph edges; same as round 2)

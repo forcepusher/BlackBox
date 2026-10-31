@@ -1,0 +1,26 @@
+﻿Button    Close                          x  843 y    0 w  58 h 40
+Button    Maximize                       x  785 y    0 w  58 h 40
+Button    Minimize                       x  727 y    0 w  57 h 40
+Text      Sloperator settings            x   46 y   10 w 671 h 19
+Button    Cancel                         x  707 y  866 w  90 h 40
+Button    Save                           x  807 y  866 w  74 h 40
+Text      Saved to C:\Repos\Sloperator\. x   21 y  876 w 671 h 19
+TabItem   General                        x    6 y   41 w 125 h 60
+TabItem   Advanced                       x  131 y   41 w 153 h 60
+Text      Side panel                     x   21 y  126 w 845 h 24
+CheckBox  Open File changes when the age x   21 y  160 w 443 h 40
+Text      Notifications                  x   21 y  220 w 845 h 24
+CheckBox  Notify me when done            x   21 y  254 w 213 h 40
+Text      Safety                         x   21 y  314 w 845 h 24
+Text      Ask me first                   x   21 y  363 w 200 h 19
+ComboBox                                 x  221 y  353 w 645 h 40
+Text      Never ask                      x  238 y  361 w 588 h 23
+CheckBox  Enable screenshots             x   21 y  403 w 198 h 40
+CheckBox  Enable keyboard and mouse cont x   21 y  448 w 332 h 40
+Text      Things Sloperator should alway x   21 y  508 w 845 h 24
+Edit                                     x   21 y  542 w 845 h125
+Text      Text recognition               x   21 y  686 w 845 h 25
+CheckBox  Use text recognition           x   21 y  721 w 203 h 40
+Text      Languages                      x   21 y  771 w 200 h 20
+Text      English (United States)        x  221 y  771 w 190 h 22
+Text      Makes model's clicks more accu x   21 y  803 w 845 h 19

@@ -1,0 +1,47 @@
+﻿
+Type     Name                          X   Y Box        Caps CapH Tall   Last Glyphs Bg    
+----     ----                          -   - ---        ---- ---- ----   ---- ------ --    
+Text     Sloperator                   46  10 1-40         -1   11    3   0.42     10 101010
+Button   New window                  855  51 51-91      -0.5   13    3   1.14      8 252525
+Button   Settings                   1005  51 51-91     -0.11 12.5    4   1.19      8 252525
+Text     History                     623  60 52-90      -0.5   13    3   2.87      6 252525
+Button   Saved servers               472 112 112-152   -0.51 13.3    1   0.06      7 252525
+Edit                                 700 112 112-152   -0.58 13.2    3   -0.5      7 111111
+Text     Servers                     489 121 113-151   -0.51 13.3    1   1.19      6 252525
+Text     Server                       21 122 none       0.03 11.1    1   1.43      6 191919
+Text     API key                     633 122 none       0.15 10.7    4   2.94      5 191919
+Edit                                 948 162 162-202   -0.45 13.1    4  -0.53      4 111111
+CheckBox Auto                       1032 162 162-202   -0.09 12.4    2   1.19      5 191919
+Text     Medium                      490 171 163-201    -0.5   13    3   1.09      6 252525
+Text     Model                        21 172 none       0.59 10.8    3    0.5      5 191919
+Text     Context                     633 172 none       0.96 10.1    3   0.96      7 191919
+Button   Line up                    1106 212 212-232    0.91  4.8    1             1 161616
+Text     stops me at any time, in a  297 260 244-293    2.04 13.1   11   7.43     39 1E1E1E
+Text     Type to correct me; I paus  173 288 244-321   13.44 10.1   19  17.66     59 1E1E1E
+Text     pastes screenshots and cop  269 354 338-392    -0.5   13   11   4.95     44 1E1E1E
+Text     opens another window, so I  298 425 409-463    -0.5   13   13   4.87     50 1E1E1E
+Text     New window                  184 426 425-446    0.01 10.6    3   1.21      7 262626
+Text     Use any app                 218 496 480-556  -11.45 13.1    1  -7.98      9 1E1E1E
+Text     Pictures, video and sound   627 496 480-556  -11.46 13.1    7 -11.46     20 1E1E1E
+Text     I can see screen, use keyb  218 523 480-556   12.96 10.1    5  17.15     29 1E1E1E
+Text     With ComfyUI, which I inst  627 523 480-556   12.94 10.1   20  17.15     33 1E1E1E
+Text     Game development            218 589 573-649  -11.46 13.1    4  -11.1     13 1E1E1E
+Text     Get what a job needs        627 589 573-649  -11.46 13.1    6   -9.8     16 1E1E1E
+Text     Unity, Unreal, Godot or an  218 616 573-649   12.94 10.1    9  17.15     29 1E1E1E
+Text     I install programs and the  627 616 573-649   12.94 10.1   12  17.16     34 1E1E1E
+Text     Work on servers             218 682 666-742  -11.43   13    2  -9.86      8 1E1E1E
+Text     Documents                   627 682 666-742   -11.1 12.4    2   -9.8      9 1E1E1E
+Text     I set up and fix servers o  218 708 666-742   12.93 10.1    8  17.16     26 1E1E1E
+Text     Word, Excel, PDF, etc. No   627 708 666-742   12.94 10.1   13  17.15     29 1E1E1E
+Text     Look things up              218 775 759-828      -8   13    5  -4.47     12 1E1E1E
+Text     Chat for you                627 775 759-828   -7.96 13.1    4  -6.45      8 1E1E1E
+Text     I search the web when I'm   218 801 759-828   16.44 10.1    8  20.65     27 1E1E1E
+Text     I can reply for you in any  627 801 759-828   16.44 10.1    6  20.65     25 1E1E1E
+Text     What should I do on your c  367 911 none       0.56   17   10   0.74     26 161616
+Text     I may use your keyboard an  276 944 none       1.11 10.8   12   5.58     49 161616
+Edit                                  82 993 993-1034      1   13   18   1.93     55 1E1E1E
+Button   Attach files                 37 994 994-1034   0.51 22.2    1             1 1E1E1E
+Button   Send                       1014 994 994-1034   0.51   13    2    0.4      4 252525
+
+
+

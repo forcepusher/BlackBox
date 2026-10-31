@@ -1,0 +1,48 @@
+﻿
+Type     Name                         X   Y Box        Caps CapH Tall   Last Glyphs Bg    
+----     ----                         -   - ---        ---- ---- ----   ---- ------ --    
+Text     Check the **UI** please -   46  10 1-40      -0.98   11   11   0.42     31 101010
+Text     30 bytes                    90  10 20-21        -1   11    8   0.42     27 101010
+Button   Output                      37  51 51-93      -1.5   13   13   0.14     32 252525
+Button   New window                 555  51 51-91      -0.5   13    3   1.14      8 252525
+Button   Settings                   705  51 51-91     -0.11 12.5    4   1.19      8 252525
+Text     History                    323  60 52-90      -0.5   13    3   2.87      6 252525
+Text     Output                      58  61 52-90      -0.5   13   12   1.04     31 252525
+Text     Connected                  302  65 52-90      0.13 11.7    3   0.92      6 252525
+Button   Saved servers              293 112 112-152   -0.51 13.3    1   0.06      7 252525
+Edit                                520 112 112-152   -0.58 13.2    3   -0.5      7 111111
+Text     Servers                    309 121 113-151   -0.51 13.3    1   1.19      6 252525
+Text     Server                      21 122 none       0.03 11.1    1   1.43      6 191919
+Text     API key                    453 122 none       0.15 10.7    4   2.94      5 191919
+Text     07:59:47 · model 316 ms     21 123 none         -1   13    6     -1     18 111111
+Button   Thoughts                    21 149 149-199     7.5   13   11   7.48     39 191919
+Edit                                648 162 162-202   -0.45 13.1    4  -0.53      4 111111
+CheckBox Auto                       732 162 162-202   -0.09 12.4    2   1.19      5 191919
+Text     Thoughts                    42 163 180-181   -0.75 10.5    2  -1.71     36 191919
+Text     Medium                     310 171 163-201    -0.5   13    3   1.09      6 252525
+Text     Model                       21 172 none       0.59 10.8    3    0.5      5 191919
+Text     Context                    453 172 none       0.96 10.1    3   0.96      7 191919
+Text     The notes are written; I'l  22 199 213-255   -16.5   33   31 -16.53     37 191919
+Button   Line up                    806 212 212-232    0.91  4.8    1             1 161616
+Text     Here is what I did:          6 258 none          0   13    8   1.82     13 161616
+Text     •                           21 305 none       1.38  5.1    1             1 161616
+Text     Looked at a picture, a GIF  36 333 none         -1   13   13     -1     27 161616
+Text     Wrote the notes             36 364 none       0.37 12.4    5   1.69     11 161616
+Text     •                           21 369 none       1.38  5.1    1             1 161616
+Button   Copy                       660 415 415-445    0.54   11    1   3.42      4 1E1E1E
+Text     powershell                  37 422 411-485   -16.5   11    3  -16.5      9 1E1E1E
+Text     echo hi                      7 445 411-485    10.5   11    3   10.5      6 161616
+Text     File                        22 499 499-534       0   13    3   1.73      4 262626
+Text     Lines                      132 499 499-534       0   13    2    1.7      5 262626
+Text     3                          132 534 535-569   -0.53 13.3    1             1 2A2A2A
+Text     doc.pdf                     74 872 862-925  -10.95 13.1    3 -11.34      7 262626
+Button   Show in folder             482 878 878-908    -0.5   13    6   1.02     11 252525
+Text     659 bytes                   74 894 862-925   11.02   11    5  12.47      8 262626
+Text     Worked for 3.5 s           345 933 926-984  -11.39 10.8    6 -10.02     11 161616
+Button   Line down                  806 953 953-973    0.55  4.9    1             1 161616
+Edit                                 77 993 993-1034      1   13   18   1.93     55 1E1E1E
+Button   Attach files                32 994 994-1034   0.51 22.2    1             1 1E1E1E
+Button   Send                       719 994 994-1034   0.51   13    2    0.4      4 252525
+
+
+
