@@ -24,7 +24,8 @@ public sealed partial class InspectorSoundViewModel : ObservableObject, IDisposa
     {
         Path = path;
         _services = services;
-        _clock = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => Tick());
+        // Made off the UI thread (the panel loads the sound there): the timer is told whose it is, else it never ticks.
+        _clock = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, Dispatcher.UIThread, (_, _) => Tick());
     }
 
     /// <summary>The sound mixed to one channel, and how many samples a second it has.</summary>

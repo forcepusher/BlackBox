@@ -31,7 +31,8 @@ public sealed partial class InspectorAnimationViewModel : ObservableObject, IDis
     public InspectorAnimationViewModel(string path)
     {
         Path = path;
-        _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(100) };
+        // Made off the UI thread (the panel loads the file there): the timer is told whose it is, else it never ticks.
+        _timer = new DispatcherTimer(DispatcherPriority.Render, Dispatcher.UIThread) { Interval = TimeSpan.FromMilliseconds(100) };
         _timer.Tick += (_, _) => Advance();
     }
 

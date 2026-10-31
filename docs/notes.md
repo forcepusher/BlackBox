@@ -295,6 +295,14 @@ guards: a node already on the way down to it is skipped (a loop), and nodes shar
 stop after four visits per node (10,000 at least); a one-node loop took 0.2 s with the old 100,000-visit
 cap alone, and over a test's 5 s with the rest of the suite running beside it (2026-10-28).
 
+A sound read from a time (`IAudioReader.Seek`, every player) starts at that sample. Media Foundation
+lands before the time asked for, and the reader used to skip each whole sample that began before it,
+so a sound started late by up to a sample: measured on 6 and 60 s files (2026-10-31), FLAC up to
+86 ms late and AAC up to 20 ms; now what is before the time in its own sample is left out (0 ms off
+for both). An MP3's times after a seek are a guess (up to 450 ms off the sound read from the start,
+growing along the file), so an MP3 (or MP2) is read through from the start instead, counting
+samples, as the waveform is: some 130 ms a minute of MP3 on the laptop (FLAC 47, AAC 145).
+
 **FBX** (`Mesh.Fbx`, MeshFbx.cs; the user's choice, 2026-10-26, over Assimp, a 15-20 MB native DLL,
 and Autodesk's SDK, whose licence keeps it out): FBX 7.x read by Sloperator, binary (from 7.5 its
 records' offsets are 64-bit; arrays zlib-packed) or text, FBX 6 refused with how to get a newer one.
@@ -3366,6 +3374,12 @@ under the panel's bar here and in the full-screen viewer for a card's peek, see 
   the playhead moves on a 16 ms clock between `Playback`'s reports (five a second), from the first
   report, as the sound takes a moment to open. "0.812 s / 3.400 s" in a slot as wide as its longest
   text. Left/Right move the playhead a hundredth of the view (Shift: a tenth), Home/End, Space.
+  The panel makes the sound's, the animation's and the 3D model's view models off the UI thread, so
+  their `DispatcherTimer`s are given `Dispatcher.UIThread`: made there without it under Avalonia 12,
+  the timer never ticked (2026-10-31: the playhead sat at the stretch's start while it played, a
+  stretch played on past its end, an animation stayed on its first frame; the 3D model's got the same
+  change, untried). A unit test that makes a
+  timer on a pool thread can't show it: there the timer did get the UI thread's dispatcher.
 - 3D models: `ModelViewer` (the chat's, now with its camera in bindable properties and a pan) in the
   panel: a left drag turns, the wheel comes closer (1x to 8x, on the panel's zoom buttons too), a right
   or middle drag moves it about (`MeshRenderer.Render` takes a pan in parts of the picture's shorter
