@@ -3282,6 +3282,14 @@ under the panel's bar here and in the full-screen viewer for a card's peek, see 
   kept whole, a .csv split at semicolons when its first line has more of them than commas.
 - Pictures: in a `ZoomBox`, fitted to the panel (never bigger than they are) and decoded as they are
   (up to 8192 wide), so zoomed in their pixels show, drawn as squares from 3 screen pixels a pixel.
+- SVG (.svg, a picture everywhere: `ComfyOutput.KindOf` says "image"): drawn by Svg.Skia (`SvgFile`,
+  Core; see [SVG](#svg)) as shapes straight onto the `ZoomBox`'s canvas at the size they show
+  (`ZoomBox.Drawing`, a custom draw operation), so it is sharp at any zoom, fitted as a picture is in
+  its own units. `Picture` holds it drawn at its own size too, for Copy image. **Code** in the bar (shown
+  for an SVG only, right of Area so Area turning up doesn't move it) shows its source as a text file is
+  shown, lines to select and ask about; it is off for each new file. An area marked on it is cut from it
+  drawn 2048 pixels along its longer side at least, the model told the place in its units. One Svg.Skia
+  can't draw shows as its text.
 - Video: a plain player of the panel's own (`InspectorVideoViewModel`; until 2026-10-25 the chat's
   video card, Prompt/Inspect/Show in folder and all, which the user found "weird"): the frame in a
   `ZoomBox` (decoded 1920 at most), under it a frame back, play, a frame on, a slider of frames and
@@ -3441,6 +3449,32 @@ searches of Sloperator's tree slow or fail while an Office file was shown: find 
 under ChatScroll. With PDFium (the same day): q3-report.pdf, a 3-page Intel overview with pictures and
 coloured headings, and a 300-page test PDF drew sharp at the panel's width, white pages on the dark
 panel, page 151 in place at half way.
+
+### SVG
+SVG files are pictures: the chat's preview (drawn to fit twice the chat's width, sharp on a screen
+scaled to 200%), the full-screen viewer, a picked file's thumbnail, File inspector (as shapes, see
+[File inspector](#file-inspector)), Copy image, and what the model is shown. read_file gives an SVG's
+numbered lines and the picture it draws, at least 1024 pixels along its longer side (a 24-pixel icon
+would show nothing; "It draws a 200x100 picture, shown at 1024x512"), so a model checks a mockup it
+made by looking at it. write_file's description says an .svg is shown to the user as what it draws,
+to write a design mockup as one (the user's request, 2026-10-31: a Figma-like mockup the model builds
+to show them); write_file and edit_file of an .svg put it under the call, so each change of a mockup is
+seen in the chat. An MCP server's SVG image is drawn for the model too (it was left out).
+
+`SvgFile` (Core) reads them with Svg.Skia 5.2.3 (MIT; Svg.Custom, its SVG model, is MS-PL), built for
+SkiaSharp 4.148 and run on 4.154. It brings HarfBuzzSharp 14.2.0 where Avalonia 12.1.4 asks for 8.3.1.3:
+Avalonia's text at six sizes in Latin, Cyrillic, Arabic, Hebrew and CJK came out pixel-identical on
+both (headless, 2026-10-31), and the App tests passed. A trimmed (TrimMode=full) single-file build
+draws the same and warns of nothing; the exe grows about 1.5 MB (27.8 MB against develop's 26.3,
+published on the laptop, 2026-10-31), its HarfBuzz library 0.25 MB of it.
+The drawing is recorded again into an `SKPicture` of its own (`SvgPicture`), so it outlives the
+parser; nothing disposes it on the UI's side, as the render thread may be drawing it. An SVG with no
+size takes its shapes' bounds from 0,0; one with no shapes at all (Svg.Skia makes it 1x1) is no picture.
+Loaded with `SvgExternalResourcePolicy.SameOrigin` and the file's own address: a picture beside the file
+is drawn, one on the web is not fetched (by default Svg.Skia fetched it: a DNS lookup was seen); bytes
+from an MCP server read nothing outside themselves. External entities aren't read and an entity
+expanding past .NET's limit throws, which is no picture. Svg.Skia ships no JavaScript engine, so
+scripts don't run.
 
 ### Web search
 A local model's memory of APIs is where it slips most (qwen3.8 writes Unity's `KeyCode.Left`, which

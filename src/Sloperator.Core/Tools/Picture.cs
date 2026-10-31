@@ -19,6 +19,9 @@ internal static class Picture
 
     public static bool Handles(string path) => Types.Contains(Path.GetExtension(path).ToLowerInvariant());
 
+    /// <summary>A picture <see cref="Load(string)"/> shows the model: one it <see cref="Handles"/>, or an SVG drawn.</summary>
+    public static bool Shows(string path) => Handles(path) || SvgFile.Handles(path);
+
     /// <summary>A picture as the model sees it: its own size, the size it is shown at, the JPEG, and how much of it is transparent.</summary>
     public sealed record Shown(int Width, int Height, int ShownWidth, int ShownHeight, byte[] Jpeg, string? Transparency = null);
 
@@ -42,9 +45,20 @@ internal static class Picture
             : $"{Math.Max(1, (int)Math.Round(100.0 * clear / all))}% of it transparent";
     }
 
-    /// <summary>The picture scaled for the model; null when the file isn't a picture this can read.</summary>
+    /// <summary>
+    /// The picture scaled for the model; null when the file isn't a picture this can read. An SVG is
+    /// drawn 1024 pixels along its longer side at least (a 24-pixel icon would show nothing), its size
+    /// told in its own units.
+    /// </summary>
     public static Shown? Load(string path)
     {
+        if (SvgFile.Handles(path))
+        {
+            if (SvgFile.Open(path) is not { } svg)
+                return null;
+            using var drawn = svg.RenderAtLeast(1024);
+            return Show(drawn) with { Width = (int)Math.Round(svg.Width), Height = (int)Math.Round(svg.Height) };
+        }
         using var original = PictureFile.Decode(path);
         return original is null ? null : Show(original);
     }
@@ -56,7 +70,12 @@ internal static class Picture
         using var bytes = SKData.CreateCopy(data);
         using var codec = SKCodec.Create(bytes);
         if (codec is null)
-            return null;
+        {
+            if (SvgFile.Open(data) is not { } svg)
+                return null;
+            using var drawn = svg.RenderAtLeast(1024);
+            return Show(drawn);
+        }
         using var original = SKBitmap.Decode(codec);
         return original is null ? null : Show(original);
     }

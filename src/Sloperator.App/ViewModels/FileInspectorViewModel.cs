@@ -92,11 +92,35 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
     private Shown _shown;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanZoom))]
+    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(ShowsPicture))]
     private Bitmap? _picture;
 
-    /// <summary>The picture file's own size, which an area on it is told in.</summary>
+    /// <summary>The picture file's own size, which an area on it is told in (an SVG's in its units).</summary>
     private (int Width, int Height) _pictureSize;
+
+    /// <summary>An SVG, drawn sharp at any zoom in place of <see cref="Picture"/> (which holds it drawn at its own size, to copy).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDrawing))]
+    private SvgPicture? _drawing;
+
+    public bool IsDrawing => Drawing is not null;
+
+    /// <summary>Code is on: an SVG's source shows in place of what it draws, its lines to select and ask about.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanZoom), nameof(ShowsPicture))]
+    private bool _showCode;
+
+    public bool ShowsPicture => Picture is not null && !ShowCode;
+
+    partial void OnShowCodeChanged(bool value)
+    {
+        Unpick();
+        AreaMode = false;
+        if (!value)
+            Text = null;
+        else if (Path is { } path)
+            (_shown, Text) = (Shown.File, FileInspector.ReadText(path).Text);
+    }
 
     /// <summary>A video, in a player of the panel's own: frame by frame, zoomed, an area marked on a frame.</summary>
     [ObservableProperty]
@@ -161,6 +185,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
         var load = ++_loading;
         Unpick();
         AreaMode = false;
+        ShowCode = false;
         Clear();
         Zoom = 1;
         Path = path;
@@ -278,9 +303,26 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
         });
     }
 
-    /// <summary>A picture, as it is, so its pixels show zoomed in; a huge one at most 8192 wide.</summary>
+    /// <summary>A picture, as it is, so its pixels show zoomed in; a huge one at most 8192 wide. An SVG as what it draws.</summary>
     private void ShowPicture(int load, string path, string size)
     {
+        if (SvgFile.Handles(path))
+        {
+            if (SvgFile.Open(path) is not { } svg)
+            {
+                // Not one Svg.Skia draws: its text, which is what an SVG is.
+                var (text, cut) = FileInspector.ReadText(path);
+                var lines = Lines(text);
+                Post(load, () => (_shown, Text, Details, Message) = (Shown.File, text,
+                    $"SVG that draws nothing here, {(cut ? "first " : "")}{lines:N0} line{(lines == 1 ? "" : "s")}, {size}", null));
+                return;
+            }
+            using var drawn = svg.Render(1);
+            var picture = FilePreview.ToBitmap(drawn);
+            var units = ((int)Math.Round(svg.Width), (int)Math.Round(svg.Height));
+            Post(load, () => (_pictureSize, Drawing, Picture, Details, Message) = (units, svg, picture, $"SVG {svg.Width:0.#}x{svg.Height:0.#}, {size}", null), picture.Dispose);
+            return;
+        }
         using var probe = Core.Media.PictureFile.Codec(path);
         var own = probe is null ? (0, 0) : (probe.Info.Width, probe.Info.Height);
         using var stream = File.OpenRead(path);
@@ -388,6 +430,8 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
         _pdf = null;
         Picture?.Dispose();
         Picture = null;
+        // Not disposed: the render thread may still be drawing it (see SvgPicture).
+        Drawing = null;
         Video?.Dispose();
         Video = null;
         Animation?.Dispose();
@@ -415,7 +459,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
     private double _zoom = 1;
 
     /// <summary>What zooms: pictures, frames, a PDF's pages, a sound, a 3D model, and what is frozen for marking.</summary>
-    public bool CanZoom => Pages is not null || Picture is not null || Video is not null || Animation is not null || Sound is not null || Model is not null || Frozen is not null;
+    public bool CanZoom => Pages is not null || ShowsPicture || Video is not null || Animation is not null || Sound is not null || Model is not null || Frozen is not null;
 
     /// <summary>Pages are drawn sharp up to 3 times the panel's width; pictures and frames go to their pixels, a sound to its samples.</summary>
     public double MaxZoom => Frozen is not null ? Views.ZoomBox.MaxZoom : Pages is not null ? 3 : Sound is { } sound ? sound.MaxZoom
@@ -588,7 +632,9 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
         else if (Picture is not null)
         {
             var (w, h) = _pictureSize;
-            cut = () => (DocumentArea.Decode(path) is { } picture ? area.Crop(picture) : null, area.Where, $"They marked an area of the picture: {area.Place(w, h, "pixels")}");
+            cut = () => (DocumentArea.Decode(path) is { } picture ? area.Crop(picture) : null, area.Where, Drawing is null
+                ? $"They marked an area of the picture: {area.Place(w, h, "pixels")}"
+                : $"They marked an area of what the SVG draws: {area.Place(w, h, "units of its drawing (its CSS pixels)")}");
         }
         else if (Video is { } video)
         {

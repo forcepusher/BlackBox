@@ -112,10 +112,20 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
     {
         try
         {
-            using var stream = File.OpenRead(Path);
-            var bitmap = Bitmap.DecodeToHeight(stream, 240, BitmapInterpolationMode.HighQuality);
-            using var probe = PictureFile.Codec(Path);
-            var details = probe is null ? size : $"{probe.Info.Width}x{probe.Info.Height}, {size}";
+            Bitmap bitmap;
+            string details;
+            if (SvgFile.Handles(Path))
+            {
+                (bitmap, var own) = FilePreview.DrawSvg(Path, 8 * 240, 240);
+                details = $"{own}, {size}";
+            }
+            else
+            {
+                using var stream = File.OpenRead(Path);
+                bitmap = Bitmap.DecodeToHeight(stream, 240, BitmapInterpolationMode.HighQuality);
+                using var probe = PictureFile.Codec(Path);
+                details = probe is null ? size : $"{probe.Info.Width}x{probe.Info.Height}, {size}";
+            }
             Dispatcher.UIThread.Post(() =>
             {
                 if (_disposed) bitmap.Dispose(); // taken off, or its chat left, while it loaded

@@ -3,7 +3,11 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Rendering.SceneGraph;
+using Avalonia.Skia;
 using Sloperator.Core.Documents;
+using Sloperator.Core.Media;
+using SkiaSharp;
 
 namespace Sloperator.App.Views;
 
@@ -12,11 +16,14 @@ namespace Sloperator.App.Views;
 /// about it: a picture file, a video's frame, or what the panel showed frozen for marking (a text,
 /// Windows' previewer). At zoom 1 it fits, never shown bigger than it is. The wheel zooms about the
 /// mouse, a right or middle drag pans, a left drag marks an area (with <see cref="CanMark"/>);
-/// zoomed in far enough to see pixels, they are drawn as squares.
+/// zoomed in far enough to see pixels, they are drawn as squares. An SVG (<see cref="Drawing"/>) is
+/// drawn as shapes at whatever size it shows, so it stays sharp however far it is zoomed.
 /// </summary>
 public sealed class ZoomBox : Control
 {
     public static readonly StyledProperty<Bitmap?> SourceProperty = AvaloniaProperty.Register<ZoomBox, Bitmap?>(nameof(Source));
+
+    public static readonly StyledProperty<SvgPicture?> DrawingProperty = AvaloniaProperty.Register<ZoomBox, SvgPicture?>(nameof(Drawing));
 
     public static readonly StyledProperty<double> ZoomProperty =
         AvaloniaProperty.Register<ZoomBox, double>(nameof(Zoom), 1, defaultBindingMode: Avalonia.Data.BindingMode.TwoWay, coerce: (_, z) => Math.Clamp(z, 1, MaxZoom));
@@ -33,6 +40,9 @@ public sealed class ZoomBox : Control
 
     public Bitmap? Source { get => GetValue(SourceProperty); set => SetValue(SourceProperty, value); }
 
+    /// <summary>An SVG, drawn in place of <see cref="Source"/>, sized in its own units.</summary>
+    public SvgPicture? Drawing { get => GetValue(DrawingProperty); set => SetValue(DrawingProperty, value); }
+
     /// <summary>1 fits it in; more is bigger.</summary>
     public double Zoom { get => GetValue(ZoomProperty); set => SetValue(ZoomProperty, value); }
 
@@ -48,11 +58,15 @@ public sealed class ZoomBox : Control
     /// <summary>The point of the picture, in its pixels, at the middle of the box.</summary>
     private Point _center;
 
-    private PixelSize _size;
+    /// <summary>How big what it shows is: a picture's pixels, a drawing's units.</summary>
+    private Size _size;
+
+    /// <summary>A picture or a drawing to show.</summary>
+    private bool Shows => Source is not null || Drawing is not null;
 
     static ZoomBox()
     {
-        AffectsRender<ZoomBox>(SourceProperty, ZoomProperty, MarkProperty);
+        AffectsRender<ZoomBox>(SourceProperty, DrawingProperty, ZoomProperty, MarkProperty);
         ClipToBoundsProperty.OverrideDefaultValue<ZoomBox>(true);
         FocusableProperty.OverrideDefaultValue<ZoomBox>(true);
     }
@@ -60,10 +74,13 @@ public sealed class ZoomBox : Control
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == SourceProperty && Source is { } source && source.PixelSize != _size)
+        if (change.Property == SourceProperty || change.Property == DrawingProperty)
         {
+            var size = Drawing is { } drawing ? new Size(drawing.Width, drawing.Height) : Source is { } source ? source.PixelSize.ToSize(1) : _size;
+            if (size == _size)
+                return;
             // Another picture: fitted again. The next frame of a video is as big, and keeps its zoom.
-            _size = source.PixelSize;
+            _size = size;
             _center = new Point(_size.Width / 2.0, _size.Height / 2.0);
             Zoom = 1;
         }
@@ -106,14 +123,19 @@ public sealed class ZoomBox : Control
     {
         // A background, so the presses on it beside the picture reach the box.
         context.FillRectangle(Brushes.Transparent, new Rect(Bounds.Size));
-        if (Source is not { } source || _size.Width <= 0)
+        if (!Shows || _size.Width <= 0)
             return;
         var scale = Scale;
         var origin = Origin;
         var rect = new Rect(origin, new Size(_size.Width * scale, _size.Height * scale));
-        var pixel = scale * (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1);
-        using (context.PushRenderOptions(new RenderOptions { BitmapInterpolationMode = pixel >= 3 ? BitmapInterpolationMode.None : BitmapInterpolationMode.HighQuality }))
-            context.DrawImage(source, new Rect(source.Size), rect);
+        if (Drawing is { } drawing)
+            context.Custom(new DrawingOperation(drawing.Picture, rect, new Rect(Bounds.Size)));
+        else if (Source is { } source)
+        {
+            var pixel = scale * (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1);
+            using (context.PushRenderOptions(new RenderOptions { BitmapInterpolationMode = pixel >= 3 ? BitmapInterpolationMode.None : BitmapInterpolationMode.HighQuality }))
+                context.DrawImage(source, new Rect(source.Size), rect);
+        }
         if (Mark is { } mark)
             DrawMark(context, new Rect(rect.X + mark.Left * rect.Width, rect.Y + mark.Top * rect.Height,
                 (mark.Right - mark.Left) * rect.Width, (mark.Bottom - mark.Top) * rect.Height));
@@ -134,7 +156,7 @@ public sealed class ZoomBox : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
-        if (Source is null)
+        if (!Shows)
             return;
         ZoomAt(Zoom * Math.Pow(Step, e.Delta.Y), e.GetPosition(this));
         e.Handled = true;
@@ -169,7 +191,7 @@ public sealed class ZoomBox : Control
     {
         base.OnPointerPressed(e);
         var point = e.GetCurrentPoint(this);
-        if (Source is null)
+        if (!Shows)
             return;
         if (point.Properties.IsRightButtonPressed || point.Properties.IsMiddleButtonPressed)
         {
@@ -241,6 +263,39 @@ public sealed class ZoomBox : Control
         {
             _markFrom = null;
             Mark = null;
+        }
+    }
+
+    /// <summary>
+    /// A drawing drawn by Skia straight onto the box's canvas, <paramref name="place"/> its place in the
+    /// box: its shapes at the size they show, never a picture of them stretched.
+    /// </summary>
+    private sealed class DrawingOperation(SKPicture picture, Rect place, Rect bounds) : ICustomDrawOperation
+    {
+        private readonly SKPicture _picture = picture;
+        private readonly Rect _place = place;
+
+        public Rect Bounds { get; } = bounds;
+
+        public bool HitTest(Point p) => false;
+
+        public bool Equals(ICustomDrawOperation? other) => other is DrawingOperation o && o._picture == _picture && o._place == _place && o.Bounds == Bounds;
+
+        public void Dispose() { }
+
+        public void Render(ImmediateDrawingContext context)
+        {
+            if (context.TryGetFeature(typeof(ISkiaSharpApiLeaseFeature)) is not ISkiaSharpApiLeaseFeature feature)
+                return;
+            using var lease = feature.Lease();
+            var canvas = lease.SkCanvas;
+            var cull = _picture.CullRect;
+            canvas.Save();
+            canvas.ClipRect(new SKRect((float)Bounds.Left, (float)Bounds.Top, (float)Bounds.Right, (float)Bounds.Bottom));
+            canvas.Translate((float)_place.X, (float)_place.Y);
+            canvas.Scale((float)(_place.Width / cull.Width), (float)(_place.Height / cull.Height));
+            canvas.DrawPicture(_picture);
+            canvas.Restore();
         }
     }
 

@@ -54,10 +54,13 @@ public sealed record DocumentArea(double Left, double Top, double Right, double 
         return new RawImage(width, height, bgra);
     }
 
-    /// <summary>A picture's pixels, BGRA and opaque; null when it can't be decoded.</summary>
+    /// <summary>
+    /// A picture's pixels, BGRA and opaque; null when it can't be decoded. An SVG is drawn 2048 pixels
+    /// along its longer side at least, so an area of a small drawing comes out sharp.
+    /// </summary>
     public static RawImage? Decode(string path)
     {
-        using var decoded = SKBitmap.Decode(path);
+        using var decoded = Media.SvgFile.Handles(path) ? Media.SvgFile.Open(path)?.RenderAtLeast(2048) : Media.PictureFile.Decode(path);
         if (decoded is null)
             return null;
         using var bgra = decoded.ColorType == SKColorType.Bgra8888 && decoded.AlphaType == SKAlphaType.Premul ? null : decoded.Copy(SKColorType.Bgra8888);

@@ -120,6 +120,17 @@ public abstract partial class FilePreview(string path) : ObservableObject, IDisp
         }
     });
 
+    /// <summary>
+    /// An SVG drawn to fit <paramref name="width"/> by <paramref name="height"/> pixels (a small drawing
+    /// drawn bigger, as it stays sharp), with "SVG 800x520" for its details.
+    /// </summary>
+    internal static (Bitmap Bitmap, string Size) DrawSvg(string path, int width, int height)
+    {
+        var svg = SvgFile.Open(path) ?? throw new InvalidDataException("not an SVG Sloperator can draw");
+        using var drawn = svg.Render(Math.Min(width / svg.Width, height / svg.Height));
+        return (ToBitmap(drawn), $"SVG {svg.Width:0.#}x{svg.Height:0.#}");
+    }
+
     internal static Bitmap ToBitmap(SKBitmap source)
     {
         using var bgra = source.ColorType == SKColorType.Bgra8888 ? null : source.Copy(SKColorType.Bgra8888);
@@ -140,6 +151,14 @@ public sealed partial class ImagePreview(string path) : FilePreview(path)
 
     protected override void Load() => Background(() =>
     {
+        if (SvgFile.Handles(Path))
+        {
+            // Twice the chat's width, so it is sharp on a screen scaled up to 200%.
+            var (drawn, drawnSize) = DrawSvg(Path, 2 * Width, 2 * Width);
+            var file = Size(Path);
+            Show(() => (Image, Details) = (drawn, $"{drawnSize}, {file}"), drawn.Dispose);
+            return;
+        }
         var size = Size(Path);
         (int Width, int Height)? own;
         using (var probe = PictureFile.Codec(Path))
