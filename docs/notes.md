@@ -952,10 +952,11 @@ going or moving mid-task, greyed with a tip when they don't apply). What changed
 - **Use this version** is always at the column's top, a small ghost button, greyed but for a version
   shown, its tip saying how to get one (it was yellow and shown only with a version).
 - The timeline's head strip (40 high, its own padding, a yellow round play, the playhead's time in
-  yellow Consolas, − and + as text) went. Play (a small ghost icon) and the time (muted, 12, tabular
-  figures) sit on the ruler's row, left of 0:00 in the names column (the user, 2026-10-31: "the play
-  button should be on top", "at the same level timeline seconds are"; a bar under the timeline had them
-  first). A bar under the timeline as the File inspector's and the Code editor's
+  yellow Consolas, − and + as text) went. Play (a ghost icon, 32 square as the panel's ×) and the time
+  (muted, 12, tabular figures) sit on the ruler's row, left of 0:00 in the names column (the user,
+  2026-10-31: "the play button should be on top", "at the same level timeline seconds are"; a bar under
+  the timeline had them first, then a 24 play in the 26-high row, which the user wanted as big as ×). The
+  ruler's row is 40 high for it (was 26), its seconds in the row's middle, level with play. A bar under the timeline as the File inspector's and the Code editor's
   (`Border.bar.slim.foot`, Padding 8,4) has − / % / + (the percentage against the usual 64 px a second,
   which it goes back to; each greyed at its end with a tip: 12 and 240), the status line and the
   video's length.

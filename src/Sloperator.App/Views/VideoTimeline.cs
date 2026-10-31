@@ -104,7 +104,8 @@ public sealed class VideoRuler : Control
             var label = s % labelEvery == 0;
             context.DrawLine(VideoColors.Tick, new Point(x, h - (label ? 10 : 5)), new Point(x, h));
             if (label)
-                VideoColors.Draw(context, $"{s / 60}:{s % 60:00}", x + 3, 2, 10, VideoColors.Muted, 60);
+                // In the row's middle, level with the play button beside the ruler.
+                VideoColors.Draw(context, $"{s / 60}:{s % 60:00}", x + 3, Math.Round(h / 2 - 7), 10, VideoColors.Muted, 60);
         }
         if (Length > 0)
         {

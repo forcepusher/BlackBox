@@ -249,9 +249,10 @@
           <Border BorderBrush="{StaticResource BbBorder}" BorderThickness="0,0,1,0">
             <StackPanel>
               <!-- Play and where the playhead is, on the ruler's row (the user, 2026-10-31: play on top, level
-                   with the timeline's seconds), left of 0:00. -->
-              <StackPanel Height="26" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
-                <Button Classes="ghost icon small" Command="{Binding PlayStripCommand}" VerticalAlignment="Center"
+                   with the timeline's seconds), left of 0:00. Play is 32 square as the panel's × (the user, the same
+                   day: a small one looked lost), so the row is 40, as the ruler beside it. -->
+              <StackPanel Height="40" Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
+                <Button Classes="ghost icon" Command="{Binding PlayStripCommand}" VerticalAlignment="Center"
                         ToolTip.Tip="Play the sound lines with each clip's frames from the playhead" AutomationProperties.Name="Play the storyboard">
                   <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" />
                 </Button>
@@ -288,7 +289,7 @@
                         PointerWheelChanged="OnTimelineWheel" Background="Transparent" BringIntoViewOnFocusChange="False" ContextRequested="OnRowMenu">
             <Panel Width="{Binding TimelineWidth}" HorizontalAlignment="Left" ClipToBounds="True">
               <StackPanel>
-                <views:VideoRuler x:Name="Ruler" Height="26" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:VideoGeneratorViewModel.Lead}" />
+                <views:VideoRuler x:Name="Ruler" Height="40" Pps="{Binding Pps}" Length="{Binding Length}" Lead="{x:Static vm:VideoGeneratorViewModel.Lead}" />
 
                 <!-- References: a card each, image files, video files and generated images; the dashed card makes a new one. -->
                 <Panel Height="92" Tag="references" Background="Transparent">
