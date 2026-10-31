@@ -66,6 +66,7 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         });
         _watch = chat.Panels.WatchCode;
         _wrap = chat.Panels.WrapCode;
+        _fontSize = Math.Clamp(chat.Panels.CodeFontSize, MinFontSize, MaxFontSize);
         // A change made before the panel opened isn't followed: only the agent's next one.
         (_followedList, _followedNumber) = (chat.Changes, chat.Changes.LastChange?.Number ?? 0);
         _chat.ChangesUpdated += OnChangesUpdated;
@@ -125,6 +126,18 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
     partial void OnWrapChanged(bool value)
     {
         _chat.Panels.WrapCode = value;
+        _chat.SavePanels();
+    }
+
+    /// <summary>The size of the code's text (the user, 2026-10-31: Ctrl+wheel zooms it, as in VS Code); kept in settings.</summary>
+    [ObservableProperty]
+    private double _fontSize;
+
+    public const double DefaultFontSize = 12, MinFontSize = 8, MaxFontSize = 36;
+
+    partial void OnFontSizeChanged(double value)
+    {
+        _chat.Panels.CodeFontSize = value;
         _chat.SavePanels();
     }
 

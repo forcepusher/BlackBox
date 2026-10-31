@@ -379,6 +379,9 @@ public sealed class PanelSettings
     /// <summary>Code editor: long lines wrap inside the panel, under their own start, rather than run off its right edge.</summary>
     public bool WrapCode { get; set; } = true;
 
+    /// <summary>Code editor: the size of its text, Ctrl+wheel bigger or smaller, Ctrl+0 back to 12.</summary>
+    public double CodeFontSize { get; set; } = 12;
+
     /// <summary>Code editor: the language picked for a kind of file, by its extension (or its name with none), in place of the one its extension says; "Plain text" for none.</summary>
     public Dictionary<string, string> CodeLanguages { get; set; } = [];
 }

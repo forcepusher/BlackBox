@@ -14,7 +14,47 @@ namespace Sloperator.App.Views;
 /// </summary>
 public sealed class CodeView : TextEditor
 {
-    public CodeView() => TextArea.TextView.BackgroundRenderers.Add(_light);
+    public CodeView()
+    {
+        TextArea.TextView.BackgroundRenderers.Add(_light);
+        // Ahead of the editor's own scrolling: Ctrl+wheel zooms the text instead.
+        AddHandler(PointerWheelChangedEvent, OnZoomWheel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+    }
+
+    /// <summary>What a touchpad's wheel turned short of a notch, kept for the next turn.</summary>
+    private double _wheel;
+
+    /// <summary>
+    /// Ctrl+wheel (the user, 2026-10-31): the text a size bigger or smaller a notch, between
+    /// <see cref="ViewModels.CodeEditorViewModel.MinFontSize"/> and <see cref="ViewModels.CodeEditorViewModel.MaxFontSize"/>,
+    /// as VS Code's editor zooms; the line under the pointer kept where it is. Without Ctrl it scrolls as ever.
+    /// </summary>
+    private void OnZoomWheel(object? sender, Avalonia.Input.PointerWheelEventArgs e)
+    {
+        if ((e.KeyModifiers & Avalonia.Input.KeyModifiers.Control) == 0)
+            return;
+        e.Handled = true;
+        _wheel += e.Delta.Y;
+        var steps = (int)Math.Truncate(_wheel);
+        if (steps == 0)
+            return;
+        _wheel -= steps;
+        var size = Math.Clamp(FontSize + steps, ViewModels.CodeEditorViewModel.MinFontSize, ViewModels.CodeEditorViewModel.MaxFontSize);
+        if (size == FontSize)
+            return;
+        var view = TextArea.TextView;
+        var at = e.GetPosition(view).Y;
+        var line = Document is null ? null : view.GetDocumentLineByVisualTop(view.VerticalOffset + at);
+        // Where the line's top is from the pointer (at or above it), before the new size.
+        var above = line is null ? 0 : view.GetVisualTopByDocumentLine(line.LineNumber) - view.VerticalOffset - at;
+        var ratio = size / FontSize;
+        FontSize = size;
+        if (line is null)
+            return;
+        UpdateLayout();
+        if (!line.IsDeleted)
+            ScrollToVerticalOffset(Math.Max(0, view.GetVisualTopByDocumentLine(line.LineNumber) - at - above * ratio));
+    }
 
     protected override Type StyleKeyOverride => typeof(TextEditor);
 

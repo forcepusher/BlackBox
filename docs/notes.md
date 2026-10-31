@@ -3547,6 +3547,14 @@ settings.json for every file of the kind (`panels.codeLanguages`, by extension, 
 with none: "dockerfile"), so a GDScript project's .gd files all open as Python once one is set. Checked in
 the app: levels.py picked as Plain text lost its colours and the pick was saved under ".py".
 
+**Zoom** (the user, 2026-10-31: "ctrl + wheel to zoom in/out the text"): Ctrl+wheel makes the code's text
+a size bigger or smaller a notch (a touchpad's partial turns add up to one), from 8 to 36, the line under
+the pointer kept where it is (`CodeView.OnZoomWheel`, a tunnel handler ahead of the editor's own scrolling);
+Ctrl+0 puts it back to 12. The size is kept in settings.json (`panels.codeFontSize`), bound both ways to
+the view model. A posted WM_MOUSEWHEEL's MK_CONTROL doesn't reach Avalonia (it reads Ctrl from the keyboard),
+so `CodeEditorTests` checks it with Avalonia's headless input instead: up a notch at line N, N still under
+the pointer; thirty down stops at 8; without Ctrl the code scrolls and the size stays.
+
 **Edits not saved** are kept per window (`MainWindowViewModel.CodeDrafts`, by path) from the first key,
 so another file clicked, the panel closed or another chat leave them; the file's row has a dot and its
 bar says "not saved". The open file changed on disk (the agent's edit_file, another program): with no

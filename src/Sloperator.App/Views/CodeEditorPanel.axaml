@@ -135,7 +135,7 @@
           <TextBlock Classes="muted" IsVisible="{Binding !HasFile}" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="360" TextAlignment="Center"
                      Text="{Binding EmptyText}" />
           <!-- The file's text, its lines numbered; lines selected go into the chat's box. -->
-          <views:CodeView x:Name="Editor" IsVisible="{Binding HasFile}" WordWrap="{Binding Wrap}" ShowLineNumbers="True" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"
+          <views:CodeView x:Name="Editor" IsVisible="{Binding HasFile}" WordWrap="{Binding Wrap}" ShowLineNumbers="True" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="{Binding FontSize, Mode=TwoWay}"
                           Background="Transparent" Foreground="{StaticResource BbCode}" LineNumbersForeground="{StaticResource BbFaint}"
                           HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" AutomationProperties.Name="Code" />
         </Panel>

@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Input.Platform;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Highlighting;
@@ -173,6 +175,38 @@ public sealed class CodeEditorTests : IDisposable
             editor.Paste();
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.Equal($"ax{lineBreak}y{lineBreak}z{lineBreak}b{lineBreak}", editor.Text);
+            return true;
+        });
+    }
+
+    [Fact]
+    public void Ctrl_and_the_wheel_zoom_the_text_keeping_the_line_under_the_pointer()
+    {
+        HeadlessApp.Run(() =>
+        {
+            var editor = new CodeView { Document = new TextDocument(string.Join("\n", Enumerable.Range(1, 300).Select(i => $"line {i}"))), FontSize = 12 };
+            var window = new Window { Content = editor, Width = 600, Height = 400 };
+            window.Show();
+            editor.ScrollToVerticalOffset(2000);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var view = editor.TextArea.TextView;
+            int LineAt(double y) => view.GetDocumentLineByVisualTop(view.VerticalOffset + y).LineNumber;
+            var under = LineAt(200);
+
+            window.MouseWheel(new Point(200, 200), new Vector(0, 1), RawInputModifiers.Control);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(13, editor.FontSize);
+            Assert.Equal(under, LineAt(200));
+
+            window.MouseWheel(new Point(200, 200), new Vector(0, -30), RawInputModifiers.Control);
+            Assert.Equal(CodeEditorViewModel.MinFontSize, editor.FontSize);
+
+            // Without Ctrl it scrolls, the size as it was.
+            var offset = view.VerticalOffset;
+            window.MouseWheel(new Point(200, 200), new Vector(0, -1), RawInputModifiers.None);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(CodeEditorViewModel.MinFontSize, editor.FontSize);
+            Assert.True(view.VerticalOffset > offset);
             return true;
         });
     }

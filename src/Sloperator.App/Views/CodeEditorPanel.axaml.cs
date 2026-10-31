@@ -159,7 +159,7 @@ public partial class CodeEditorPanel : UserControl
         _pickTimer.Stop();
     }
 
-    /// <summary>Ctrl+S saves; Esc lets go of the selected lines, as a click away does.</summary>
+    /// <summary>Ctrl+S saves; Ctrl+0 puts the text back to its usual size; Esc lets go of the selected lines, as a click away does.</summary>
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
@@ -169,6 +169,11 @@ public partial class CodeEditorPanel : UserControl
         {
             if (_vm.SaveCommand.CanExecute(null))
                 _vm.SaveCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key is Key.D0 or Key.NumPad0 && e.KeyModifiers == KeyModifiers.Control)
+        {
+            _vm.FontSize = CodeEditorViewModel.DefaultFontSize;
             e.Handled = true;
         }
         else if (e.Key == Key.Escape && !Editor.TextArea.Selection.IsEmpty)

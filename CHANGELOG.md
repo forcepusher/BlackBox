@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   right-click menu opens a text file there. A bar under the code shows its language, encoding and line
   breaks: another language picked is kept for that kind of file, and other line breaks or another
   encoding convert the whole file (encodings on Save); otherwise the editor keeps them as they are.
-  Lines you select go into the message box, so you can ask about them.
+  Ctrl+wheel zooms the code's text and Ctrl+0 puts it back. Lines you select go into the message box,
+  so you can ask about them.
 - Settings → Advanced → Updates shows which version of Sloperator is running.
 - The agent shows you a picture of what it made: a window or a part of the screen, at full
   resolution, under its final reply with a caption. Click it to see it full size.
