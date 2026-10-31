@@ -3511,7 +3511,9 @@ the same foldout arrow (`PathIcon.fold`) and greyed action button (`Button.act`)
 chat (**Open folder** in its bar, or a folder dropped on the panel), kept with the chat (`SavedChat.Folder`,
 `MainWindowViewModel.EditorFolder`) so it comes back when the chat is opened again from History; until
 then, the project the agent changed files in (`FileChanges.Project`: the git repository, solution or
-package of the first file it changed, `ProjectRoot`; else that file's folder), read again as the agent
+package of the first file it changed, `ProjectRoot`; for a file in the folder of its own that what the agent
+makes gets in DocumentsSloperator, `AgentSetup.MadeDirectory`, that folder unless a project is found inside
+it: Snake for Snakesrcgame.js; else that file's folder), read again as the agent
 changes files and when another chat comes; with neither, none, and the panel says to open one. A
 file open outside a new folder closes. **Open in Code editor** on a file's right-click menu (`IFilePanel`,
 `FileInspector.IsText` files) and a file dropped on the panel open it, its folders unfolded down to its

@@ -200,8 +200,38 @@ public class CodeEditorFilesTests : IDisposable
         Assert.Null(changes.Project());
         Assert.Null(changes.LastChange);
 
-        // As the agent writes them: the file read before the call, the change noted after it.
-        foreach (var (path, text) in new[] { (first, "class Ship { int Lives; }\n"), (other, "b\n") })
+        await Written(changes, (first, "class Ship { int Lives; }\n"), (other, "b\n"));
+
+        Assert.Equal(Path.Combine(_root, "game"), changes.Project());
+        // Watch goes to the file of the last call, numbered so a new call tells from one followed already.
+        Assert.Equal((Path.GetFullPath(other), 2), changes.LastChange);
+    }
+
+    [Fact]
+    public async Task What_the_agent_makes_in_documents_opens_at_its_own_folder_there()
+    {
+        // Documents\Sloperator\<task>, where what the agent makes goes when the user names no place.
+        var made = Path.Combine(_root, "Documents", "Sloperator");
+        var snake = new FileChanges();
+        await Written(snake, (Path.Combine(made, "Snake", "src", "game.js"), "let score = 0;\n"));
+        Assert.Equal(Path.Combine(made, "Snake"), snake.Project(made));
+
+        // A project inside the task's folder is still the project.
+        Make(@"Documents\Sloperator\Shop\server\package.json", "{}");
+        var shop = new FileChanges();
+        await Written(shop, (Path.Combine(made, "Shop", "server", "src", "app.js"), "listen();\n"));
+        Assert.Equal(Path.Combine(made, "Shop", "server"), shop.Project(made));
+
+        // A file right in Documents\Sloperator: that folder.
+        var note = new FileChanges();
+        await Written(note, (Path.Combine(made, "hello.txt"), "hi\n"));
+        Assert.Equal(made, note.Project(made));
+    }
+
+    /// <summary>Files written as the agent writes them: the file read before the call, the change noted after it.</summary>
+    private async Task Written(FileChanges changes, params (string Path, string Text)[] files)
+    {
+        foreach (var (path, text) in files)
         {
             var args = new JsonObject { ["path"] = path, ["content"] = text };
             var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = _root, Changes = changes };
@@ -209,9 +239,5 @@ public class CodeEditorFilesTests : IDisposable
             await new WriteFileTool().ExecuteAsync(args, ctx, CancellationToken.None);
             await call!.EndAsync();
         }
-
-        Assert.Equal(Path.Combine(_root, "game"), changes.Project());
-        // Watch goes to the file of the last call, numbered so a new call tells from one followed already.
-        Assert.Equal((Path.GetFullPath(other), 2), changes.LastChange);
     }
 }
