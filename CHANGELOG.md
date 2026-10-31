@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Code editor** in the Side panel dropdown: a folder's files in a tree and the file you click open
+  beside it, with line numbers and highlighting, to read and edit (Ctrl+S saves). It shows the folder
+  you open in it (Open folder, or drop one on it), kept with the chat, else the project the agent
+  changed files in, and follows the agent's edits as they happen. **Open in Code editor** on a file's
+  right-click menu opens a text file there. Lines you select go into the message box, so you can ask
+  about them.
 - Settings → Advanced → Updates shows which version of Sloperator is running.
 - Right-click any file (a card in the chat, a file in a message, the full-screen viewer, File changes,
   the Video generator) for **Open in Inspector**, which shows it in the File inspector panel.

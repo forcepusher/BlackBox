@@ -120,7 +120,7 @@ public sealed partial class MainWindowViewModel
         OnPropertyChanged(nameof(WindowTitle));
         _history = chat.History;
         _pictures = new(_chats.NextPictureNumber(chat.Id));
-        UseChanges(FileChanges.Load(ChangesFile(chat.Id)));
+        UseChanges(FileChanges.Load(ChangesFile(chat.Id)), chat.Folder);
         Changes.TurnsUpTo(chat.Entries.Max(e => e.Turn) ?? 0);
         var withFiles = new List<(ChatItemViewModel, Func<IReadOnlyList<string>>)>();
         foreach (var entry in chat.Entries)
@@ -333,6 +333,7 @@ public sealed partial class MainWindowViewModel
         chat.Id = _chatId;
         chat.Title = _chatTitle;
         chat.Updated = DateTime.UtcNow;
+        chat.Folder = EditorFolder;
         // A reply bubble with nothing in it yet (a step just started) is left out.
         chat.Entries = Items.Where(i => i is not AssistantMessageItem { IsStreaming: true, HasText: false, HasReasoning: false }).Select(ToEntry).ToList();
         // Written in the background: a long run's chat is megabytes, at every step.

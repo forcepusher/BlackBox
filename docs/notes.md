@@ -1648,6 +1648,10 @@ Servers' lists unlike the dropdowns'):
   rounded rows lit grey; now `FlyoutPresenter.list` with `listRow` rows, lit as a dropdown's rows
   under the pointer and pressed, the chat or server in use tinted as a dropdown's pick, the trash
   button as far in from the right as the title from the left.
+- **Lists of files** (File changes' changed files, the Code editor's tree) are `ListBox.files`: one
+  line a file, 8 in and 4 over and under; a foldout's arrow is `PathIcon.fold` (right while folded,
+  down while open), and a button over what it acts on that has nothing to act on is `Button.act`
+  (greyed, not filled).
 - **Bars**: the chat's top bar and server rows, each side panel's top bar and Settings' foot are one
   `Border.bar`: the background, a line on the inner side, 16 in from the window's edge and 8 over and
   under 32-high controls, so every bar is 49 high (at 125%: 61 px) and the chat's top bar and a
@@ -1719,6 +1723,11 @@ takes its look from its kind:
   file's name too); a removed line's the red #F05A5A at 13%, #F28B82 (its number no longer greyed
   out: the red says it is the old file's). The server dot is #4CC38A when connected; a hunk's divider
   has no band, only its words.
+- **Code** in the Code editor panel: AvaloniaEdit's highlighting drawn in eight colours of the app's,
+  one each for every language (`BbSyntax*`): comments #6A9955, strings #CE9178, numbers #B5CEA8,
+  keywords and tags #569CD6, types #4EC9B0, calls #DCDCAA, preprocessor lines #C586C0, names
+  (attributes, properties, variables) #9CDCFE; the rest `BbCode`. Its selection is the pick's yellow at
+  16% (`BbAccentTint`), the line with the caret `BbSurface`.
 - **Corners**: 8 for every control (Fluent's `ControlCornerRadius`), a notice, a well, a code block
   and the files over the message box; 12 a card and the user's bubble; 16 the message box; 6 a tool's
   name; 4 a check box and a scrollbar's thumb. No shadows.
@@ -3427,6 +3436,66 @@ searches of Sloperator's tree slow or fail while an Office file was shown: find 
 under ChatScroll. With PDFium (the same day): q3-report.pdf, a 3-page Intel overview with pictures and
 coloured headings, and a 300-page test PDF drew sharp at the panel's width, white pages on the dark
 panel, page 151 in place at half way.
+
+### Code editor
+**Code editor** in the Side panel dropdown (`CodeEditorViewModel`, `CodeEditorPanel`; least 560, as
+File changes) is a bare VS Code beside the chat (the user's request, 2026-10-31): a folder's files in a
+tree on the left, the file clicked open on the right to read and edit, Ctrl+S to save. It is drawn as
+File changes is: the same bar, a 230 list of one-line rows (`ListBox.files`, now in App.axaml for both),
+the same foldout arrow (`PathIcon.fold`) and greyed action button (`Button.act`).
+
+**Which folder.** Sloperator's chats have no folder, so the panel shows the one the user opened in the
+chat (**Open folder** in its bar, or a folder dropped on the panel), kept with the chat (`SavedChat.Folder`,
+`MainWindowViewModel.EditorFolder`) so it comes back when the chat is opened again from History; until
+then, the project the agent changed files in (`FileChanges.Project`: the git repository, solution or
+package of the first file it changed, `ProjectRoot`; else that file's folder), read again as the agent
+changes files and when another chat comes; with neither, none, and the panel says to open one. A
+file open outside a new folder closes. **Open in Code editor** on a file's right-click menu (`IFilePanel`,
+`FileInspector.IsText` files) and a file dropped on the panel open it, its folders unfolded down to its
+row (`FileTree.Reveal`); a file outside the folder shown makes its project the folder, as Open folder would. (Proposed to the user as the first of three: the picker only, as
+VS Code, or the agent's project only, as File changes.)
+
+**The tree** (`FileTree`, `FileTreeRow`) is one list: a folder's rows go in under it when it is
+unfolded (12 in a level), so it scrolls, selects and virtualizes as a list. A folder is read when first
+unfolded (`FolderListing`: folders first, each in Explorer's order, "file2" before "file10"; what VS Code
+leaves out, .git, .svn, .hg, CVS, .DS_Store, Thumbs.db, left out; hidden files shown) and kept, folded
+or not. A `FileSystemWatcher` on the folder notes the folders where files came, went or were renamed,
+and 250 ms after a burst each folder read before is read again: rows still there are the same objects
+(unfolded, with their own rows), and the list is changed only where it differs (`FileTree.Sync`), so it
+stays scrolled where it was and keeps its selection. The file open is grey in it, not the yellow of what
+goes with a message: nothing of the tree does. A click on a folder folds or unfolds it, on a file opens
+it; Enter, Left and Right as in Explorer's tree; a right-click has Show in folder and Copy file.
+
+**The editor** is AvaloniaEdit (MIT, `Avalonia.AvaloniaEdit` 12.0.0, about 0.6 MB; its Fluent theme in
+App.axaml) as `CodeView`: line numbers 8 in from the panel's edge, no dotted line after them, Consolas 12
+as the diff, the line with the caret a card's shade, no links followed by a click, tabs kept for a file
+indented with tabs. Highlighting is AvaloniaEdit's own (C#, JavaScript, HTML, CSS, C++, Java, PowerShell,
+PHP, Python, SQL, VB, XML, Markdown, JSON, patches), with TypeScript as JavaScript, XAML and project files
+as XML, shaders as C++ (`CodeView.For`); its colours are for a white page, so each named colour is drawn
+in the app's (`DarkColorizer`, see Colours). TextMate grammars (`AvaloniaEdit.TextMate`) would cover more
+languages, but bring several MB of grammars to the exe. TeX's definition doesn't load in AvaloniaEdit 12.
+A file is read as read_file reads it and saved in the encoding it was read in (`CodeFile`: a signature
+kept or left out, the ANSI code page kept, written through a file beside it as edit_file does; a
+PowerShell script typed past ASCII gets UTF-8's signature); line breaks stay as they are in the text.
+Not opened: a file with a zero byte in its first 8 KB, or over 5 MB.
+
+**Edits not saved** are kept per window (`MainWindowViewModel.CodeDrafts`, by path) from the first key,
+so another file clicked, the panel closed or another chat leave them; the file's row has a dot and its
+bar says "not saved". The open file changed on disk (the agent's edit_file, another program): with no
+edits here, the editor shows the disk's text, only what differs replaced (`CodeEditorViewModel.Replace`)
+so the caret and the view before it stay; with edits, the bar says so, Save writes the edits over it and
+Reload takes the disk's. A file deleted on disk stays open; Save writes it again.
+
+**Lines selected go into the chat's box** (the user's rule, 2026-10-28: a card only for what was
+picked): 150 ms after the selection rests, as "Lines 31-38 · Game.cs" ("Line 4", "Whole file" for all of
+it). Opening a file puts nothing there. A message sent with it tells the model the file's path, whether
+it has edits not saved, and the lines the selection is in, whole and numbered (a selection from the middle
+of a line still means the line), with the part selected when it is in one line, up to 20,000 characters
+(`CodeEditorViewModel.Told`). Sent, the selection goes; Esc, a click, typing over it or another file
+take it out of the box. Checked in the app (2026-10-31, a stand-in model keeping its requests): lines
+31-38 of a made-up game's Game.cs dragged over, the box showed the card, and the model got the eight lines
+numbered; Ship.cs changed on disk while open showed the new lines in place, and a file added in src came
+into the tree under it.
 
 ### Web search
 A local model's memory of APIs is where it slips most (qwen3.8 writes Unity's `KeyCode.Left`, which

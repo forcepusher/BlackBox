@@ -70,6 +70,19 @@ public sealed class FileChanges
         }
     }
 
+    /// <summary>
+    /// The project the agent worked in, for the Code editor panel: that of the first file it changed
+    /// (its git repository, solution or package, see <see cref="Projects.ProjectRoot"/>), else that
+    /// file's folder; null while it changed none.
+    /// </summary>
+    public string? Project()
+    {
+        string? first;
+        lock (_gate)
+            first = _order.FirstOrDefault();
+        return first is null ? null : Projects.ProjectRoot.Find(first)?.Root ?? Path.GetDirectoryName(first);
+    }
+
     /// <summary>Keeps the list in <paramref name="file"/> from now on (the chat's, once it has one), and writes it there now.</summary>
     public void KeepIn(string file)
     {
