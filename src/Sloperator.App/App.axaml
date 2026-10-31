@@ -831,6 +831,10 @@
     <Style Selector="Button.rowDelete:pointerover PathIcon">
       <Setter Property="Foreground" Value="{StaticResource BbError}" />
     </Style>
+    <!-- A chat open in another window: its trash button greyed, as a button with nothing to act on. -->
+    <Style Selector="Button.rowDelete:disabled">
+      <Setter Property="Opacity" Value="0.6" />
+    </Style>
 
     <!-- The message box: the card around it is the visible field, so the TextBox itself stays
          flat in every state and the card's border shows focus instead. Bordered as a control, 16
