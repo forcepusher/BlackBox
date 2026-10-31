@@ -3525,8 +3525,12 @@ first is left where it is in the upper half of the view, else brought a quarter 
 the folder isn't followed: it would take the tree from the folder the user chose. Turned on, Watch goes
 to the agent's last change and lights it again. Every button of the panel's bars is there from the start
 and greyed while it has nothing to do (the user, 2026-10-31: bar buttons never come and go mid-task):
-Watch, and Save and Reload over the file even with none open. Checked in the app with a stand-in agent
+Wrap and Watch, and Save and Reload over the file even with none open. Checked in the app with a stand-in agent
 (2026-10-31): with Game.cs open, its edit_file on Ship.cs opened Ship.cs with the three lines it added lit.
+**Wrap** beside it (the user's question, 2026-10-31; `panels.wrapCode`, on by default as File changes'):
+long lines wrap inside the panel under their own start (AvaloniaEdit's `WordWrap`), one number a line, so
+picks and Watch's lines are as before; off, a long line scrolls sideways. Checked by a click in the app:
+Game.cs's long summary line wrapped, and off, the setting was saved false.
 
 ### Web search
 A local model's memory of APIs is where it slips most (qwen3.8 writes Unity's `KeyCode.Left`, which

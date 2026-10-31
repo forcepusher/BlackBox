@@ -65,6 +65,7 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
             _ = OnDiskChangedAsync();
         });
         _watch = chat.Panels.WatchCode;
+        _wrap = chat.Panels.WrapCode;
         // A change made before the panel opened isn't followed: only the agent's next one.
         (_followedList, _followedNumber) = (chat.Changes, chat.Changes.LastChange?.Number ?? 0);
         _chat.ChangesUpdated += OnChangesUpdated;
@@ -116,6 +117,16 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
     }
 
     // ---- Watch: following the agent's edits -----------------------------------------------------
+
+    /// <summary>Wrap (the user, 2026-10-31, as File changes has it): long lines wrap inside the panel. Kept in settings.</summary>
+    [ObservableProperty]
+    private bool _wrap;
+
+    partial void OnWrapChanged(bool value)
+    {
+        _chat.Panels.WrapCode = value;
+        _chat.SavePanels();
+    }
 
     /// <summary>Watch (the user, 2026-10-31, as File changes has it): the file the agent edits opens at the lines it changed, lit a moment. Kept in settings.</summary>
     [ObservableProperty]
