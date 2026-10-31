@@ -1509,6 +1509,12 @@ same words were a warning line on the "Use any app" card before, said twice.
 The cards are 16 in from their sides (`StackPanel.intro Border.card`, 12 above and below), a step more
 than other cards' 12: at 12 the keys and icons sat a tiny bit close to the edge, the user said. Every
 card's line still keeps to one line at MinWidth at 100% and 125%.
+They keep one size in any window (`StackPanel.intro` Width 612; the user, 2026-10-31): the width they
+had at the window's MinWidth, the chat's least 660 less the conversation's 16 a side and the scroll
+bar's 16, centred in a wider chat. Until then they grew with the window up to a MaxWidth of 640, and
+there the two columns came out 393 and 391 px at 125%; at 612 they are 300 each, 375 px at 125%. The
+chat never gets narrower than 660 (a side panel gives way first, then the window stops), so the cards
+never have less room than that. Measured on captures at MinWidth and 1800 wide, 100% and 125%.
 In a window too short for both (`MainWindow.FitIntroHeading`) the heading gives the cards its room
 when they would get less than 64: the smallest window with nine lines typed (the box grows to 200),
 or with a banner up; it comes back as the box shrinks. Whether it shows is worked out from the room
