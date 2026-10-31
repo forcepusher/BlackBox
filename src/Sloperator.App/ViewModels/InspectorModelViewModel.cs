@@ -24,7 +24,8 @@ public sealed partial class InspectorModelViewModel : ObservableObject, IDisposa
     public InspectorModelViewModel(string path)
     {
         Path = path;
-        _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(33) };
+        // Made off the UI thread (the panel loads the model there): the timer is told whose it is, else it never ticks.
+        _timer = new DispatcherTimer(DispatcherPriority.Render, Dispatcher.UIThread) { Interval = TimeSpan.FromMilliseconds(33) };
         _timer.Tick += (_, _) => Tick();
     }
 

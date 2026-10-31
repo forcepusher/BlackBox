@@ -64,6 +64,8 @@ public sealed unsafe class MediaFoundationDecoder : IMediaDecoder
     private static readonly Guid AudioType = new("73647561-0000-0010-8000-00AA00389B71");
     private static readonly Guid Rgb32 = new("00000016-0000-0010-8000-00AA00389B71");
     private static readonly Guid FloatAudio = new("00000003-0000-0010-8000-00AA00389B71");
+    private static readonly Guid Mp3Audio = new("00000055-0000-0010-8000-00AA00389B71");
+    private static readonly Guid MpegAudio = new("00000050-0000-0010-8000-00AA00389B71");
     private static readonly Guid FrameSize = new("1652c33d-d6b2-4012-b834-72030849a37d");
     private static readonly Guid FrameRateKey = new("c459a2e8-3d2c-4e44-b132-fee5156c7bb0");
     private static readonly Guid DefaultStride = new("644b4e48-1e02-4516-b0eb-c01ca9d49ac6");
@@ -86,7 +88,13 @@ public sealed unsafe class MediaFoundationDecoder : IMediaDecoder
 
     private static readonly Lazy<bool> Started = new(() => MFStartup(MF_VERSION, 0) >= 0);
 
-    // IMFAttributes: GetUINT32 7, GetUINT64 8, SetUINT32 21, SetUINT64 22, SetGUID 24.
+    // IMFAttributes: GetUINT32 7, GetUINT64 8, GetGUID 10, SetUINT32 21, SetUINT64 22, SetGUID 24.
+    private static Guid GetGuid(nint attrs, Guid key)
+    {
+        Guid v;
+        return ((delegate* unmanaged[Stdcall]<nint, Guid*, Guid*, int>)Slot(attrs, 10))(attrs, &key, &v) >= 0 ? v : Guid.Empty;
+    }
+
     private static int GetUInt32(nint attrs, Guid key, out uint value)
     {
         uint v;
@@ -115,6 +123,15 @@ public sealed unsafe class MediaFoundationDecoder : IMediaDecoder
         private readonly uint _stream;
         private readonly int _stride;
         private TimeSpan _skipBefore = TimeSpan.MinValue;
+        /// <summary>The time a sound was sought to, until the sample holding it has been read: what is before it in that sample is left out.</summary>
+        private TimeSpan? _soundFrom;
+        /// <summary>
+        /// An MP3 (or MP2): Media Foundation seeks it by guesswork, and its times after a seek were up to
+        /// half a second off the sound read from the start (the waveform), so it is read from the start.
+        /// </summary>
+        private readonly bool _roughSeeks;
+        /// <summary>How many values (samples × channels) are still to be read past, reading from the start to a time.</summary>
+        private long _drop;
         private float[] _left = [];
         private int _leftAt;
 
@@ -194,6 +211,17 @@ public sealed unsafe class MediaFoundationDecoder : IMediaDecoder
                 }
                 else
                 {
+                    nint native;
+                    Check(((delegate* unmanaged[Stdcall]<nint, uint, uint, nint*, int>)Slot(_reader, 5))(_reader, _stream, 0, &native));
+                    try
+                    {
+                        var coded = GetGuid(native, SubType);
+                        _roughSeeks = coded == Mp3Audio || coded == MpegAudio;
+                    }
+                    finally
+                    {
+                        Release(native);
+                    }
                     if (!SetOutput(AudioType, FloatAudio, null))
                         throw new COMException("The sound can't be decoded.");
                     nint current;
@@ -318,11 +346,32 @@ public sealed unsafe class MediaFoundationDecoder : IMediaDecoder
                 {
                     if (ReadSample() is not { } s)
                         break;
-                    if (s.Time < _skipBefore)
-                        continue;
-                    _skipBefore = TimeSpan.MinValue;
-                    _left = new float[s.Bytes.Length / 4];
-                    Buffer.BlockCopy(s.Bytes, 0, _left, 0, _left.Length * 4);
+                    // After a seek the reader starts somewhere before the time asked for (a FLAC
+                    // block, an MP3 frame or more): read from that time's own sample on. Skipping
+                    // whole samples that began before it started an MP3 up to half a second late.
+                    var from = 0;
+                    if (_drop > 0)
+                    {
+                        if (_drop >= s.Bytes.Length / 4)
+                        {
+                            _drop -= s.Bytes.Length / 4;
+                            continue;
+                        }
+                        from = (int)_drop;
+                        _drop = 0;
+                    }
+                    else if (_soundFrom is { } at)
+                    {
+                        var channels = Math.Max(1, Channels);
+                        var frames = s.Bytes.Length / 4 / channels;
+                        var skip = (long)Math.Round((at - s.Time).TotalSeconds * SampleRate);
+                        if (skip >= frames)
+                            continue;
+                        _soundFrom = null;
+                        from = (int)Math.Max(0, skip) * channels;
+                    }
+                    _left = new float[s.Bytes.Length / 4 - from];
+                    Buffer.BlockCopy(s.Bytes, from * 4, _left, 0, _left.Length * 4);
                     _leftAt = 0;
                 }
                 var n = Math.Min(count - written, _left.Length - _leftAt);
@@ -336,11 +385,15 @@ public sealed unsafe class MediaFoundationDecoder : IMediaDecoder
         public void Seek(TimeSpan time)
         {
             if (time < TimeSpan.Zero) time = TimeSpan.Zero;
-            var position = new PropVariant { Type = 20 /* VT_I8 */, Value = time.Ticks };
+            // Read through from the start, which takes some 130 ms a minute of MP3 on a laptop.
+            var rough = !_video && _roughSeeks;
+            _drop = rough ? (long)Math.Round(time.TotalSeconds * SampleRate) * Math.Max(1, Channels) : 0;
+            var position = new PropVariant { Type = 20 /* VT_I8 */, Value = rough ? 0 : time.Ticks };
             var format = Guid.Empty;
             Check(((delegate* unmanaged[Stdcall]<nint, Guid*, PropVariant*, int>)Slot(_reader, 8))(_reader, &format, &position));
             // Frames from the key frame before it up to half a frame early are skipped.
-            _skipBefore = _video && FrameRate > 0 ? time - TimeSpan.FromSeconds(0.5 / FrameRate) : time - TimeSpan.FromMilliseconds(1);
+            _skipBefore = _video && FrameRate > 0 ? time - TimeSpan.FromSeconds(0.5 / FrameRate) : TimeSpan.MinValue;
+            _soundFrom = _video || rough ? null : time;
             _left = [];
             _leftAt = 0;
         }

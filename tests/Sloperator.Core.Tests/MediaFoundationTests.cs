@@ -51,5 +51,33 @@ public class MediaFoundationTests : IDisposable
 
         Assert.Null(decoder.Probe(Path.Combine(_dir, "missing.wav")));
     }
+
+    [Theory]
+    [InlineData(0.4567)]
+    [InlineData(0.8)]
+    [InlineData(1.2345)]
+    public void A_sound_read_from_a_time_starts_at_that_sample(double seconds)
+    {
+        // Two seconds whose every sample is its own number, so the first one read says where it starts.
+        const int rate = 16000;
+        var path = Path.Combine(_dir, "count.wav");
+        using (var file = new BinaryWriter(File.Create(path)))
+        {
+            const int data = 2 * rate * 2;
+            file.Write("RIFF"u8); file.Write(36 + data); file.Write("WAVE"u8);
+            file.Write("fmt "u8); file.Write(16); file.Write((short)1); file.Write((short)1);
+            file.Write(rate); file.Write(rate * 2); file.Write((short)2); file.Write((short)16);
+            file.Write("data"u8); file.Write(data);
+            for (var i = 0; i < 2 * rate; i++)
+                file.Write((short)i);
+        }
+
+        using var sound = new MediaFoundationDecoder().OpenAudio(path);
+        Assert.NotNull(sound);
+        sound.Seek(TimeSpan.FromSeconds(seconds));
+        var buffer = new float[16];
+        Assert.Equal(16, sound.Read(buffer, 0, buffer.Length));
+        Assert.InRange(Math.Round(buffer[0] * 32768), seconds * rate - 1, seconds * rate + 1);
+    }
 }
 #endif
