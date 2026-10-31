@@ -2538,7 +2538,10 @@ the same way now. Blocks in a stretched column (a reply, the thinking, a call's 
 margins: they are given back the width they measured with. `Sloperator.App.Tests` lays the chat's own
 templates out headless (Avalonia.Headless with Skia and the real fonts) and checks every line of a
 message, a message with files and a notice is laid out within its block at three window widths; on
-the old markup 45 of the cases failed.
+the old markup 45 of the cases failed. Anything a headless test builds is built inside
+`HeadlessApp.Run`: a chat item made on xUnit's thread first made that thread Avalonia's UI thread,
+and when xUnit ran such a case first (its order follows the checkout's path; it did in a worktree
+named changes-bar, 2026-10-31), the session failed to start and 194 tests with it.
 Every other text block in the chat does the same with a margin of its own: a reply's text reaches
 12 pixels past its sides and 4 over and under it (`MarkdownView`), a code block's text 11 past the
 box's sides and 3 under it (App.axaml), the thinking, a call's output and a note 8 and 4. A drag
@@ -3163,11 +3166,13 @@ picked (a grey, c yellow, cards "Whole file · c.py" and "Line 99 · a.py"), tha
 (a yellow again), lines in a and b (both grey, b not selected), and the message sent told the model c
 whole and the two lines. Before that, with click, Ctrl+click on and off, Shift+click a run and a second
 click on the only one, the list's selection (UI Automation) and the box's cards agreed.
-**Wrap and Watch** (the user, 2026-10-26), toggles in the bar between the summary and the ×, shown
-once a file changed, both on by default and kept in settings.json under `panels` (`wrapDiff`,
-`watchChanges`; `PanelSettings`). **Wrap**: the diff's code column is `*` (under a sideways scroll it
-sizes to the line, as Auto did) and `ListBox.diff.wrap` turns the sideways scrollbar off and the code
-TextBlock to Wrap, so a long line wraps under its code with the number and marker on its first row.
+**Wrap and Watch** (the user, 2026-10-26), toggles in the bar between the summary and the ×, always
+there (shown only once a file changed until 2026-10-31, when the user asked that the bar not change
+mid-task; both stay usable with no files, as Watch on then follows the first change), both on by
+default and kept in settings.json under `panels` (`wrapDiff`, `watchChanges`; `PanelSettings`).
+**Wrap**: the diff's code column is `*` (under a sideways scroll it sizes to the line, as Auto did) and
+`ListBox.diff.wrap` turns the sideways scrollbar off and the code TextBlock to Wrap, so a long line
+wraps under its code with the number and marker on its first row.
 Rows stay logical lines: picks, drags (checked with a real drag across two wrapped lines) and the box's
 card are as before.
 **The number gutter** (the user, 2026-10-28, from a screenshot where it took about 110 px: two 46 px
