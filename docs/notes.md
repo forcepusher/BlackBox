@@ -1697,8 +1697,10 @@ takes its look from its kind:
   pointer, the yellow around a field being typed in.
 - **Text**: the main #F0F0F0 (`BbText`, and Fluent's `BaseHigh` in its palette, so every control's
   text), secondary #BBBBBB (a notice's words, Output's and Thoughts' headers), muted #A2A2A2
-  (`BbMuted`: labels, times, the message box's hint, thoughts), faint #808080 (`BbFaint`: line
-  numbers, what is disabled, an empty field's hint), code #E8E8E8 (`BbCode`).
+  (`BbMuted`: labels, times, thoughts), the message box's hint #606060 (`BbHint`), faint #808080
+  (`BbFaint`: line numbers, what is disabled, an empty field's hint), code #E8E8E8 (`BbCode`). A
+  hint is drawn in its colour: Avalonia 12 draws every one at `TextControlPlaceholderOpacity`
+  (Fluent's 0.5, a combo box's too), which App.axaml sets to 1 (`PlaceholderTests`).
 - **Diff**: an added line's row the green #50C878 at 11%, its number, marker and counts #7FD9A2 (a new
   file's name too); a removed line's the red #F05A5A at 13%, #F28B82 (its number no longer greyed
   out: the red says it is the old file's). The server dot is #4CC38A when connected; a hunk's divider
@@ -1964,7 +1966,8 @@ same way (2 of 4 full runs, 24 October 2026), when another test started a proces
 Skia (SkiaSharp 4, newer than the 3.x Avalonia 12 asks for; Avalonia runs on it) takes how to read a
 picture's pixels at another size as `SKSamplingOptions`, given with each draw or resize: SkiaSharp 4
 dropped the paint's filter quality. `Sampling` (Media) gives SkiaSharp 2's pixels, measured against
-it on a screenshot (2026-10-30): High shrinks through mipmaps and enlarges with Mitchell's cubic.
+it on a screenshot (2026-10-30): High shrinks through mipmaps and enlarges with Mitchell's cubic,
+and at the picture's own size copies it (the cubic there softened a PDF page).
 SkiaSharp 3's own stand-in for High, the cubic both ways, came out 2.9 grey levels off on average
 shrinking a screenshot to 37% (aliased text); mipmaps 0.2.
 

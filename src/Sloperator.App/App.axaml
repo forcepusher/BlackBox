@@ -30,11 +30,12 @@
     <SolidColorBrush x:Key="BbControlBorderHover" Color="#3A3A3A" />
     <!-- Text: the main one (Fluent's own too, through its palette below); secondary (a notice, an
          Output or Thoughts header), muted (labels, times, hints, thoughts), faint (line numbers, what
-         is disabled, an empty field's hint), and code. -->
+         is disabled, an empty field's hint), the chat box's hint, and code. -->
     <SolidColorBrush x:Key="BbText" Color="#F0F0F0" />
     <SolidColorBrush x:Key="BbSecondary" Color="#BBBBBB" />
     <SolidColorBrush x:Key="BbMuted" Color="#A2A2A2" />
     <SolidColorBrush x:Key="BbFaint" Color="#808080" />
+    <SolidColorBrush x:Key="BbHint" Color="#606060" />
     <SolidColorBrush x:Key="BbCode" Color="#E8E8E8" />
     <!-- The yellow of the blob logo (docs/logo/blob.svg); lighter under the pointer, darker pressed.
          Dark text (#1A1A1A, BbOnAccent) on it reads at about 11:1. -->
@@ -133,9 +134,8 @@
     <StaticResource x:Key="TextControlBorderBrushDisabled" ResourceKey="BbControlBorder" />
     <StaticResource x:Key="TextControlForegroundDisabled" ResourceKey="BbFaint" />
     <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="BbFaint" />
-    <StaticResource x:Key="TextControlPlaceholderForegroundPointerOver" ResourceKey="BbFaint" />
-    <StaticResource x:Key="TextControlPlaceholderForegroundFocused" ResourceKey="BbFaint" />
-    <StaticResource x:Key="TextControlPlaceholderForegroundDisabled" ResourceKey="BbFaint" />
+    <!-- An empty field's hint in its own colour: Fluent draws it at half, a combo box's too. -->
+    <x:Double x:Key="TextControlPlaceholderOpacity">1</x:Double>
     <StaticResource x:Key="ComboBoxBackground" ResourceKey="BbField" />
     <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="BbField" />
     <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="BbSurface" />
@@ -802,7 +802,7 @@
       <Setter Property="Margin" Value="0,-0.6,0,0.6" />
       <!-- Its words follow the paperclip, not a border of their own: Fluent's 10, not a field's 12. -->
       <Setter Property="Padding" Value="10,6,6,5" />
-      <Setter Property="PlaceholderForeground" Value="{StaticResource BbMuted}" />
+      <Setter Property="PlaceholderForeground" Value="{StaticResource BbHint}" />
     </Style>
     <Style Selector="Border.composer:focus-within">
       <Setter Property="BorderBrush" Value="{StaticResource BbAccent}" />
