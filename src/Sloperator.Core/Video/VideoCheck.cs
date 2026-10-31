@@ -738,7 +738,7 @@ public static partial class VideoCheck
         var (w, h) = (Small, height ?? SmallHeight(source));
         using var small = new SKBitmap(new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Opaque));
         using (var canvas = new SKCanvas(small))
-            canvas.DrawBitmap(source, new SKRect(0, 0, w, h), Sampling.Medium(source.Width, w));
+            canvas.DrawBitmap(source, new SKRect(0, 0, w, h), Sampling.Medium);
         var gray = new double[w * h];
         var rgb = new double[w * h * 3];
         for (var yy = 0; yy < h; yy++)
@@ -936,7 +936,7 @@ public static partial class VideoCheck
                 var x = i * frameWidth;
                 canvas.Save();
                 canvas.ClipRect(new SKRect(x, 0, x + frameWidth, frameHeight));
-                canvas.DrawBitmap(bitmap, new SKRect(x + (frameWidth - w) / 2, (frameHeight - h) / 2, x + (frameWidth + w) / 2, (frameHeight + h) / 2), Sampling.Medium(bitmap.Width, w));
+                canvas.DrawBitmap(bitmap, new SKRect(x + (frameWidth - w) / 2, (frameHeight - h) / 2, x + (frameWidth + w) / 2, (frameHeight + h) / 2), Sampling.Medium);
                 canvas.Restore();
             }
         }

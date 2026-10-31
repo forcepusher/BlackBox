@@ -1966,10 +1966,14 @@ same way (2 of 4 full runs, 24 October 2026), when another test started a proces
 Skia (SkiaSharp 4, newer than the 3.x Avalonia 12 asks for; Avalonia runs on it) takes how to read a
 picture's pixels at another size as `SKSamplingOptions`, given with each draw or resize: SkiaSharp 4
 dropped the paint's filter quality. `Sampling` (Media) gives SkiaSharp 2's pixels, measured against
-it on a screenshot (2026-10-30): High shrinks through mipmaps and enlarges with Mitchell's cubic,
-and at the picture's own size copies it (the cubic there softened a PDF page).
-SkiaSharp 3's own stand-in for High, the cubic both ways, came out 2.9 grey levels off on average
-shrinking a screenshot to 37% (aliased text); mipmaps 0.2.
+it on a screenshot shrunk to 37 to 90% and enlarged 2.3 times (2026-10-31): Medium blends the four
+nearest pixels of the nearest mipmap at any size; High does that going down, enlarges with Mitchell's
+cubic and at the picture's own size copies it (the cubic there softened a PDF page). A resize comes
+out within 3 grey levels of SkiaSharp 2's, a draw within 22 (0.3 on average). Blending the two
+nearest mipmaps (Avalonia 12's own Medium, and its High going down) came out 1.1 off on average at
+half size, up to 69; SkiaSharp 3's own stand-in for High, the cubic both ways, 2.9 at 37% (aliased
+text). Avalonia's `Image` draws with its own: a thumbnail shrunk at `MediumQuality` is a shade
+smoother than it was on Avalonia 11 (the PDF peek's letters lost their jagged edges).
 
 Until a chat is used, it shows first that Pause/Break stops it and that corrections and hints can be
 typed to it while it works, that it uses the mouse and keyboard but pauses while you type and what it
