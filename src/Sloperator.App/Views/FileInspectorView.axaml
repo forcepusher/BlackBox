@@ -6,8 +6,8 @@
              x:Class="Sloperator.App.Views.FileInspectorView"
              x:DataType="vm:FileInspectorViewModel">
   <!-- The file itself, as the File inspector panel and the full-screen viewer show it. A right-click on it
-       gives Copy image or Copy file (see CopyMenu), but in text, which has its own Copy. -->
-  <Grid RowDefinitions="*,Auto" Background="Transparent" views:CopyMenu.File="{Binding Path}">
+       gives the file's menu (see FileMenu), but in text, which has its own Copy. -->
+  <Grid RowDefinitions="*,Auto" Background="Transparent" views:FileMenu.File="{Binding Path}">
     <Panel>
       <TextBlock Classes="muted" Text="{Binding Message}" IsVisible="{Binding HasMessage}" HorizontalAlignment="Center" VerticalAlignment="Center"
                  TextWrapping="Wrap" MaxWidth="360" TextAlignment="Center" />
@@ -25,17 +25,17 @@
 
       <!-- A picture: zoomed with the wheel, panned with a right drag, an area marked with a left one. -->
       <views:ZoomBox x:Name="PictureBox" Source="{Binding Picture}" IsVisible="{Binding Picture, Converter={x:Static ObjectConverters.IsNotNull}}" Margin="16"
-                     views:CopyMenu.Image="{Binding Picture}" views:CopyMenu.File="{Binding Path}"
+                     views:FileMenu.Image="{Binding Picture}" views:FileMenu.File="{Binding Path}"
                      Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Picture" />
 
       <!-- A video's frame, the same; its player is under it. -->
       <views:ZoomBox x:Name="FrameBox" Source="{Binding Video.Frame}" IsVisible="{Binding Video, Converter={x:Static ObjectConverters.IsNotNull}}" Margin="16,16,16,8"
-                     views:CopyMenu.Image="{Binding Video.Frame}" views:CopyMenu.File="{Binding Path}"
+                     views:FileMenu.Image="{Binding Video.Frame}" views:FileMenu.File="{Binding Path}"
                      Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Video frame" />
 
       <!-- An animation's frame, the same; its player is under it. -->
       <views:ZoomBox x:Name="AnimationBox" Source="{Binding Animation.Frame}" IsVisible="{Binding Animation, Converter={x:Static ObjectConverters.IsNotNull}}" Margin="16,16,16,8"
-                     views:CopyMenu.Image="{Binding Animation.Frame}" views:CopyMenu.File="{Binding Path}"
+                     views:FileMenu.Image="{Binding Animation.Frame}" views:FileMenu.File="{Binding Path}"
                      Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Animation frame" />
 
       <!-- A sound's waveform: a click sets the playhead, a drag picks a stretch, the ruler scrubs, the wheel zooms. -->
@@ -60,8 +60,8 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:PdfPageItem">
-              <views:PdfPageView HorizontalAlignment="Center" Margin="0,0,0,12" AutomationProperties.Name="{Binding}" views:CopyMenu.Image="{Binding Image}"
-                                 views:CopyMenu.File="{Binding $parent[views:FileInspectorView].((vm:FileInspectorViewModel)DataContext).Path, FallbackValue={x:Null}}" />
+              <views:PdfPageView HorizontalAlignment="Center" Margin="0,0,0,12" AutomationProperties.Name="{Binding}" views:FileMenu.Image="{Binding Image}"
+                                 views:FileMenu.File="{Binding $parent[views:FileInspectorView].((vm:FileInspectorViewModel)DataContext).Path, FallbackValue={x:Null}}" />
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
@@ -72,7 +72,7 @@
 
       <!-- With Area on: the view frozen, to drag an area over. -->
       <views:ZoomBox x:Name="FrozenBox" Source="{Binding Frozen}" IsVisible="{Binding Frozen, Converter={x:Static ObjectConverters.IsNotNull}}"
-                     views:CopyMenu.Image="{Binding Frozen}" views:CopyMenu.File="{Binding Path}"
+                     views:FileMenu.Image="{Binding Frozen}" views:FileMenu.File="{Binding Path}"
                      Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="True" AutomationProperties.Name="Frozen view" />
 
       <!-- Zoom: out, back to fit, in. -->

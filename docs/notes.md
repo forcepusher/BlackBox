@@ -402,15 +402,27 @@ AUTOMATIC1111's and Forge's "parameters" text is read too. Over the 901 pictures
 in the PC's ComfyUI output folder it took at most 66 ms a file; 51 said nothing (files ffmpeg or a
 script made from ComfyUI's), and the 62 without a prompt had an empty one in their workflow.
 
-**Copy image and Copy file** (the user, 2026-10-29: every image in the app, then "Add copy for video
-too and all other files actually") are one right-click menu for every picture and file Sloperator
-shows, `Views/CopyMenu.cs`. A view says what it shows with attached properties: `CopyMenu.Image` (the
-picture on screen), `CopyMenu.Data` (its bytes when no file has it: a screenshot) and `CopyMenu.File`;
+**The file menu.** One right-click menu for every picture and file Sloperator shows, `Views/FileMenu.cs`
+(`CopyMenu` until 2026-10-31): Open in each side panel the file opens in, then Copy image or Copy file
+(the user, 2026-10-29: every image in the app, then "Add copy for video too and all other files
+actually"; 2026-10-31: "Every right-click menu on a file (in any place) should universally list all
+file editing tools, and a code editing tool if the format is text-based", that is Open in Inspector
+and Open in Code editor). A view says what it shows with attached properties: `FileMenu.Image` (the
+picture on screen), `FileMenu.Data` (its bytes when no file has it: a screenshot) and `FileMenu.File`;
 a right-click on it or on anything in it without a menu of its own opens the menu. Menus of their own
 (the Video generator's card, clip, frame and sound menus, File changes' file menu) take
-`CopyMenu.Items` at their end. The chat's own menu (`MainWindow.OnChatMenu`) leaves a control with
+`FileMenu.Items` at their end. The chat's own menu (`MainWindow.OnChatMenu`) leaves a control with
 either alone.
 
+- **Open in Inspector**, **Open in Code editor**: the file in that side panel, which opens in place of
+  the one open, as a card's Inspect does (`MainWindowViewModel.OpenIn`). The entries are the side
+  panels whose `SidePanelOption` has `OpenIn` (what the menu calls it) and whose `Opens` takes the file:
+  the File inspector any file but a folder, the Code editor `FileInspector.IsText` (Markdown, tables,
+  web pages, SVG and the picker's code and text by extension; a file of no kind its name tells by its
+  start). Such a panel is an `IFilePanel` (`Path`, `Show`). The panel open with the file in it already
+  isn't offered (in the File inspector's own bar, Open in Inspector). From the full-screen viewer the
+  viewer closes first, as it covers the panel (`MediaViewer.Chat` is the chat it was opened from).
+  Whether a path is a folder or a nameless kind is text is looked up on this PC's own drives only.
 - **Copy image**, on a picture or on whatever shows one (a video's frame, a document's peek, a PDF
   page, the frozen view of Area, the Video generator's frames, cards and clip strips, the logo): the
   picture at its full size, not the size it is shown at, decoded from its file or bytes. A picture
@@ -420,8 +432,10 @@ either alone.
 - **Copy file**, on any other file (a video, a sound, a 3D model, a document, a folder): the file alone,
   as Explorer's Copy puts it. A picture has no Copy file: its Copy image carries the file.
 
-The menu reads nothing from the disk before a click (a share whose server is off would hold it), so a
-file that has gone shows its entry and copies nothing; File changes, which looks anyway, greys it out.
+Copy reads nothing from the disk before a click (a share whose server is off would hold the menu), so a
+file that has gone shows its entry and copies nothing; File changes, which looks anyway, greys out
+every entry (its menu: Open in…, Show in folder, Copy), on a file in its list and on a file's name
+over its lines.
 The picture last copied is kept until the next copy, as programs read it from Sloperator when they
 paste. Where a right drag pans (a picture or frame in the File inspector, a 3D model, a waveform), a
 drag of 4 DIPs or more opens no menu; a right-click that moved nothing does. Where it is: previews in the
@@ -3229,8 +3243,9 @@ do?" got an answer about exactly those lines, with no tool call.
 
 ### File inspector
 **File inspector** in the Side panel dropdown (`FileInspectorViewModel`, `FileInspectorPanel`; least
-420) shows one file whole on the left of the chat. A card's **Inspect** opens it on that file
-(`MainWindowViewModel.Inspect`: the dropdown switches to it through the same path as a pick, so
+420) shows one file whole on the left of the chat. A card's **Inspect**, or **Open in Inspector** on
+any file's right-click menu (see [Previews](#previews)), opens it on that file
+(`MainWindowViewModel.OpenIn`: the dropdown switches to it through the same path as a pick, so
 the window lays the panel out before it grows); picked from the dropdown it waits for an Inspect, a
 file dropped on it, or one picked with the folder button. With no file, its top bar says how it is
 used, "Select text, cells or an area to ask about it." (muted, cut short with "…" as File changes'

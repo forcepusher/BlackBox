@@ -258,23 +258,24 @@ public partial class FileChangesPanel : UserControl
     }
 
     /// <summary>
-    /// A right-click on a file: Show in folder, in the look of the Video generator's menus, then Copy file
-    /// (Copy image for a picture, see <see cref="CopyMenu"/>). A deleted file has nothing to show or copy,
-    /// so both are greyed out.
+    /// A right-click on a file, in the list or on its name over its lines: every file's menu (Open in
+    /// Inspector, Open in Code editor, Copy file or Copy image, see <see cref="FileMenu"/>) with Show in
+    /// folder before Copy. A deleted file has nothing to open, show or copy, so all are greyed out.
     /// </summary>
     private void OnFileMenu(object? sender, ContextRequestedEventArgs e)
     {
-        if ((e.Source as Control)?.FindLogicalAncestorOfType<ListBoxItem>(includeSelf: true) is not { DataContext: DiffFileItem file } item)
+        if ((e.Source as Control)?.FindLogicalAncestorOfType<ListBoxItem>(includeSelf: true) is not { } item
+            || item.DataContext switch { DiffFileItem f => f, DiffRow { IsHeader: true } row => row.File, _ => null } is not { } file)
             return;
         e.Handled = true;
-        var show = new MenuItem { Header = "Show in folder", IsEnabled = File.Exists(file.FullPath) };
+        var show = new MenuItem { Header = "Show in folder" };
         show.Click += (_, _) => FilePreview.ShowInFolder(file.FullPath);
+        var exists = File.Exists(file.FullPath);
         var menu = new ContextMenu();
-        menu.Items.Add(show);
-        foreach (var copy in CopyMenu.Items(item, null, null, file.FullPath))
+        foreach (var entry in (List<Control>)[.. FileMenu.Open(item, file.FullPath), show, .. FileMenu.Copy(item, null, null, file.FullPath)])
         {
-            copy.IsEnabled = show.IsEnabled;
-            menu.Items.Add(copy);
+            entry.IsEnabled = exists;
+            menu.Items.Add(entry);
         }
         menu.Open(item);
     }

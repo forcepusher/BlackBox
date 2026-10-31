@@ -29,12 +29,28 @@ public interface ISidePanel : IDisposable
     bool Drop(IReadOnlyList<string> paths);
 }
 
+/// <summary>A side panel that shows one file, which a file's right-click menu opens in it (File inspector, Code editor).</summary>
+public interface IFilePanel : ISidePanel
+{
+    /// <summary>The file shown; null before one is.</summary>
+    string? Path { get; }
+
+    /// <summary>Shows <paramref name="path"/> in the panel, in place of the file shown.</summary>
+    void Show(string path);
+}
+
 /// <summary>
 /// An entry of the Side panel dropdown: None, or a panel with how narrow it may get with its top
 /// bar still in one row, splitter included, and how short the window may get with it open (0: as
 /// short as the chat may). Every panel opens as wide (<see cref="SidePanelColumns.PanelWidth"/>).
 /// </summary>
-public sealed record SidePanelOption(string Name, string Description, double MinWidth, double MinHeight, Func<MainWindowViewModel, ISidePanel>? Open)
+/// <param name="OpenIn">
+/// For an <see cref="IFilePanel"/>: what every file's right-click menu calls it, "Open in Inspector"
+/// (see <see cref="Views.FileMenu"/>); null for a panel no file opens in.
+/// </param>
+/// <param name="Opens">Which files it opens from that menu, by their path.</param>
+public sealed record SidePanelOption(string Name, string Description, double MinWidth, double MinHeight, Func<MainWindowViewModel, ISidePanel>? Open,
+    string? OpenIn = null, Func<string, bool>? Opens = null)
 {
     /// <summary>How wide the panel opens, splitter included; 0 for None.</summary>
     public double Width => Open is null ? 0 : SidePanelColumns.PanelWidth;
@@ -56,19 +72,30 @@ public sealed partial class MainWindowViewModel
         new(FileChangesName, "Files the agent changed", 560, 0,
             vm => new FileChangesViewModel(vm)),
         new(FileInspectorName, "Look inside any file", 420, 0,
-            vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir)),
+            vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir),
+            OpenIn: "Inspector", Opens: path => !LocalFolder(path)),
         new("Video generator", "Plan and make a video shot by shot", 770, 633,
             vm => new VideoGeneratorViewModel(vm._previews, vm, vm._paths.VideosDir, null)),
     ];
 
     private const string FileInspectorName = "File inspector", FileChangesName = "File changes";
 
-    /// <summary>A card's Inspect: the file in the File inspector panel, which opens in place of the panel open (if another).</summary>
-    internal void Inspect(string path)
+    /// <summary>A card's Inspect: the file in the File inspector panel.</summary>
+    internal void Inspect(string path) => OpenIn(SidePanelOptions.First(o => o.Name == FileInspectorName), path);
+
+    /// <summary>
+    /// The panels a file's right-click menu opens it in: each that opens its kind, but the one open
+    /// with it in it already.
+    /// </summary>
+    internal IEnumerable<SidePanelOption> PanelsFor(string path) => SidePanelOptions.Where(o => o.OpenIn is not null && o.Opens?.Invoke(path) == true
+        && !(ReferenceEquals(o, SelectedSidePanel) && SidePanel is IFilePanel { Path: { } shown } && string.Equals(shown, Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>The file in that panel (a card's Inspect, Open in on its right-click menu), which opens in place of the panel open (if another).</summary>
+    internal void OpenIn(SidePanelOption panel, string path)
     {
-        if (SidePanel is not FileInspectorViewModel)
-            SelectedSidePanel = SidePanelOptions.First(o => o.Name == FileInspectorName);
-        (SidePanel as FileInspectorViewModel)?.Show(path);
+        if (!ReferenceEquals(SelectedSidePanel, panel))
+            SelectedSidePanel = panel;
+        (SidePanel as IFilePanel)?.Show(path);
     }
 
     /// <summary>The × on the open panel: None in the dropdown.</summary>

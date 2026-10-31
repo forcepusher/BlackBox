@@ -156,9 +156,9 @@
   <!-- How each kind of file is previewed: under the tool call that made or showed it, and under a
        reply that names it by its path. -->
   <Window.DataTemplates>
-    <!-- A right-click anywhere on a preview: Copy image or Copy file (see CopyMenu). -->
+    <!-- A right-click anywhere on a preview: the file's menu, Open in Inspector, Copy image or Copy file (see FileMenu). -->
     <DataTemplate DataType="vm:ImagePreview">
-      <Border Classes="preview" views:CopyMenu.Image="{Binding Image}" views:CopyMenu.File="{Binding Path}">
+      <Border Classes="preview" views:FileMenu.Image="{Binding Image}" views:FileMenu.File="{Binding Path}">
         <StackPanel Spacing="8">
           <Button Classes="bare" Click="OnPictureClick" ToolTip.Tip="See it full screen" HorizontalAlignment="Left" AutomationProperties.Name="{Binding FileName}">
             <Image Source="{Binding Image}" MaxWidth="480" MaxHeight="480" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
@@ -169,7 +169,7 @@
     </DataTemplate>
 
     <DataTemplate DataType="vm:AnimationPreview">
-      <Border Classes="preview" views:CopyMenu.Image="{Binding Image}" views:CopyMenu.File="{Binding Path}">
+      <Border Classes="preview" views:FileMenu.Image="{Binding Image}" views:FileMenu.File="{Binding Path}">
         <StackPanel Spacing="8">
           <Button Classes="bare" Click="OnPictureClick" ToolTip.Tip="See it full screen" HorizontalAlignment="Left" AutomationProperties.Name="{Binding FileName}">
             <Image Source="{Binding Image}" MaxWidth="480" MaxHeight="480" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
@@ -181,7 +181,7 @@
 
     <!-- Copy image is the frame on screen, Copy file the video. -->
     <DataTemplate DataType="vm:VideoPreview">
-      <Border Classes="preview" views:CopyMenu.Image="{Binding Frame}" views:CopyMenu.File="{Binding Path}">
+      <Border Classes="preview" views:FileMenu.Image="{Binding Frame}" views:FileMenu.File="{Binding Path}">
         <StackPanel Spacing="8">
           <Panel HorizontalAlignment="Left" MaxWidth="480" views:InView.Video="True">
             <Button Classes="bare" Click="OnPictureClick" ToolTip.Tip="Watch it full screen, with its sound" AutomationProperties.Name="Watch full screen">
@@ -207,7 +207,7 @@
     </DataTemplate>
 
     <DataTemplate DataType="vm:AudioPreview">
-      <Border Classes="preview" Width="498" views:CopyMenu.File="{Binding Path}">
+      <Border Classes="preview" Width="498" views:FileMenu.File="{Binding Path}">
         <StackPanel Spacing="8">
           <DockPanel>
             <Button DockPanel.Dock="Left" Classes="roundPlay accent" Command="{Binding PlayCommand}" VerticalAlignment="Center" ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause sound">
@@ -225,7 +225,7 @@
     </DataTemplate>
 
     <DataTemplate DataType="vm:ModelPreview">
-      <Border Classes="preview" views:CopyMenu.File="{Binding Path}">
+      <Border Classes="preview" views:FileMenu.File="{Binding Path}">
         <StackPanel Spacing="8">
           <views:ModelViewer Mesh="{Binding Mesh}" Width="480" Height="360" HorizontalAlignment="Left" ToolTip.Tip="Drag to turn, scroll to zoom, double-click to reset" />
           <views:PreviewFooter />
@@ -248,7 +248,7 @@
          over the card with its name. The peek is the box of a picture's thumbnail in a message (at most
          300x180 in a 1-pixel frame); what doesn't fit it is cut off. -->
     <DataTemplate DataType="vm:FileCardPreview">
-      <Border Classes="preview" Width="498" views:CopyMenu.Image="{Binding Thumbnail}" views:CopyMenu.File="{Binding Path}">
+      <Border Classes="preview" Width="498" views:FileMenu.Image="{Binding Thumbnail}" views:FileMenu.File="{Binding Path}">
         <StackPanel Spacing="8">
           <Button Classes="bare" Click="OnPictureClick" IsVisible="{Binding HasPeek}" HorizontalAlignment="Left"
                   ToolTip.Tip="See it full screen" AutomationProperties.Name="{Binding FileName}">
@@ -514,7 +514,7 @@
             <!-- A tool call's picture, as the model got it: open on the card for a look, folded for an action. -->
             <DataTemplate x:Key="ToolShot" x:DataType="vm:ToolCallItem">
               <Button Classes="bare" Click="OnScreenshotClick" HorizontalAlignment="Left"
-                      views:CopyMenu.Image="{Binding Screenshot}" views:CopyMenu.Data="{Binding ScreenshotData}"
+                      views:FileMenu.Image="{Binding Screenshot}" views:FileMenu.Data="{Binding ScreenshotData}"
                       ToolTip.Tip="See it full screen" AutomationProperties.Name="Screenshot">
                 <Image Source="{Binding Screenshot}" MaxWidth="480" Stretch="Uniform" />
               </Button>
@@ -575,7 +575,7 @@
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:AttachmentItem">
                           <Button Classes="bare" Click="OnAttachmentClick" ToolTip.Tip="{Binding Tip}" Margin="0,0,0,6"
-                                  views:CopyMenu.File="{Binding Path}" AutomationProperties.Name="{Binding FileName}">
+                                  views:FileMenu.File="{Binding Path}" AutomationProperties.Name="{Binding FileName}">
                             <Panel Margin="6,0,0,0">
                               <Border Classes="attachment" IsVisible="{Binding !ShowsName}">
                                 <Image Source="{Binding Thumbnail}" MaxHeight="180" MaxWidth="300" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
@@ -950,7 +950,7 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="vm:AttachmentItem">
-                    <Panel Margin="0,8,12,0" ToolTip.Tip="{Binding Tip}" views:CopyMenu.File="{Binding Path}">
+                    <Panel Margin="0,8,12,0" ToolTip.Tip="{Binding Tip}" views:FileMenu.File="{Binding Path}">
                       <!-- A click on the picture shows it full screen, as one in the chat. -->
                       <Border Classes="attachment" IsVisible="{Binding !ShowsName}" Cursor="Hand" PointerReleased="OnComposerPictureReleased" AutomationProperties.Name="{Binding FileName}">
                         <Image Source="{Binding Thumbnail}" Height="64" MaxWidth="160" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
