@@ -479,6 +479,9 @@
     <Style Selector="views|TitleBar.inactive TextBlock.title">
       <Setter Property="Foreground" Value="{StaticResource BbFaint}" />
     </Style>
+    <Style Selector="views|TitleBar.inactive TextBlock.muted">
+      <Setter Property="Foreground" Value="{StaticResource BbFaint}" />
+    </Style>
     <Style Selector="views|TitleBar.inactive Button.caption">
       <Setter Property="Foreground" Value="{StaticResource BbFaint}" />
     </Style>

@@ -21,6 +21,15 @@ public partial class TitleBar : UserControl
     /// </summary>
     public const double Room = 33;
 
+    public static readonly StyledProperty<string?> TextProperty =
+        AvaloniaProperty.Register<TitleBar, string?>(nameof(Text));
+
+    public static readonly StyledProperty<Control?> StatusProperty =
+        AvaloniaProperty.Register<TitleBar, Control?>(nameof(Status));
+
+    public static readonly StyledProperty<string?> SubtitleProperty =
+        AvaloniaProperty.Register<TitleBar, string?>(nameof(Subtitle));
+
     private Window? _window;
 
     public TitleBar()
@@ -29,13 +38,57 @@ public partial class TitleBar : UserControl
         IsVisible = false;
     }
 
+    /// <summary>The bar's title when it isn't the window's (whose title the taskbar shows).</summary>
+    public string? Text
+    {
+        get => GetValue(TextProperty);
+        set => SetValue(TextProperty, value);
+    }
+
+    /// <summary>
+    /// What sits right after the title: the chat window's server status. It takes the
+    /// pointer as the buttons do (not the caption), so its tooltips show.
+    /// </summary>
+    public Control? Status
+    {
+        get => GetValue(StatusProperty);
+        set => SetValue(StatusProperty, value);
+    }
+
+    /// <summary>Last, after the status, in the title's look: the chat's title.</summary>
+    public string? Subtitle
+    {
+        get => GetValue(SubtitleProperty);
+        set => SetValue(SubtitleProperty, value);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == StatusProperty)
+            StatusHost.Content = change.NewValue;
+        else if (change.Property == SubtitleProperty)
+            SubtitleText.Text = change.NewValue as string;
+        else if (change.Property == TextProperty && _window is { } window)
+            ShowTitle(window);
+    }
+
+    /// <summary>The bar's own title, else the window's, followed as it changes.</summary>
+    private void ShowTitle(Window window)
+    {
+        if (Text is { } text)
+            TitleText.Text = text;
+        else
+            TitleText[!TextBlock.TextProperty] = window[!Window.TitleProperty];
+    }
+
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
         if (TopLevel.GetTopLevel(this) is not Window window || window == _window)
             return;
         _window = window;
-        TitleText[!TextBlock.TextProperty] = window[!Window.TitleProperty];
+        ShowTitle(window);
         window.PropertyChanged += OnWindowChanged;
         Show(window);
 #if WINDOWS
@@ -100,7 +153,7 @@ public partial class TitleBar : UserControl
                 handled = true;
                 var hit = Platform.Windows.WindowsPlatform.FrameHitTest(hwnd, lParam);
                 return hit != HTCLIENT ? hit : Over(MaximizeButton, lParam) ? HTMAXBUTTON
-                    : Over(this, lParam) && !Over(MinimizeButton, lParam) && !Over(CloseButton, lParam) ? HTCAPTION : HTCLIENT;
+                    : Over(this, lParam) && !Over(MinimizeButton, lParam) && !Over(CloseButton, lParam) && !Over(StatusHost, lParam) ? HTCAPTION : HTCLIENT;
             case WM_NCMOUSEMOVE:
                 _pointer = new PixelPoint((short)(lParam & 0xFFFF), (short)((lParam >> 16) & 0xFFFF));
                 Hover(wParam == HTMAXBUTTON);

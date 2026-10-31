@@ -1823,6 +1823,23 @@ signs #808080 while the window isn't active. Windows 10 drew its own grey bar wh
 The bar had the blob 16x16 at 12 from the left and the title 8 after it until 2026-10-31, when
 the user asked for it to go: the title took its place at 12, and the exe, taskbar and Alt+Tab keep
 the icon.
+A chat window's bar reads "Sloperator ● Connected · 15k of 256k used   <chat>" since 2026-10-31
+(the user: the status was in the top bar under it, between the Side panel dropdown and History; put
+first beside minimize, then after the window's title, then first with the title last, then "Separate
+Sloperator word from the chat title. Put Sloperator word first"): the bar's own title
+(`TitleBar.Text`, "Sloperator"; the window's title, "<chat> - Sloperator", stays the taskbar's),
+the server's state 12 after it (`TitleBar.Status`: the dot, the status word 8 after it and the
+context's use, in the muted 12, faint while the window isn't active), and the chat's title 12 after
+that (`TitleBar.Subtitle`, the title's look; nothing before the first message). The dot and the word
+never move; the chat's title moves as the context's use comes after the first reply and as its
+number grows. The status is docked before the chat's title and measured first, so a long chat title
+is cut short with "…" before any of it; with no room left the `WholeRow` gives way, the context's
+use first, then the word, the dot staying (the word in the row's tooltip). Settings has neither and
+its title at 12 as before. The row is as tall as the strip and each part centred in it, as the
+title is: the words share the title's baseline and the 8 x 8 dot (9 x 9 before, 11.25 px at 125%) is
+exactly in the middle at 100% and 125% (12 rows over and under it; 15 at 125%). Measured on the
+laptop's 100% (unaware) and 125% builds. The row is the client to Windows (not the caption), as the
+buttons are, so its tooltips show; it can't be dragged from.
 The buttons' tooltips (Minimize, Maximize or Restore Down, Close) are at the pointer, as every
 tooltip in the app and Windows' own caption tooltips: Avalonia's `Pointer` placement, the tip's
 corner 20 under the pointer, flipped to its left when it would run off the screen (Restore Down and
@@ -1892,7 +1909,8 @@ dot and "…" beside Video generator's longer name in the Side panel dropdown, i
 part shows only if it and all before it fit in full: the context's use ("· 35k of 100k used") goes
 first, then the status word, and the dot stays, 12 from History, the status in the row's tooltip.
 Measured, not a width breakpoint, as the status words and the dropdown's name differ in length.
-`WholeRowTests` checks each part is in full or past the clipped right edge. Starting Sloperator
+`WholeRowTests` checks each part is in full or past the clipped right edge. Since 2026-10-31 the
+status is in the title bar (see Title bar), and the top bar has nothing that gives way. Starting Sloperator
 again does the same: one Sloperator runs per `Data` folder (`SingleInstance`), and a second start of
 the exe asks it for another window and ends at once. All the windows are one process
 (`ChatWindows` keeps them), so what they share needs no talk between programs; Sloperator ends with

@@ -27,6 +27,9 @@ public sealed partial class MainWindowViewModel
     /// <summary>The window's title: the chat's, so several Sloperator windows can be told apart on the taskbar.</summary>
     public string WindowTitle => _chatTitle is { } title ? $"{title} - Sloperator" : "Sloperator";
 
+    /// <summary>The chat's title in the title bar, after the server's status; empty until its first message.</summary>
+    public string ChatTitle => _chatTitle ?? "";
+
     /// <summary>
     /// The run in progress belongs to a chat that is no longer on screen (New chat or another chat
     /// was picked while it ran): it is being stopped, and what it still reports is dropped.
@@ -91,6 +94,7 @@ public sealed partial class MainWindowViewModel
         _chatTitle = null;
         UseChanges(new FileChanges());
         OnPropertyChanged(nameof(WindowTitle));
+        OnPropertyChanged(nameof(ChatTitle));
         ContextUsage = "";
     }
 
@@ -118,6 +122,7 @@ public sealed partial class MainWindowViewModel
         _chatId = chat.Id;
         _chatTitle = chat.Title;
         OnPropertyChanged(nameof(WindowTitle));
+        OnPropertyChanged(nameof(ChatTitle));
         _history = chat.History;
         _pictures = new(_chats.NextPictureNumber(chat.Id));
         UseChanges(FileChanges.Load(ChangesFile(chat.Id)), chat.Folder);
@@ -256,6 +261,7 @@ public sealed partial class MainWindowViewModel
         _chatTitle = null;
         UseChanges(new FileChanges());
         OnPropertyChanged(nameof(WindowTitle));
+        OnPropertyChanged(nameof(ChatTitle));
         ContextUsage = "";
         MarkCurrentChat();
     }
@@ -329,6 +335,7 @@ public sealed partial class MainWindowViewModel
             const string video = "Video generator · ";
             _chatTitle = ChatStore.TitleFrom(first.Via is { } via ? $"{text.Trim().Split('\n')[0]} ({(via.StartsWith(video, StringComparison.Ordinal) ? via[video.Length..] : via)})" : text);
             OnPropertyChanged(nameof(WindowTitle));
+            OnPropertyChanged(nameof(ChatTitle));
         }
         chat.Id = _chatId;
         chat.Title = _chatTitle;

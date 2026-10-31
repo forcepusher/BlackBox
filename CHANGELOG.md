@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chat. Pictures an SVG links on the web aren't fetched. Sloperator.exe is about 1.5 MB bigger.
 
 ### Changed
+- The server's status (the coloured dot, Connected and how much context is used) moved from the top
+  bar into the window's title bar, which reads Sloperator, the status, then the chat's title.
 - Settings → Safety: the dropdown for when Sloperator asks before acting is labelled
   **Tool call approval** (it read "Ask me first", next to choices like "Never ask").
 - Video generator looks like the other side panels: how the piece shown was made sits in a column
