@@ -27,9 +27,14 @@ public static class PictureFile
         }
     }
 
-    /// <summary>The picture in the file, as <see cref="SKBitmap.Decode(string)"/> reads it; null when it can't be read.</summary>
+    /// <summary>
+    /// The picture in the file, as <see cref="SKBitmap.Decode(string)"/> reads it, an SVG drawn at its
+    /// own size; null when it can't be read.
+    /// </summary>
     public static SKBitmap? Decode(string path)
     {
+        if (SvgFile.Handles(path))
+            return SvgFile.Open(path)?.Render(1);
         using var codec = Codec(path);
         return codec is null ? null : SKBitmap.Decode(codec);
     }

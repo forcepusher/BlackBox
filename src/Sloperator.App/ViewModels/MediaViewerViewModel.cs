@@ -153,11 +153,7 @@ public sealed partial class ViewerPicture : ObservableObject, IDisposable
             string details;
             try
             {
-                using var stream = data is not null ? new MemoryStream(data) : (Stream)File.OpenRead(path!);
-                using var probe = (path is not null ? PictureFile.Codec(path) : null) ?? (data is not null ? SkiaSharp.SKCodec.Create(new MemoryStream(data)) : null);
-                var size = probe is { } p ? $"{p.Info.Width}x{p.Info.Height}" : "";
-                bitmap = probe is { } c && c.Info.Width > width ? Bitmap.DecodeToWidth(stream, width, BitmapInterpolationMode.HighQuality) : new Bitmap(stream);
-                details = path is null ? size : string.Join(", ", new[] { size, FilePreview.Size(path) }.Where(s => s.Length > 0));
+                (bitmap, details) = data is null && path is not null && SvgFile.Handles(path) ? DrawSvg(path, width) : Decode(path, data, width);
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -174,6 +170,23 @@ public sealed partial class ViewerPicture : ObservableObject, IDisposable
                 loaded(this, details);
             });
         });
+    }
+
+    /// <summary>A picture's bytes or file, at most <paramref name="width"/> wide, with its size and the file's.</summary>
+    private static (Bitmap, string) Decode(string? path, byte[]? data, int width)
+    {
+        using var stream = data is not null ? new MemoryStream(data) : (Stream)File.OpenRead(path!);
+        using var probe = (path is not null ? PictureFile.Codec(path) : null) ?? (data is not null ? SkiaSharp.SKCodec.Create(new MemoryStream(data)) : null);
+        var size = probe is { } p ? $"{p.Info.Width}x{p.Info.Height}" : "";
+        var bitmap = probe is { } c && c.Info.Width > width ? Bitmap.DecodeToWidth(stream, width, BitmapInterpolationMode.HighQuality) : new Bitmap(stream);
+        return (bitmap, path is null ? size : string.Join(", ", new[] { size, FilePreview.Size(path) }.Where(s => s.Length > 0)));
+    }
+
+    /// <summary>An SVG drawn to fit the screen's width, as a drawing stays sharp at any size.</summary>
+    private static (Bitmap, string) DrawSvg(string path, int width)
+    {
+        var (bitmap, own) = FilePreview.DrawSvg(path, width, width);
+        return (bitmap, $"{own}, {FilePreview.Size(path)}");
     }
 
     public void Dispose()

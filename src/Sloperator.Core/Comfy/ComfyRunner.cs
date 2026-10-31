@@ -14,7 +14,7 @@ public sealed record ComfyOutput(string NodeId, string Filename, string Subfolde
 
     public static string KindOf(string file) => Path.GetExtension(file).ToLowerInvariant() switch
     {
-        ".png" or ".jpg" or ".jpeg" or ".bmp" or ".tif" or ".tiff" or ".exr" => "image",
+        ".png" or ".jpg" or ".jpeg" or ".bmp" or ".tif" or ".tiff" or ".exr" or ".svg" => "image",
         ".webp" or ".gif" or ".apng" => "animation",
         ".mp4" or ".webm" or ".mov" or ".mkv" or ".avi" or ".m4v" => "video",
         ".wav" or ".mp3" or ".flac" or ".ogg" or ".opus" or ".m4a" or ".aac" => "audio",

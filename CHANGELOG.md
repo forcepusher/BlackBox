@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resolution, under its final reply with a caption. Click it to see it full size.
 - Right-click any file (a card in the chat, a file in a message, the full-screen viewer, File changes,
   the Video generator) for **Open in Inspector**, which shows it in the File inspector panel.
+- SVG files show as pictures: in the chat, full screen, and in File inspector, where they stay sharp
+  however far you zoom and **Code** shows their source to select lines of. The agent sees what an SVG
+  draws when it reads one, and writes design mockups as SVG files, so you see a mockup right in the
+  chat. Pictures an SVG links on the web aren't fetched. Sloperator.exe is about 1.5 MB bigger.
 
 ### Changed
 - Sloperator runs on Avalonia 12 and SkiaSharp 4 (both the latest): buttons and rows sized by their

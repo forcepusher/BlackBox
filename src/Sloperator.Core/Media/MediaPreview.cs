@@ -100,6 +100,15 @@ public static class MediaPreview
 
     private static (string, SKBitmap?, string) LookAtPicture(string path, string size, bool makeTile)
     {
+        if (SvgFile.Handles(path))
+        {
+            var svg = SvgFile.Open(path) ?? throw new InvalidDataException("not an SVG this can draw");
+            var said = $"SVG drawing {svg.Width:0.#}x{svg.Height:0.#}, {size}";
+            if (!makeTile)
+                return (said, null, "");
+            using var drawn = svg.RenderAtLeast(TileWidth);
+            return (said, Fit(drawn, TileWidth, TileWidth), "the drawing");
+        }
         using var codec = PictureFile.Codec(path) ?? throw new InvalidDataException("not a picture this can read");
         var (w, h) = (codec.Info.Width, codec.Info.Height);
         var frames = codec.FrameCount;

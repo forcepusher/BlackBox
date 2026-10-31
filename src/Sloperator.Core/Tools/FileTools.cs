@@ -39,7 +39,7 @@ public sealed class ReadFileTool : Tool
     public override string Name => "read_file";
     public override string Description =>
         "Read a file. Text files come back as numbered lines; PDF, Word (.docx), Excel (.xlsx) and PowerPoint (.pptx) files as their text " +
-        "(Excel cell by cell, with formulas); a picture (PNG, JPEG, GIF, BMP, WebP) is shown to you as an image; a video (MP4, WebM, MOV…) " +
+        "(Excel cell by cell, with formulas); a picture (PNG, JPEG, GIF, BMP, WebP) is shown to you as an image, an SVG as its numbered lines and the image it draws; a video (MP4, WebM, MOV…) " +
         "as frames with their times, a sound (WAV, MP3, FLAC, OGG…) as its waveform and spectrogram with its loudness and silences, " +
         "a 3D model (GLB, glTF, OBJ, PLY, STL, FBX) from four sides, with an FBX's animation at four times. Relative paths are resolved against the working directory.";
     public override ToolRisk Risk => ToolRisk.ReadOnly;
@@ -71,6 +71,21 @@ public sealed class ReadFileTool : Tool
             var look = Media.MediaPreview.ForFiles([path], ctx.Media, ctx.SeesImages);
             var text = string.Join("\n", look.Lines) + (look.Image is not null ? "\n" + look.Caption : "");
             return new ToolResult(text, look.Image, ImageCaption: look.Image is null ? null : $"A look at {Path.GetFileName(path)}:", Files: [path]);
+        }
+        if (Media.SvgFile.Handles(path) && ctx.SeesImages)
+        {
+            // Its lines to edit, and what they draw: a mockup the model made is checked by looking at it.
+            using var source = TextFiles.OpenText(path);
+            var lines = await NumberedAsync(source, offset, limit, ct).ConfigureAwait(false);
+            if (Picture.Load(path) is not { } drawn)
+                return lines with { Text = lines.Text + "\n(It draws nothing: Sloperator can't read it as an SVG.)" };
+            var size = drawn.ShownWidth == drawn.Width && drawn.ShownHeight == drawn.Height ? "" : $", shown at {drawn.ShownWidth}x{drawn.ShownHeight}";
+            var clear = drawn.Transparency is { } t ? $", {t} (shown on white)" : "";
+            return lines with
+            {
+                Text = $"{lines.Text.TrimEnd()}\n\nIt draws a {drawn.Width}x{drawn.Height} picture{size}{clear}.",
+                Image = drawn.Jpeg, ImageCaption = $"What {Path.GetFileName(path)} draws:", Files = [path],
+            };
         }
         if (Picture.Handles(path))
         {
@@ -204,6 +219,7 @@ public sealed class WriteFileTool : Tool
         "In .xlsx each heading starts a sheet named after it and tables fill it; a cell starting with = is a formula, and numbers, 12%, $1,200 and " +
         "2026-10-16 become values shown as written (write amounts as $1,200.00 to show them in dollars; a formula under them shows dollars too). " +
         "In .pptx a line --- starts the next slide, and a slide's first heading is its title. " +
+        "An .svg is shown to the user as the picture it draws: write a design mockup as one. " +
         "To change an existing document, use edit_file, which keeps its formatting.";
     public override ToolRisk Risk => ToolRisk.Risky;
     public override JsonObject Parameters => Schema(
@@ -251,8 +267,11 @@ public sealed class WriteFileTool : Tool
         return new ToolResult($"{(existed ? "Overwrote" : "Created")} {path} ({content.Length} chars).", Files: Shown(path));
     }
 
-    /// <summary>A Markdown file written gets its card under the call (Preview shows it formatted); other text files aren't shown.</summary>
-    private static List<string>? Shown(string path) => Media.MarkdownFiles.Handles(path) ? [path] : null;
+    /// <summary>
+    /// A Markdown file written gets its card under the call (Preview shows it formatted), an SVG the
+    /// picture it draws; other text files aren't shown.
+    /// </summary>
+    private static List<string>? Shown(string path) => Media.MarkdownFiles.Handles(path) || Media.SvgFile.Handles(path) ? [path] : null;
 }
 
 public sealed class EditFileTool : Tool
@@ -328,7 +347,9 @@ public sealed class EditFileTool : Tool
         if (TextFiles.NeedsSignature(path, encoding, edited))
             encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
         await TextFiles.WriteAllAsync(path, edited, encoding, ct).ConfigureAwait(false);
-        return new ToolResult(count > 1 ? $"Edited {path}: replaced {count} occurrences." : $"Edited {path}.");
+        // An SVG edited is shown again as it draws now, as a mockup changed is seen at once.
+        return new ToolResult(count > 1 ? $"Edited {path}: replaced {count} occurrences." : $"Edited {path}.",
+            Files: Media.SvgFile.Handles(path) ? [path] : null);
     }
 }
 
