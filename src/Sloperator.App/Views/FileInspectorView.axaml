@@ -75,22 +75,36 @@
                      views:FileMenu.Image="{Binding Frozen}" views:FileMenu.File="{Binding Path}"
                      Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="True" AutomationProperties.Name="Frozen view" />
 
-      <!-- Zoom: out, back to fit, in. -->
-      <Border x:Name="ZoomButtons" IsVisible="{Binding CanZoom}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,16" CornerRadius="6" Padding="4"
-              Background="{StaticResource BbSurfaceRaised}" BorderBrush="{StaticResource BbBorder}" BorderThickness="1">
-        <StackPanel Orientation="Horizontal" Spacing="4">
-          <Button Classes="ghost icon small"
-                  Command="{Binding ZoomOutCommand}" ToolTip.Tip="Zoom out" AutomationProperties.Name="Zoom out">
-            <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
-          </Button>
-          <Button Classes="ghost small" MinWidth="48" HorizontalContentAlignment="Center"
-                  Command="{Binding ZoomFitCommand}" Content="{Binding ZoomText}" ToolTip.Tip="Fit" AutomationProperties.Name="Zoom to fit" />
-          <Button Classes="ghost icon small"
-                  Command="{Binding ZoomInCommand}" ToolTip.Tip="Zoom in" AutomationProperties.Name="Zoom in">
-            <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-          </Button>
-        </StackPanel>
-      </Border>
+      <!-- In the corner over the file: Prompt metadata, then the zoom buttons. -->
+      <StackPanel x:Name="CornerButtons" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,16">
+        <!-- Prompt metadata: what the file was made with, under it, in the panel (the user, 2026-10-31: not a
+             selection, so not in the bar with Text and Area). There only for a file that carries prompts. -->
+        <Border IsVisible="{Binding ShowsPromptButton}" CornerRadius="6" Padding="4"
+                Background="{StaticResource BbSurfaceRaised}" BorderBrush="{StaticResource BbBorder}" BorderThickness="1">
+          <ToggleButton Classes="ghost small" IsChecked="{Binding ShowRecipe}" ToolTip.Tip="Prompts and settings it was made with" AutomationProperties.Name="Prompt metadata">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <PathIcon Width="12" Height="12" Data="M3 18h12v-2H3v2zM3 6v2h18V6H3zm0 7h18v-2H3v2z" />
+              <TextBlock Text="Prompt metadata" VerticalAlignment="Center" />
+            </StackPanel>
+          </ToggleButton>
+        </Border>
+        <!-- Zoom: out, back to fit, in. -->
+        <Border IsVisible="{Binding CanZoom}" CornerRadius="6" Padding="4"
+                Background="{StaticResource BbSurfaceRaised}" BorderBrush="{StaticResource BbBorder}" BorderThickness="1">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <Button Classes="ghost icon small"
+                    Command="{Binding ZoomOutCommand}" ToolTip.Tip="Zoom out" AutomationProperties.Name="Zoom out">
+              <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
+            </Button>
+            <Button Classes="ghost small" MinWidth="48" HorizontalContentAlignment="Center"
+                    Command="{Binding ZoomFitCommand}" Content="{Binding ZoomText}" ToolTip.Tip="Fit" AutomationProperties.Name="Zoom to fit" />
+            <Button Classes="ghost icon small"
+                    Command="{Binding ZoomInCommand}" ToolTip.Tip="Zoom in" AutomationProperties.Name="Zoom in">
+              <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+            </Button>
+          </StackPanel>
+        </Border>
+      </StackPanel>
     </Panel>
 
     <!-- An animation's player: a frame back, play, a frame on; where it is. -->

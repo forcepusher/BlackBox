@@ -383,7 +383,7 @@ and the side buttons go through the chat's other pictures and videos, Esc, × or
 picture goes back. The agent's clicks step it aside as they do the chat's window, and its keys go to
 the window under both (before, from the chat they could go to the Video generator window there was then).
 
-**Prompt metadata** in the File inspector panel's bar ("Prompt" until 2026-10-31, when the user found the name unclear; see [File inspector](#file-inspector)), for a picture,
+**Prompt metadata** in the File inspector panel, over the file's corner ("Prompt" in the panel's bar until 2026-10-31, when the user found the name unclear and the button no selection; see [File inspector](#file-inspector)), for a picture,
 animation, video, sound or 3D model made with ComfyUI, shows the prompts it was made with and
 the settings that matter for making it again (model, LoRAs with their strength, shift, sampler,
 scheduler, steps, CFG, seed, denoise, size, a song's tempo and key, the pictures it started from),
@@ -3271,8 +3271,7 @@ do?" got an answer about exactly those lines, with no tool call.
 
 ### File inspector
 **File inspector** in the Side panel dropdown (`FileInspectorViewModel`, `FileInspectorPanel`; least
-560, as File changes and Code editor: 420 until 2026-10-31, when its bar kept Code, Area and Prompt metadata
-for every file and they no longer fitted beside the file's name) shows one file whole on the left of the chat. A card's **Inspect**, or **Open in Inspector** on
+420) shows one file whole on the left of the chat. A card's **Inspect**, or **Open in Inspector** on
 any file's right-click menu (see [Previews](#previews)), opens it on that file
 (`MainWindowViewModel.OpenIn`: the dropdown switches to it through the same path as a pick, so
 the window lays the panel out before it grows); picked from the dropdown it waits for an Inspect, a
@@ -3283,11 +3282,12 @@ file: a picker in the shown file's folder, listing "Files it shows" first, then 
 `FileInspector.PickerTypes`, then All files, since anything else opens in hex; the user's request,
 2026-10-26, not Open in the default program, which the cards no longer have) and the × that closes it; Show in folder was there too until the user had it taken off (2026-10-25), as the file's card in the chat has it. For a picture, animation, video, sound or 3D model that says
 how it was made (`MediaRecipe.Read`, run beside the file's own load so a large file's wait doesn't
-hold the picture), the bar has **Prompt metadata** too ("Prompt" until 2026-10-31): a toggle that shows its prompts and settings under the
-file, in a section at most half the panel's height (set on resize in `FileInspectorPanel`) that
-scrolls past that; it stays on from one file to the next, and is greyed (its tooltip "This file doesn't say
-how it was made") for a file that says nothing: hidden until 2026-10-31, when the user had the bar's
-buttons kept in place from one file to the next, as Text and Area are. It is in the panel only, not in `FileInspectorView`, so the full-screen viewer's peek at a
+hold the picture), the panel has **Prompt metadata**: a toggle in the corner over the file, left of the zoom buttons, that
+shows its prompts and settings under the file, in a section at most half the panel's height (set on
+resize in `FileInspectorPanel`) that scrolls past that; it stays on from one file to the next, and is
+there only for a file that says how it was made (`ShowsPromptButton`). Until 2026-10-31 it was
+"Prompt" in the panel's bar; the user had it renamed, then moved out of the bar, as it isn't a way to
+select as Text and Area are, the bar's buttons staying the same for every file. It is in the panel only, not in `FileInspectorView`, so the full-screen viewer's peek at a
 document doesn't carry it. A message sent
 while it shows a file carries "File inspector · name" over the bubble and tells the model which file
 is open, so "what does this say" is about it. Which way a file is shown (`FileInspector.KindOf`,

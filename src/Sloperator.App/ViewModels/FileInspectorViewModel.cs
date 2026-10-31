@@ -60,7 +60,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>The file shown; null before one is.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FileName), nameof(HasFile), nameof(CanFreeze), nameof(AreaTip), nameof(PromptTip), nameof(TextTip))]
+    [NotifyPropertyChangedFor(nameof(FileName), nameof(HasFile), nameof(CanFreeze), nameof(AreaTip), nameof(TextTip))]
     private string? _path;
 
     public string FileName => System.IO.Path.GetFileName(Path ?? "");
@@ -208,13 +208,13 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     /// <summary>The prompts and settings a picture, animation, video, sound or 3D model says it was made with (ComfyUI keeps them in every file it saves); null when it says none.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasRecipe), nameof(PromptTip))]
+    [NotifyPropertyChangedFor(nameof(HasRecipe), nameof(ShowsPromptButton))]
     private MediaRecipe? _recipe;
 
     public bool HasRecipe => Recipe is not null;
 
-    /// <summary>Prompt is always in the panel's bar, greyed for a file that says nothing of how it was made.</summary>
-    public string PromptTip => HasRecipe ? "Prompts and settings it was made with" : HasFile ? "This file doesn't say how it was made" : "Open a file first";
+    /// <summary>Prompt metadata, in the corner over the file in the panel: there only for a file that says how it was made.</summary>
+    public bool ShowsPromptButton => HasRecipe && CanPick;
 
     /// <summary>Prompt is on: what the file was made with shows under it; it stays on from one file to the next.</summary>
     [ObservableProperty]

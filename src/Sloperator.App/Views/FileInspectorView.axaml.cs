@@ -94,20 +94,20 @@ public partial class FileInspectorView : UserControl
             return;
         }
         ClearSelection();
-        // Read off the screen, the zoom buttons over a picture would be in the still: hidden for the frame it is read in.
-        ZoomButtons.Opacity = 0;
+        // Read off the screen, the buttons in the corner over a picture would be in the still: hidden for the frame it is read in.
+        CornerButtons.Opacity = 0;
         DispatcherTimer.RunOnce(() =>
         {
             if (_vm is not { AreaMode: true, Frozen: null })
             {
-                ZoomButtons.Opacity = 1;
+                CornerButtons.Opacity = 1;
                 return;
             }
             Control? shown = _vm.Markdown is not null ? DocumentScroll : _vm.Text is not null ? TextScroll : _vm.Model is not null ? ModelView
                 : _vm.Pages is not null ? PdfScroll : _vm.Video is not null ? FrameBox : _vm.Animation is not null ? AnimationBox
                 : _vm.Sound is not null ? Waveform : _vm.Picture is not null ? PictureBox : null;
             Frozen(shown is null ? null : OnScreen(shown));
-            ZoomButtons.Opacity = 1;
+            CornerButtons.Opacity = 1;
         }, TimeSpan.FromMilliseconds(80));
     }
 

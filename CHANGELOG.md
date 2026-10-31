@@ -27,12 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - File changes shows Wrap and Watch even before any file has changed, so its bar no longer shifts
   when the agent makes its first change.
-- File inspector always shows **Text**, **Area** and **Prompt metadata** in its bar, greyed for a file
-  they don't apply to (the tooltip says why), so the buttons no longer come and go from one file to the
-  next. Area works on every file, pictures, videos, sounds and PDFs too. Text, in place of Code (an
-  SVG's source), shows any file's text to select: an SVG's or a Markdown file's source, a CSV as
-  written, the text of a Word, PowerPoint, Excel or PDF file or a web page. Prompt was renamed Prompt
-  metadata. The panel can't be made quite as narrow as before (560 at least, as File changes), so its bar fits.
+- File inspector's bar always shows **Text** and **Area**, greyed for a file they don't apply to (the
+  tooltip says why), so its buttons no longer come and go from one file to the next. Area works on every
+  file, pictures, videos, sounds and PDFs too. Text, in place of Code (an SVG's source), shows a file's
+  text to select: an SVG's or a Markdown file's source, a CSV as written, the text of a Word,
+  PowerPoint, Excel or PDF file or a web page.
+- File inspector's Prompt is now **Prompt metadata**, beside the zoom buttons over the file, and shows
+  only for a file that carries prompts.
 - Sloperator runs on Avalonia 12 and SkiaSharp 4 (both the latest): buttons and rows sized by their
   text are up to a pixel tighter, an empty field's hint keeps its grey under the pointer and while
   typed in, and pictures the window shrinks come out a shade smoother. Sloperator.exe is about 1 MB

@@ -17,8 +17,9 @@
                 ToolTip.Tip="Open a file" AutomationProperties.Name="Open file">
           <PathIcon Width="14" Height="14" Data="M19 20H4a2 2 0 0 1-2-2V6c0-1.11.89-2 2-2h6l2 2h7a2 2 0 0 1 2 2H4v10l2.14-8h17.07l-2.28 8.5c-.23.87-1.01 1.5-1.93 1.5z" />
         </Button>
-        <!-- Text, Area and Prompt metadata are always there, greyed where they don't apply (their tooltips say
-             why), so the bar doesn't change from one file to the next (the user, 2026-10-31).
+        <!-- Text and Area, the ways to select in the file, are always there, greyed where they don't apply
+             (their tooltips say why), so the bar doesn't change from one file to the next (the user,
+             2026-10-31). Prompt metadata isn't a selection: it is in the corner over the file (FileInspectorView).
              Text: the file's text in place of how it looks (an SVG's source, a document's text), to select. -->
         <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding ShowText}" IsEnabled="{Binding CanShowText}" Margin="8,0,0,0"
                       ToolTip.Tip="{Binding TextTip}" ToolTip.ShowOnDisabled="True" AutomationProperties.Name="Text">
@@ -36,15 +37,6 @@
             <TextBlock Text="Area" VerticalAlignment="Center" />
           </StackPanel>
         </ToggleButton>
-        <!-- Prompt metadata: for a picture, animation, video, sound or 3D model that says how it was made, its
-             prompts and settings under it. -->
-        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding ShowRecipe}" IsEnabled="{Binding HasRecipe}" Margin="8,0,0,0"
-                      ToolTip.Tip="{Binding PromptTip}" ToolTip.ShowOnDisabled="True" AutomationProperties.Name="Prompt metadata">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <PathIcon Width="14" Height="14" Data="M3 18h12v-2H3v2zM3 6v2h18V6H3zm0 7h18v-2H3v2z" />
-            <TextBlock Text="Prompt metadata" VerticalAlignment="Center" />
-          </StackPanel>
-        </ToggleButton>
         <Panel>
           <!-- The file's menu on a right-click (Open in Code editor, Copy file or Copy image), as on the file under it. -->
           <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" ClipToBounds="True" Margin="0,0,4,0" Background="Transparent" views:FileMenu.File="{Binding Path}"
@@ -59,7 +51,7 @@
       </DockPanel>
     </Border>
 
-    <!-- What the file was made with, with Prompt metadata on: under the file, at most half the panel's height
+    <!-- What the file was made with, with Prompt metadata on (its button over the file, FileInspectorView): under the file, at most half the panel's height
          (set in code), scrolling past that. Room around the text as its margin: a ScrollViewer's
          padding isn't taken from the width, and the text ran past the edge. -->
     <Border x:Name="RecipeBox" DockPanel.Dock="Bottom" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">

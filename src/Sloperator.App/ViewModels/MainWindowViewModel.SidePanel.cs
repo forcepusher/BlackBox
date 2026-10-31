@@ -71,7 +71,7 @@ public sealed partial class MainWindowViewModel
         new("None", "", 0, 0, null),
         new(FileChangesName, "Files the agent changed", 560, 0,
             vm => new FileChangesViewModel(vm)),
-        new(FileInspectorName, "Look inside any file", 560, 0,
+        new(FileInspectorName, "Look inside any file", 420, 0,
             vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir),
             OpenIn: "Inspector", Opens: path => !LocalFolder(path)),
         new("Code editor", "Browse and edit a folder's files", 560, 0,
