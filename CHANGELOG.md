@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   text are up to a pixel tighter, an empty field's hint keeps its grey under the pointer and while
   typed in, and pictures the window shrinks come out a shade smoother. Sloperator.exe is about 1 MB
   bigger.
+- The start screen's first card is plainer: Pause/Break stops Sloperator "at any time, in any
+  window", and you correct it by sending prompts during a task.
 
 ## [1.2.0] - 2026-10-31
 ### Added
