@@ -108,14 +108,6 @@
       <Setter Property="Margin" Value="4,1,4,-1" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
-    <Style Selector="ListBox.files">
-      <Setter Property="Background" Value="Transparent" />
-    </Style>
-    <!-- One line a file, so a long list fits (the user, 2026-10-29): its name, its counts at the right. -->
-    <Style Selector="ListBox.files ListBoxItem">
-      <Setter Property="Padding" Value="8,4" />
-      <Setter Property="MinHeight" Value="0" />
-    </Style>
     <!-- A file some of whose lines are picked: grey, selected or not, as only those lines are (the
          user, 2026-10-28); yellow again once they are let go, if it is selected. -->
     <Style Selector="ListBox.files ListBoxItem.lines /template/ ContentPresenter#PART_ContentPresenter,
@@ -124,29 +116,12 @@
                      ListBox.files ListBoxItem.lines:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="Background" Value="{StaticResource BbChip}" />
     </Style>
-    <!-- Stage, Unstage and Discard over the diff: one that has nothing to act on is only greyed, not
-         filled: it shouldn't look the more pressable. -->
-    <Style Selector="Button.act:disabled /template/ ContentPresenter#PART_ContentPresenter">
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="{StaticResource BbControlBorder}" />
-      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
-    </Style>
-    <Style Selector="Button.act:disabled">
-      <Setter Property="Opacity" Value="0.6" />
-    </Style>
-    <!-- A foldout's header in the file list: a flat button as wide as the list, its arrow pointing
-         down while open; lit under the pointer as any button is. -->
+    <!-- A foldout's header in the file list: a flat button as wide as the list; lit under the pointer as
+         any button is. -->
     <Style Selector="Button.fold">
       <Setter Property="HorizontalAlignment" Value="Stretch" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
       <Setter Property="CornerRadius" Value="0" />
-    </Style>
-    <Style Selector="Button.fold PathIcon.arrow">
-      <Setter Property="Foreground" Value="{StaticResource BbMuted}" />
-      <Setter Property="RenderTransform" Value="rotate(-90deg)" />
-    </Style>
-    <Style Selector="Button.fold.open PathIcon.arrow">
-      <Setter Property="RenderTransform" Value="none" />
     </Style>
     <Style Selector="TextBlock.added">
       <Setter Property="Foreground" Value="{StaticResource BbAdded}" />
@@ -158,18 +133,19 @@
 
   <DockPanel>
     <!-- How the panel is used, or what went wrong; how many files changed on the right, Wrap and Watch, then
-         × to close the panel. A bar as the chat's top bar beside it. -->
+         × to close the panel. A bar as the chat's top bar beside it. Wrap and Watch are there with no files
+         too (the user, 2026-10-31), so the bar doesn't change mid-task when the first file does. -->
     <Border DockPanel.Dock="Top" Classes="bar">
       <DockPanel MinHeight="32">
         <views:SidePanelClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
-        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding Watch}" IsVisible="{Binding HasFiles}" Margin="8,0,0,0"
+        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding Watch}" Margin="8,0,0,0"
                       ToolTip.Tip="Follow the agent's changes as they happen" AutomationProperties.Name="Watch">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Width="14" Height="14" Data="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z" />
             <TextBlock Text="Watch" VerticalAlignment="Center" />
           </StackPanel>
         </ToggleButton>
-        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding Wrap}" IsVisible="{Binding HasFiles}" Margin="12,0,0,0"
+        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding Wrap}" Margin="12,0,0,0"
                       ToolTip.Tip="Wrap long lines" AutomationProperties.Name="Wrap">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Width="14" Height="14" Data="M4 19h6v-2H4v2zM20 5H4v2h16V5zm-3 6H4v2h13.25c1.1 0 2 .9 2 2s-.9 2-2 2H15v-2l-3 3 3 3v-2h2c2.21 0 4-1.79 4-4s-1.79-4-4-4z" />
@@ -192,10 +168,10 @@
             <DataTemplate x:DataType="vm:FileSection">
               <StackPanel>
                 <!-- A foldout's header: Committed, Staged, Unstaged or Outside git, and how many files. -->
-                <Button Classes="flat fold" Classes.open="{Binding IsExpanded}" Command="{Binding ToggleCommand}" IsVisible="{Binding HasHeader}"
+                <Button Classes="flat fold" Command="{Binding ToggleCommand}" IsVisible="{Binding HasHeader}"
                         AutomationProperties.Name="{Binding Name}" ToolTip.Tip="Fold or unfold">
                   <StackPanel Orientation="Horizontal" Spacing="4">
-                    <PathIcon Classes="arrow" Width="10" Height="10" Data="M7 10l5 5 5-5z" />
+                    <PathIcon Classes="fold" Classes.open="{Binding IsExpanded}" Width="10" Height="10" Data="M7 10l5 5 5-5z" />
                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding Count}" Classes="muted" Margin="4,0,0,0" VerticalAlignment="Center" />
                   </StackPanel>

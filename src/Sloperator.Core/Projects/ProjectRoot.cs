@@ -5,7 +5,7 @@ namespace Sloperator.Core.Projects;
 /// with a solution or an engine's project (Unity, Unreal, Godot), or else with a package or build
 /// file (package.json, Cargo.toml, a .csproj…). The home folder and drives are never one.
 /// </summary>
-internal static class ProjectRoot
+public static class ProjectRoot
 {
     /// <summary>The project <paramref name="path"/> is in and what makes it one ("a git repository"); null when it isn't in one.</summary>
     public static (string Root, string Why)? Find(string path)

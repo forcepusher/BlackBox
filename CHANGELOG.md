@@ -6,14 +6,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Code editor** in the Side panel dropdown: a folder's files in a tree and the file you click open
+  beside it, with line numbers and highlighting, to read and edit (Ctrl+S saves). It shows the folder
+  you open in it (Open folder, or drop one on it), kept with the chat, else the project the agent
+  changed files in. **Wrap** and **Watch**, as in File changes: long lines wrap, and the file the
+  agent edits opens at the lines it changed, lit a moment. **Open in Code editor** on a file's
+  right-click menu opens a text file there. The file's bar shows its encoding and line breaks, which
+  the editor keeps; picking others converts the whole file (encodings on Save). Lines you select go
+  into the message box, so you can ask about them.
 - Settings → Advanced → Updates shows which version of Sloperator is running.
 - The agent shows you a picture of what it made: a window or a part of the screen, at full
   resolution, under its final reply with a caption. Click it to see it full size.
 - When it changes something you can see, the agent can show it before and after, side by side.
 - Right-click any file (a card in the chat, a file in a message, the full-screen viewer, File changes,
   the Video generator) for **Open in Inspector**, which shows it in the File inspector panel.
+- SVG files show as pictures: in the chat, full screen, and in File inspector, where they stay sharp
+  however far you zoom and **Code** shows their source to select lines of. The agent sees what an SVG
+  draws when it reads one, and writes design mockups as SVG files, so you see a mockup right in the
+  chat. Pictures an SVG links on the web aren't fetched. Sloperator.exe is about 1.5 MB bigger.
 
 ### Changed
+- File changes shows Wrap and Watch even before any file has changed, so its bar no longer shifts
+  when the agent makes its first change.
 - Sloperator runs on Avalonia 12 and SkiaSharp 4 (both the latest): buttons and rows sized by their
   text are up to a pixel tighter, an empty field's hint keeps its grey under the pointer and while
   typed in, and pictures the window shrinks come out a shade smoother. Sloperator.exe is about 1 MB

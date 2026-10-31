@@ -60,28 +60,31 @@ public sealed class ChatLayoutTests
     [Theory]
     [MemberData(nameof(Texts))]
     public void A_user_message_shows_all_its_lines(string text) =>
-        AssertAllShown(new UserMessageItem(text));
+        AssertAllShown(() => new UserMessageItem(text));
 
     [Theory]
     [MemberData(nameof(Texts))]
     public void A_user_message_with_files_shows_all_its_lines(string text) =>
-        AssertAllShown(new UserMessageItem(text, [@"E:\Repos\HoC-Web-Server", @"E:\Repos\Heroes-of-the-Chests"]));
+        AssertAllShown(() => new UserMessageItem(text, [@"E:\Repos\HoC-Web-Server", @"E:\Repos\Heroes-of-the-Chests"]));
 
     [Theory]
     [MemberData(nameof(Texts))]
     public void A_notice_shows_all_its_lines(string text) =>
-        AssertAllShown(new NoticeItem(text, isError: true));
+        AssertAllShown(() => new NoticeItem(text, isError: true));
 
     [Theory]
     [MemberData(nameof(Texts))]
     public void A_notice_with_continue_shows_all_its_lines(string text) =>
-        AssertAllShown(new NoticeItem(text, isError: false, carryOn: () => { }));
+        AssertAllShown(() => new NoticeItem(text, isError: false, carryOn: () => { }));
 
-    private static void AssertAllShown(ChatItemViewModel item)
+    /// <summary>The item is made on the headless session's thread: made on the test's thread first, it
+    /// made that thread Avalonia's UI thread, and every headless test after it failed to start
+    /// ("a different thread owns it"), whenever xUnit happened to run one of these first.</summary>
+    private static void AssertAllShown(Func<ChatItemViewModel> item)
     {
         foreach (var width in new[] { 1000, 760, 520 })
         {
-            var problems = HeadlessApp.Run(() => Problems(item, width));
+            var problems = HeadlessApp.Run(() => Problems(item(), width));
             Assert.True(problems.Count == 0, $"At a window {width} wide: {string.Join("; ", problems)}");
         }
     }

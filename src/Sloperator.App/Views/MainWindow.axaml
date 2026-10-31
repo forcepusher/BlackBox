@@ -243,6 +243,9 @@
     <DataTemplate DataType="vm:FileInspectorViewModel">
       <views:FileInspectorPanel />
     </DataTemplate>
+    <DataTemplate DataType="vm:CodeEditorViewModel">
+      <views:CodeEditorPanel />
+    </DataTemplate>
 
     <!-- A document: a peek at its start as the File inspector panel draws it, which opens full screen,
          over the card with its name. The peek is the box of a picture's thumbnail in a message (at most

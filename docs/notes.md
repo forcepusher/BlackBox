@@ -1648,6 +1648,10 @@ Servers' lists unlike the dropdowns'):
   rounded rows lit grey; now `FlyoutPresenter.list` with `listRow` rows, lit as a dropdown's rows
   under the pointer and pressed, the chat or server in use tinted as a dropdown's pick, the trash
   button as far in from the right as the title from the left.
+- **Lists of files** (File changes' changed files, the Code editor's tree) are `ListBox.files`: one
+  line a file, 8 in and 4 over and under; a foldout's arrow is `PathIcon.fold` (right while folded,
+  down while open), and a button over what it acts on that has nothing to act on is `Button.act`
+  (greyed, not filled).
 - **Bars**: the chat's top bar and server rows, each side panel's top bar and Settings' foot are one
   `Border.bar`: the background, a line on the inner side, 16 in from the window's edge and 8 over and
   under 32-high controls, so every bar is 49 high (at 125%: 61 px) and the chat's top bar and a
@@ -1719,6 +1723,11 @@ takes its look from its kind:
   file's name too); a removed line's the red #F05A5A at 13%, #F28B82 (its number no longer greyed
   out: the red says it is the old file's). The server dot is #4CC38A when connected; a hunk's divider
   has no band, only its words.
+- **Code** in the Code editor panel: AvaloniaEdit's highlighting drawn in eight colours of the app's,
+  one each for every language (`BbSyntax*`): comments #6A9955, strings #CE9178, numbers #B5CEA8,
+  keywords and tags #569CD6, types #4EC9B0, calls #DCDCAA, preprocessor lines #C586C0, names
+  (attributes, properties, variables) #9CDCFE; the rest `BbCode`. Its selection is the pick's yellow at
+  16% (`BbAccentTint`), the line with the caret `BbSurface`.
 - **Corners**: 8 for every control (Fluent's `ControlCornerRadius`), a notice, a well, a code block
   and the files over the message box; 12 a card and the user's bubble; 16 the message box; 6 a tool's
   name; 4 a check box and a scrollbar's thumb. No shadows.
@@ -2529,7 +2538,10 @@ the same way now. Blocks in a stretched column (a reply, the thinking, a call's 
 margins: they are given back the width they measured with. `Sloperator.App.Tests` lays the chat's own
 templates out headless (Avalonia.Headless with Skia and the real fonts) and checks every line of a
 message, a message with files and a notice is laid out within its block at three window widths; on
-the old markup 45 of the cases failed.
+the old markup 45 of the cases failed. Anything a headless test builds is built inside
+`HeadlessApp.Run`: a chat item made on xUnit's thread first made that thread Avalonia's UI thread,
+and when xUnit ran such a case first (its order follows the checkout's path; it did in a worktree
+named changes-bar, 2026-10-31), the session failed to start and 194 tests with it.
 Every other text block in the chat does the same with a margin of its own: a reply's text reaches
 12 pixels past its sides and 4 over and under it (`MarkdownView`), a code block's text 11 past the
 box's sides and 3 under it (App.axaml), the thinking, a call's output and a note 8 and 4. A drag
@@ -3161,11 +3173,13 @@ picked (a grey, c yellow, cards "Whole file · c.py" and "Line 99 · a.py"), tha
 (a yellow again), lines in a and b (both grey, b not selected), and the message sent told the model c
 whole and the two lines. Before that, with click, Ctrl+click on and off, Shift+click a run and a second
 click on the only one, the list's selection (UI Automation) and the box's cards agreed.
-**Wrap and Watch** (the user, 2026-10-26), toggles in the bar between the summary and the ×, shown
-once a file changed, both on by default and kept in settings.json under `panels` (`wrapDiff`,
-`watchChanges`; `PanelSettings`). **Wrap**: the diff's code column is `*` (under a sideways scroll it
-sizes to the line, as Auto did) and `ListBox.diff.wrap` turns the sideways scrollbar off and the code
-TextBlock to Wrap, so a long line wraps under its code with the number and marker on its first row.
+**Wrap and Watch** (the user, 2026-10-26), toggles in the bar between the summary and the ×, always
+there (shown only once a file changed until 2026-10-31, when the user asked that the bar not change
+mid-task; both stay usable with no files, as Watch on then follows the first change), both on by
+default and kept in settings.json under `panels` (`wrapDiff`, `watchChanges`; `PanelSettings`).
+**Wrap**: the diff's code column is `*` (under a sideways scroll it sizes to the line, as Auto did) and
+`ListBox.diff.wrap` turns the sideways scrollbar off and the code TextBlock to Wrap, so a long line
+wraps under its code with the number and marker on its first row.
 Rows stay logical lines: picks, drags (checked with a real drag across two wrapped lines) and the box's
 card are as before.
 **The number gutter** (the user, 2026-10-28, from a screenshot where it took about 110 px: two 46 px
@@ -3289,6 +3303,14 @@ under the panel's bar here and in the full-screen viewer for a card's peek, see 
   kept whole, a .csv split at semicolons when its first line has more of them than commas.
 - Pictures: in a `ZoomBox`, fitted to the panel (never bigger than they are) and decoded as they are
   (up to 8192 wide), so zoomed in their pixels show, drawn as squares from 3 screen pixels a pixel.
+- SVG (.svg, a picture everywhere: `ComfyOutput.KindOf` says "image"): drawn by Svg.Skia (`SvgFile`,
+  Core; see [SVG](#svg)) as shapes straight onto the `ZoomBox`'s canvas at the size they show
+  (`ZoomBox.Drawing`, a custom draw operation), so it is sharp at any zoom, fitted as a picture is in
+  its own units. `Picture` holds it drawn at its own size too, for Copy image. **Code** in the bar (shown
+  for an SVG only, right of Area so Area turning up doesn't move it) shows its source as a text file is
+  shown, lines to select and ask about; it is off for each new file. An area marked on it is cut from it
+  drawn 2048 pixels along its longer side at least, the model told the place in its units. One Svg.Skia
+  can't draw shows as its text.
 - Video: a plain player of the panel's own (`InspectorVideoViewModel`; until 2026-10-25 the chat's
   video card, Prompt/Inspect/Show in folder and all, which the user found "weird"): the frame in a
   `ZoomBox` (decoded 1920 at most), under it a frame back, play, a frame on, a slider of frames and
@@ -3448,6 +3470,129 @@ searches of Sloperator's tree slow or fail while an Office file was shown: find 
 under ChatScroll. With PDFium (the same day): q3-report.pdf, a 3-page Intel overview with pictures and
 coloured headings, and a 300-page test PDF drew sharp at the panel's width, white pages on the dark
 panel, page 151 in place at half way.
+
+### Code editor
+**Code editor** in the Side panel dropdown (`CodeEditorViewModel`, `CodeEditorPanel`; least 560, as
+File changes) is a bare VS Code beside the chat (the user's request, 2026-10-31): a folder's files in a
+tree on the left, the file clicked open on the right to read and edit, Ctrl+S to save. It is drawn as
+File changes is: the same bar, a 230 list of one-line rows (`ListBox.files`, now in App.axaml for both),
+the same foldout arrow (`PathIcon.fold`) and greyed action button (`Button.act`).
+
+**Which folder.** Sloperator's chats have no folder, so the panel shows the one the user opened in the
+chat (**Open folder** in its bar, or a folder dropped on the panel), kept with the chat (`SavedChat.Folder`,
+`MainWindowViewModel.EditorFolder`) so it comes back when the chat is opened again from History; until
+then, the project the agent changed files in (`FileChanges.Project`: the git repository, solution or
+package of the first file it changed, `ProjectRoot`; else that file's folder), read again as the agent
+changes files and when another chat comes; with neither, none, and the panel says to open one. A
+file open outside a new folder closes. **Open in Code editor** on a file's right-click menu (`IFilePanel`,
+`FileInspector.IsText` files) and a file dropped on the panel open it, its folders unfolded down to its
+row (`FileTree.Reveal`); a file outside the folder shown makes its project the folder, as Open folder would. (Proposed to the user as the first of three: the picker only, as
+VS Code, or the agent's project only, as File changes.)
+
+**The tree** (`FileTree`, `FileTreeRow`) is one list: a folder's rows go in under it when it is
+unfolded (12 in a level), so it scrolls, selects and virtualizes as a list. A folder is read when first
+unfolded (`FolderListing`: folders first, each in Explorer's order, "file2" before "file10"; what VS Code
+leaves out, .git, .svn, .hg, CVS, .DS_Store, Thumbs.db, left out; hidden files shown) and kept, folded
+or not. A `FileSystemWatcher` on the folder notes the folders where files came, went or were renamed,
+and 250 ms after a burst each folder read before is read again: rows still there are the same objects
+(unfolded, with their own rows), and the list is changed only where it differs (`FileTree.Sync`), so it
+stays scrolled where it was and keeps its selection. The file open is grey in it, not the yellow of what
+goes with a message: nothing of the tree does. A click on a folder folds or unfolds it, on a file opens
+it; Enter, Left and Right as in Explorer's tree; a right-click has Show in folder and Copy file.
+
+**The editor** is AvaloniaEdit (MIT, `Avalonia.AvaloniaEdit` 12.0.0: the trimmed exe grew 0.25 MB, 26.34 to 26.59; its Fluent theme in
+App.axaml) as `CodeView`: line numbers 8 in from the panel's edge, no dotted line after them, Consolas 12
+as the diff, the line with the caret a card's shade, no links followed by a click, tabs kept for a file
+indented with tabs. Highlighting is AvaloniaEdit's own (C#, JavaScript, HTML, CSS, C++, Java, PowerShell,
+PHP, Python, SQL, VB, XML, Markdown, JSON, patches), with TypeScript as JavaScript, XAML and project files
+as XML, shaders as C++ (`CodeView.For`); its colours are for a white page, so each named colour is drawn
+in the app's (`DarkColorizer`, see Colours). TextMate grammars (`AvaloniaEdit.TextMate`) would cover more
+languages, but bring several MB of grammars to the exe. TeX's definition doesn't load in AvaloniaEdit 12.
+A file is read as read_file reads it and saved in the encoding it was read in (`CodeFile`: a signature
+kept or left out, the ANSI code page kept, written through a file beside it as edit_file does; a
+PowerShell script typed past ASCII gets UTF-8's signature); line breaks stay as they are in the text.
+Not opened: a file with a zero byte in its first 8 KB, or over 5 MB. The published exe (fully trimmed) draws
+the tree and the highlighting as the Debug build does (a Python file, checked 2026-10-31).
+
+**Encoding and line breaks** (the user, 2026-10-31: "use currently used line endings and encoding", and
+settings to change them "like it is in VS code or studio, when switching it converts the whole file"):
+two menu buttons at the right of the file's bar (`MenuButton`, `ghost menu small`, greyed with no file
+open, there from the start) show the file's encoding ("UTF-8", "UTF-8 with BOM", "UTF-16 LE", "UTF-16 BE"
+or the PC's ANSI code page, "Windows-1252": `CodeFile.Encodings`, the ones read_file tells files apart by)
+and its line breaks ("CRLF", "LF", "Mixed" when its lines end in more than one; `CodeFile.LineBreakOf`, the
+one most lines end in, read again 300 ms after typing rests). The editor keeps them: Enter and a paste put
+in the line break of the line they are on (AvaloniaEdit does; `CodeEditorTests` checks an LF and a CRLF
+file), and Save writes the encoding the file was read in. Another encoding picked is written on the next
+Save, as Visual Studio's Advanced Save Options and VS Code's Save with Encoding do (`CodeFile.Encoding` vs
+`SavedEncoding`), and counts as an edit not saved till then; Reload takes it back. One that can't write a
+character of the text is refused, the bar saying which and on what line ("Windows-1252 can't write "✓"
+(line 3): kept UTF-8"). Other line breaks picked rewrite every line's (`CodeFile.WithLineBreaks`), one
+edit that Ctrl+Z undoes. Checked in the app: Ship.cs (UTF-8, LF) with CRLF and UTF-8 with BOM picked
+showed "not saved", and Save wrote EF BB BF and \r\n.
+
+**Edits not saved** are kept per window (`MainWindowViewModel.CodeDrafts`, by path) from the first key,
+so another file clicked, the panel closed or another chat leave them; the file's row has a dot and its
+bar says "not saved". The open file changed on disk (the agent's edit_file, another program): with no
+edits here, the editor shows the disk's text, only what differs replaced (`CodeEditorViewModel.Replace`)
+so the caret and the view before it stay; with edits, the bar says so, Save writes the edits over it and
+Reload takes the disk's. A file deleted on disk stays open; Save writes it again.
+
+**Lines selected go into the chat's box** (the user's rule, 2026-10-28: a card only for what was
+picked): 150 ms after the selection rests, as "Lines 31-38 · Game.cs" ("Line 4", "Whole file" for all of
+it). Opening a file puts nothing there. A message sent with it tells the model the file's path, whether
+it has edits not saved, and the lines the selection is in, whole and numbered (a selection from the middle
+of a line still means the line), with the part selected when it is in one line, up to 20,000 characters
+(`CodeEditorViewModel.Told`). Sent, the selection goes; Esc, a click, typing over it or another file
+take it out of the box. Checked in the app (2026-10-31, a stand-in model keeping its requests): lines
+31-38 of a made-up game's Game.cs dragged over, the box showed the card, and the model got the eight lines
+numbered; Ship.cs changed on disk while open showed the new lines in place, and a file added in src came
+into the tree under it.
+
+**Watch** (the user, 2026-10-31: "a watch button as well just like file changes panel does"): a toggle
+in the top bar, on by default and kept in settings.json (`panels.watchCode`; File changes' is
+`watchChanges`). Each write_file or edit_file call notes its file and a number in the chat's list
+(`FileChanges.LastChange`), and with Watch on the panel follows the new one (not one made before it
+opened): a text file in the folder shown opens, its tree row shown, at what the chat changed in it (the
+added lines of its File changes diff); the open file, read again from disk, at the lines that differ from
+what it showed (`Replace` gives where the new text went in). Those lines are lit in `BbFresh` (the accent
+at 25%, File changes' fresh rows' colour), the light fading over 2 s after 4 s, as File changes', and the
+first is left where it is in the upper half of the view, else brought a quarter of the way down
+(`CodeView.Light`, a background renderer under the text whose lines follow later edits). A file outside
+the folder isn't followed: it would take the tree from the folder the user chose. Turned on, Watch goes
+to the agent's last change and lights it again. Every button of the panel's bars is there from the start
+and greyed while it has nothing to do (the user, 2026-10-31: bar buttons never come and go mid-task):
+Wrap and Watch, and Save and Reload over the file even with none open. Checked in the app with a stand-in agent
+(2026-10-31): with Game.cs open, its edit_file on Ship.cs opened Ship.cs with the three lines it added lit.
+**Wrap** beside it (the user's question, 2026-10-31; `panels.wrapCode`, on by default as File changes'):
+long lines wrap inside the panel under their own start (AvaloniaEdit's `WordWrap`), one number a line, so
+picks and Watch's lines are as before; off, a long line scrolls sideways. Checked by a click in the app:
+Game.cs's long summary line wrapped, and off, the setting was saved false.
+
+### SVG
+SVG files are pictures: the chat's preview (drawn to fit twice the chat's width, sharp on a screen
+scaled to 200%), the full-screen viewer, a picked file's thumbnail, File inspector (as shapes, see
+[File inspector](#file-inspector)), Copy image, and what the model is shown. read_file gives an SVG's
+numbered lines and the picture it draws, at least 1024 pixels along its longer side (a 24-pixel icon
+would show nothing; "It draws a 200x100 picture, shown at 1024x512"), so a model checks a mockup it
+made by looking at it. write_file's description says an .svg is shown to the user as what it draws,
+to write a design mockup as one (the user's request, 2026-10-31: a Figma-like mockup the model builds
+to show them); write_file and edit_file of an .svg put it under the call, so each change of a mockup is
+seen in the chat. An MCP server's SVG image is drawn for the model too (it was left out).
+
+`SvgFile` (Core) reads them with Svg.Skia 5.2.3 (MIT; Svg.Custom, its SVG model, is MS-PL), built for
+SkiaSharp 4.148 and run on 4.154. It brings HarfBuzzSharp 14.2.0 where Avalonia 12.1.4 asks for 8.3.1.3:
+Avalonia's text at six sizes in Latin, Cyrillic, Arabic, Hebrew and CJK came out pixel-identical on
+both (headless, 2026-10-31), and the App tests passed. A trimmed (TrimMode=full) single-file build
+draws the same and warns of nothing; the exe grows about 1.5 MB (27.8 MB against develop's 26.3,
+published on the laptop, 2026-10-31), its HarfBuzz library 0.25 MB of it.
+The drawing is recorded again into an `SKPicture` of its own (`SvgPicture`), so it outlives the
+parser; nothing disposes it on the UI's side, as the render thread may be drawing it. An SVG with no
+size takes its shapes' bounds from 0,0; one with no shapes at all (Svg.Skia makes it 1x1) is no picture.
+Loaded with `SvgExternalResourcePolicy.SameOrigin` and the file's own address: a picture beside the file
+is drawn, one on the web is not fetched (by default Svg.Skia fetched it: a DNS lookup was seen); bytes
+from an MCP server read nothing outside themselves. External entities aren't read and an entity
+expanding past .NET's limit throws, which is no picture. Svg.Skia ships no JavaScript engine, so
+scripts don't run.
 
 ### Web search
 A local model's memory of APIs is where it slips most (qwen3.8 writes Unity's `KeyCode.Left`, which
