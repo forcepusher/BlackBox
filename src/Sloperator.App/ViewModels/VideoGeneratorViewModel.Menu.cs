@@ -180,9 +180,14 @@ public sealed partial class VideoGeneratorViewModel
     }
 
     /// <summary>Another sound line, under the last.</summary>
+    /// <summary>Whether + Sound line can add one: at the most it is greyed, its tip saying so (a click did nothing before).</summary>
+    public bool CanAddSoundLine => _board.SoundLines < Storyboard.MaxSoundLines;
+
+    public string AddSoundLineTip => CanAddSoundLine ? "Another sound line" : $"{Storyboard.MaxSoundLines} sound lines is the most a video has";
+
     public void AddSoundLine()
     {
-        if (_board.SoundLines >= Storyboard.MaxSoundLines)
+        if (!CanAddSoundLine)
             return;
         _board.SoundLines++;
         while (_board.SoundLineVolumes.Count < _board.SoundLines)

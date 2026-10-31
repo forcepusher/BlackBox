@@ -128,16 +128,25 @@ public sealed partial class VideoGeneratorViewModel
                                  "and make it again, up to twice. ";
 
     /// <summary>Makes every piece not made or out of date, each looked at and fixed, then joins the video and looks at it: in the chat.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanMakeVideo))]
     private void MakeVideo()
     {
-        if (_board.Shots.Count == 0 || _board.Shots.Any(s => s.Prompt.Trim().Length == 0))
-        {
-            Status = _board.Shots.Count == 0 ? "The video has no clips yet: say in the chat what video you want first." : "Some clips don't say what happens in them yet: click them and say it in the chat.";
-            return;
-        }
-        _chat.SendFromSidePanel("Make the video.");
+        if (CanMakeVideo())
+            _chat.SendFromSidePanel("Make the video.");
     }
+
+    /// <summary>
+    /// Why Make the video can't be used yet, else null: greyed with this as its tip (the user's rule,
+    /// 2026-10-31: a bar's buttons stay, greyed with a tip saying why), where a click once put it on
+    /// the status line.
+    /// </summary>
+    private string? CantMakeVideo() =>
+        _board.Shots.Count == 0 ? "The video has no clips yet: say in the chat what video you want first" :
+        _board.Shots.Any(s => s.Prompt.Trim().Length == 0) ? "Some clips don't say what happens in them yet: click them and say it in the chat" : null;
+
+    private bool CanMakeVideo() => CantMakeVideo() is null;
+
+    public string MakeVideoTip => CantMakeVideo() ?? "Makes what's missing or changed, checks it and joins the video";
 
     // ---- what the chat is doing -------------------------------------------------------------------------
 
