@@ -463,8 +463,9 @@
                 </Panel>
                 <Border Height="28" />
               </StackPanel>
-              <!-- The playhead, through every row. -->
+              <!-- The video's end (red, its length on the ruler) and the playhead, through every row. -->
               <Canvas IsHitTestVisible="False">
+                <Rectangle Canvas.Left="{Binding EndX}" Width="1" Height="2000" Fill="{StaticResource BbError}" IsVisible="{Binding HasLength}" />
                 <Rectangle Canvas.Left="{Binding PlayheadX}" Width="2" Height="2000" Fill="{StaticResource BbAccent}" />
               </Canvas>
             </Panel>

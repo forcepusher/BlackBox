@@ -15,7 +15,12 @@ internal static class VideoColors
     public static readonly IPen Tick = new Pen(new SolidColorBrush(Color.Parse("#4D4D4D")), 1);
     public static readonly IPen Border = new Pen(new SolidColorBrush(Color.Parse("#2A2A2A")), 1);
     public static readonly IPen Picked = new Pen(new SolidColorBrush(Color.Parse("#FCC21B")), 2);
-    public static readonly IPen End = new Pen(new SolidColorBrush(Color.Parse("#FCC21B")), 1);
+    // The video's end: red (BbError), not the playhead's yellow, which it was.
+    public static readonly IBrush EndBrush = new SolidColorBrush(Color.Parse("#E06C6C"));
+    public static readonly IPen End = new Pen(EndBrush, 1);
+    public static readonly IBrush OnEnd = new SolidColorBrush(Color.Parse("#1A1A1A"));
+    public static readonly IPen Hover = new Pen(Muted, 1, new DashStyle([3, 2], 0));
+    public static readonly IBrush HoverBack = new SolidColorBrush(Color.Parse("#333333"));
 
     public static void Draw(DrawingContext context, string text, double x, double y, double size, IBrush brush, double maxWidth, IBrush? behind = null)
     {
@@ -59,6 +64,12 @@ public sealed class VideoRuler : Control
 
     private bool _dragging;
 
+    /// <summary>Where the pointer is over the ruler, in pixels; null when it isn't: its time is shown there.</summary>
+    private double? _hover;
+
+    /// <summary>A time on the ruler as the playhead's is written: 0:09.4.</summary>
+    public static string TimeText(double seconds) => $"{TimeSpan.FromSeconds(Math.Max(0, seconds)):m\\:ss\\.f}";
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
@@ -72,8 +83,17 @@ public sealed class VideoRuler : Control
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
+        _hover = e.GetPosition(this).X;
+        InvalidateVisual();
         if (_dragging)
             Seek(e);
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        _hover = null;
+        InvalidateVisual();
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -108,10 +128,22 @@ public sealed class VideoRuler : Control
             if (label)
                 VideoColors.Draw(context, $"{s / 60}:{s % 60:00}", x + 3, 3, 10, VideoColors.Muted, 60);
         }
+        // The video's end, with how long it is beside it (the user, 2026-10-31, option 4 of the mockups);
+        // the line goes on down the rows in the panel.
         if (Length > 0)
         {
             var end = Math.Round(Lead + Length * Pps) + 0.5;
             context.DrawLine(VideoColors.End, new Point(end, 0), new Point(end, h));
+            var whole = (int)Math.Round(Length);
+            var length = Math.Abs(Length - whole) < 0.05 ? $"{whole / 60}:{whole % 60:00}" : TimeText(Length);
+            VideoColors.Draw(context, $"end {length}", end + 8, 22, 10, VideoColors.OnEnd, 80, VideoColors.EndBrush);
+        }
+        // The time under the pointer, as a dashed line and a time beside it, over the rest.
+        if (_hover is { } at && at >= Lead)
+        {
+            var x = Math.Round(at) + 0.5;
+            context.DrawLine(VideoColors.Hover, new Point(x, 0), new Point(x, h));
+            VideoColors.Draw(context, TimeText((at - Lead) / Pps), x + 8, 22, 10, VideoColors.Text, 80, VideoColors.HoverBack);
         }
         context.DrawLine(VideoColors.Border, new Point(0, h - 0.5), new Point(w, h - 0.5));
     }
