@@ -197,10 +197,10 @@ public partial class VideoGeneratorPanel : UserControl
         }
     }
 
-    /// <summary>A menu of the panel's; for a card, clip, frame or sound, Copy image or Copy file at its end (see <see cref="CopyMenu"/>).</summary>
+    /// <summary>A menu of the panel's; for a card, clip, frame or sound, the file's menu at its end (Open in Inspector, Copy image or Copy file, see <see cref="FileMenu"/>).</summary>
     private static void OpenMenu(IReadOnlyList<VideoMenuItem?> items, Control? at, Avalonia.Media.IImage? picture = null, string? file = null)
     {
-        var copy = at is null ? [] : CopyMenu.Items(at, picture, null, file);
+        var copy = at is null ? [] : FileMenu.Items(at, picture, null, file);
         if (items.Count == 0 && copy.Count == 0)
             return;
         var menu = new ContextMenu();
@@ -578,7 +578,7 @@ public partial class VideoGeneratorPanel : UserControl
         if (clicked is PlayerPreview { IsPlaying: true } playing)
             playing.Stop();
         _viewer?.Close();
-        var viewer = _viewer = MediaViewer.On(screen, entries, index, Vm.Previews);
+        var viewer = _viewer = MediaViewer.On(screen, entries, index, Vm.Previews, window.DataContext as MainWindowViewModel);
         viewer.Closed += (_, _) =>
         {
             if (ReferenceEquals(_viewer, viewer))

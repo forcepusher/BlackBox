@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Settings → Advanced → Updates shows which version of Sloperator is running.
+- Right-click any file (a card in the chat, a file in a message, the full-screen viewer, File changes,
+  the Video generator) for **Open in Inspector**, which shows it in the File inspector panel.
 
 ### Changed
 - Sloperator runs on Avalonia 12 and SkiaSharp 4 (both the latest): buttons and rows sized by their

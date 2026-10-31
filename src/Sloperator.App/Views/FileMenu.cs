@@ -5,24 +5,26 @@ using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
+using Sloperator.App.ViewModels;
 using Sloperator.Core.Media;
 
 namespace Sloperator.App.Views;
 
 /// <summary>
-/// Right-click → Copy image or Copy file, one menu for every picture and file the app shows. A control
-/// says what it shows: <c>CopyMenu.Image</c>, the picture on screen; <c>CopyMenu.Data</c>, the picture's
-/// bytes when no file has it (a screenshot); <c>CopyMenu.File</c>, the file behind it. A right-click on
-/// it, or on anything in it without a menu of its own, opens the menu. A menu of its own (the Video
+/// One right-click menu for every picture and file the app shows: Open in each side panel the file
+/// opens in (Open in Inspector, Open in Code editor), then Copy image or Copy file. A control says what
+/// it shows: <c>FileMenu.Image</c>, the picture on screen; <c>FileMenu.Data</c>, the picture's bytes
+/// when no file has it (a screenshot); <c>FileMenu.File</c>, the file behind it. A right-click on it,
+/// or on anything in it without a menu of its own, opens the menu. A menu of its own (the Video
 /// generator's, File changes') takes <see cref="Items(Visual, IImage, byte[], string)"/> at its end.
 /// </summary>
-public static class CopyMenu
+public static class FileMenu
 {
-    public static readonly AttachedProperty<IImage?> ImageProperty = AvaloniaProperty.RegisterAttached<Control, IImage?>("Image", typeof(CopyMenu));
-    public static readonly AttachedProperty<byte[]?> DataProperty = AvaloniaProperty.RegisterAttached<Control, byte[]?>("Data", typeof(CopyMenu));
-    public static readonly AttachedProperty<string?> FileProperty = AvaloniaProperty.RegisterAttached<Control, string?>("File", typeof(CopyMenu));
+    public static readonly AttachedProperty<IImage?> ImageProperty = AvaloniaProperty.RegisterAttached<Control, IImage?>("Image", typeof(FileMenu));
+    public static readonly AttachedProperty<byte[]?> DataProperty = AvaloniaProperty.RegisterAttached<Control, byte[]?>("Data", typeof(FileMenu));
+    public static readonly AttachedProperty<string?> FileProperty = AvaloniaProperty.RegisterAttached<Control, string?>("File", typeof(FileMenu));
 
-    static CopyMenu()
+    static FileMenu()
     {
         ImageProperty.Changed.AddClassHandler<Control>((c, _) => Hook(c));
         DataProperty.Changed.AddClassHandler<Control>((c, _) => Hook(c));
@@ -49,24 +51,56 @@ public static class CopyMenu
     {
         if (e.Handled || sender is not Control control)
             return;
-        var items = Items(control, () => GetImage(control), GetData(control), GetFile(control));
+        var file = GetFile(control);
+        List<Control> items = [.. Open(control, file), .. Copy(control, () => GetImage(control), GetData(control), file)];
         if (items.Count == 0)
             return;
         e.Handled = true;
         new ContextMenu { ItemsSource = items }.Open(control);
     }
 
-    /// <summary>
-    /// The menu's entries for what <paramref name="at"/> shows. Copy image for a picture: the whole of
-    /// it, not the size it is shown at, and its file with it when it has one, so Paint, Word or a chat
-    /// app's box paste the picture and Explorer or a mail the file. Copy file for any other file (a
-    /// video, a sound, a document, a folder), which a video's frame or a document's peek doesn't stand
-    /// for. Nothing is read from the disk until a click: a share whose server is off would hold the menu.
-    /// </summary>
-    public static List<Control> Items(Visual at, IImage? image, byte[]? data, string? file) => Items(at, () => image, data, file);
+    /// <summary>The menu's entries for what <paramref name="at"/> shows: <see cref="Open"/>, then Copy image or Copy file.</summary>
+    public static List<Control> Items(Visual at, IImage? image, byte[]? data, string? file) => [.. Open(at, file), .. Copy(at, () => image, data, file)];
 
-    /// <summary>The same, the picture read again at the click: a playing video's frame on screen then, the one at the right-click let go of.</summary>
-    private static List<Control> Items(Visual at, Func<IImage?> image, byte[]? data, string? file)
+    /// <summary>
+    /// Open in each side panel of the chat that opens a file of this kind ("Open in Inspector" for any
+    /// file, "Open in Code editor" for text, see <see cref="SidePanelOption.OpenIn"/>), but the panel
+    /// open with this file in it already. The panel opens in place of the one open, as a card's Inspect
+    /// does; from the full-screen viewer, which would cover it, the viewer closes first. The panels are
+    /// told by the file's name, and by the disk only on this PC's own drives (a folder, or a file of no
+    /// kind its name tells), as a share whose server is off would hold the menu.
+    /// </summary>
+    public static List<Control> Open(Visual at, string? file)
+    {
+        var items = new List<Control>();
+        var top = TopLevel.GetTopLevel(at);
+        var chat = top is MediaViewer viewer ? viewer.Chat : top?.DataContext as MainWindowViewModel;
+        if (file is null || chat is null)
+            return items;
+        foreach (var panel in chat.PanelsFor(file))
+        {
+            var open = new MenuItem { Header = $"Open in {panel.OpenIn}" };
+            open.Click += (_, _) =>
+            {
+                (top as MediaViewer)?.Close();
+                chat.OpenIn(panel, file);
+            };
+            items.Add(open);
+        }
+        return items;
+    }
+
+    /// <summary>
+    /// Copy image for a picture: the whole of it, not the size it is shown at, and its file with it when
+    /// it has one, so Paint, Word or a chat app's box paste the picture and Explorer or a mail the file.
+    /// Copy file for any other file (a video, a sound, a document, a folder), which a video's frame or a
+    /// document's peek doesn't stand for. Nothing is read from the disk until a click: a share whose
+    /// server is off would hold the menu. The picture is read again at the click: a playing video's
+    /// frame on screen then, the one at the right-click let go of.
+    /// </summary>
+    public static List<Control> Copy(Visual at, IImage? image, byte[]? data, string? file) => Copy(at, () => image, data, file);
+
+    private static List<Control> Copy(Visual at, Func<IImage?> image, byte[]? data, string? file)
     {
         var picture = file is not null && MediaPreview.KindOf(file) is "image" or "animation";
         var items = new List<Control>();

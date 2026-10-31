@@ -37,7 +37,7 @@ public sealed class LogoBlob : Control
     public LogoBlob()
     {
         // Copy image gives the logo as the app has it.
-        CopyMenu.SetImage(this, _picture ??= new Bitmap(AssetLoader.Open(new Uri("avares://Sloperator/Assets/sloperator.png"))));
+        FileMenu.SetImage(this, _picture ??= new Bitmap(AssetLoader.Open(new Uri("avares://Sloperator/Assets/sloperator.png"))));
     }
 
     public override void Render(DrawingContext context)
