@@ -44,7 +44,7 @@ public sealed class IndexFolderTool : Tool
             // A file stands for the project it is in.
             var folder = isFile ? ProjectRoot.Find(path)?.Root ?? Path.GetDirectoryName(path)! : path;
             return await FolderIndex.UseAsync(folder, ctx.IndexDirectory, progress,
-                (index, changes) => Task.FromResult(new ToolResult(ProjectOverview.Build(index, changes))), ct).ConfigureAwait(false);
+                (index, changes) => Task.FromResult(new ToolResult(ProjectOverview.Build(index, changes, ctx.InConversation))), ct).ConfigureAwait(false);
         }
 
         // The index the path is in, if there is one, or else its project's: a search of a part of

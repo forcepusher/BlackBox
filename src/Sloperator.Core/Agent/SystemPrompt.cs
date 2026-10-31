@@ -69,6 +69,17 @@ public static class SystemPrompt
                           "Index a folder once per chat; later calls bring it up to date.");
         sb.AppendLine("- To see what changed in a project or folder (your own edits, the user's work, a commit, two copies of a file), use diff " +
                       "rather than reading the files again or running git through run_shell.");
+        // The user's request (2026-10-31): what the agent learns about a project is kept in the
+        // project, in a text file the user can read and edit, and which Codex, Cursor and Claude Code
+        // read too. Sloperator gives it whole the first time the model works in the project (with
+        // index_folder's overview, or a note), so a note at its end is seen next time.
+        sb.AppendLine("- A project's AGENTS.md (or its CLAUDE.md, when it has only that) in its top folder holds notes for AI agents, the user's and yours; " +
+                      "Sloperator shows it to you whole when you start work in the project. " +
+                      "When you learn something about a project (a git repository, a solution, a game, a package) that the next task in it would need and its files don't make plain " +
+                      "(how to build, run or test it, a step that failed and what worked instead, a quirk of it, a choice the user made), " +
+                      "add it there before you finish: a line or two at the end, under a \"## Notes\" heading; make AGENTS.md if the project has neither. " +
+                      "Keep your notes short and right: fix or remove one of yours that turns out wrong, never change the user's lines, and never write secrets there (keys, passwords): " +
+                      "the file is often shared. Say in your reply what you noted.");
         if (screen is not null && !control)
             sb.AppendLine("- You can look at the screen (screenshot, zoom, wait) but not use the mouse or keyboard: the user has turned that off. " +
                           "Do the work through files, the shell and MCP servers, and look at the screen to check what they did.");

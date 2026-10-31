@@ -11,12 +11,18 @@ namespace Sloperator.Core.Agent;
 /// reads, lists, changes or runs a command in, when it hasn't indexed it in this chat. The user
 /// asked for the model to index eagerly, by itself; the system prompt and index_folder's
 /// description ask for it too, and this catches the times it goes straight to the files. A note
-/// once per project, never a block: the user's rule for steering the model.
+/// once per project, never a block: the user's rule for steering the model. The same note gives the
+/// project's AGENTS.md and CLAUDE.md whole, where the agent keeps what it learns about the project,
+/// also for a project too small to index (or when there is no index_folder): the overview would
+/// have given them, and a model that doesn't index would never see them.
 /// </summary>
 internal sealed partial class ProjectNudge
 {
     /// <summary>A project with fewer files than this is read faster than indexed: one the model is making from scratch, say.</summary>
     internal const int MinFiles = 25;
+
+    /// <summary>What comes before a project's notes in a note.</summary>
+    internal const string NotesLead = "notes for AI agents in its top folder, which go for your work on it:";
 
     private readonly List<string> _indexed = [];
     private readonly HashSet<string> _said = new(StringComparer.OrdinalIgnoreCase);
@@ -29,7 +35,17 @@ internal sealed partial class ProjectNudge
         "tells you what is in it and what its files define, and index_folder with query= finds where anything is in it " +
         "far faster than listing folders and opening files one by one.";
 
-    /// <summary>The project a <see cref="Note"/> is about, for the line the chat shows.</summary>
+    /// <summary>The note for a project with notes for agents (<see cref="ProjectOverview.ProjectNotes"/>), which says to index it too when <paramref name="index"/>.</summary>
+    internal static string Note(string root, string why, string notes, bool index) =>
+        (index ? Note(root, why) + "\nIts " : $"[Sloperator] {root} is a project ({why}) with ") + NotesLead + "\n" + notes.TrimEnd();
+
+    /// <summary>Whether a note says to index its project.</summary>
+    internal static bool AsksToIndex(string note) => note.Contains(" that you haven't indexed in this chat.", StringComparison.Ordinal);
+
+    /// <summary>Whether a note gives its project's notes for agents.</summary>
+    internal static bool GivesNotes(string note) => note.Contains(NotesLead, StringComparison.Ordinal);
+
+    /// <summary>The project a <see cref="Note(string, string)"/> is about, for the line the chat shows.</summary>
     internal static string RootIn(string note)
     {
         const string start = "[Sloperator] ";
@@ -91,7 +107,8 @@ internal sealed partial class ProjectNudge
     }
 
     /// <summary>The note for a call, or null.</summary>
-    public string? Check(Tool? tool, string arguments, ToolResult result, ToolContext ctx)
+    /// <param name="canIndex">Whether index_folder is in the tool list: without it, only a project's notes for agents.</param>
+    public string? Check(Tool? tool, string arguments, ToolResult result, ToolContext ctx, bool canIndex = true)
     {
         if (tool is null)
             return null;
@@ -127,9 +144,16 @@ internal sealed partial class ProjectNudge
             if (project is not var (root, why) || _said.Contains(root) || _indexed.Any(i => Under(root, i)))
                 continue;
             _said.Add(root);
-            if (!ProjectRoot.HasFiles(root, MinFiles))
-                continue;
-            return Note(root, why);
+            var index = canIndex && ProjectRoot.HasFiles(root, MinFiles);
+            // Not again while the conversation holds them as they are: a new message's session knows
+            // nothing of an overview read for the one before.
+            var notes = ProjectOverview.ProjectNotes(root);
+            if (notes.Length > 0 && ctx.InConversation?.Invoke(notes.TrimEnd()) == true)
+                notes = "";
+            if (notes.Length > 0)
+                return Note(root, why, notes, index);
+            if (index)
+                return Note(root, why);
         }
         return null;
     }

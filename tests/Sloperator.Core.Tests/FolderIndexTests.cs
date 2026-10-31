@@ -471,7 +471,7 @@ public class FolderIndexTests : IDisposable
         Assert.Contains("package.json: Node package shop; npm scripts dev, build; depends on react.", overview);
         Assert.Contains("# Shop\nAn online shop for board games.", overview);
         Assert.DoesNotContain("badge", overview);
-        Assert.Contains("Notes for AI agents in the project:\n(AGENTS.md, 1 line; the start of it)\nUse pnpm, not npm.", overview);
+        Assert.Contains("Notes for AI agents in the project:\n(AGENTS.md, 1 line, all of it)\nUse pnpm, not npm.", overview);
         Assert.Contains("TypeScript 2 files", overview);
         Assert.Contains($"src{Path.DirectorySeparatorChar} 2", overview);
         Assert.Contains($"src{Path.DirectorySeparatorChar}cart.ts (5 lines): class Cart (addItem); functions checkout", overview);
@@ -479,6 +479,46 @@ public class FolderIndexTests : IDisposable
         Assert.Contains("Listed but not read: 1 pictures", overview);
         Assert.EndsWith($"To find anything in it: index_folder path=\"{project}\" query=\"...\" (names, words of an error, or what the code does in a few words).", overview);
         Assert.True(overview.Length <= ProjectOverview.MaxChars);
+    }
+
+    [Fact]
+    public async Task The_projects_notes_for_agents_come_whole_and_past_their_size_its_start_and_end()
+    {
+        var project = Path.Combine(_dir, "notes");
+        Directory.CreateDirectory(Path.Combine(project, ".git"));
+        var rules = string.Join("\n", Enumerable.Range(1, 60).Select(i => $"- Rule {i}: keep the code of part {i} in its own folder."));
+        var agents = rules + "\n\n## Notes\n- The tests need the emulator: run `pnpm emu` first.\n";
+        Write("notes/AGENTS.md", agents);
+        Write("notes/CLAUDE.md", agents);
+        for (var i = 1; i <= 3; i++)
+            Write($"notes/.cursor/rules/rule{i}.mdc", $"Cursor rule {i}.\n");
+        Write("notes/src/app.ts", "export class App {\n  run(): void {}\n}\n");
+
+        var overview = (await Run(Ctx(), project)).Text;
+        // Whole, the note at its end too, and ahead of other tools' files, which no longer crowd it out.
+        Assert.Contains("Notes for AI agents in the project:\n(AGENTS.md, 63 lines, all of it)\n" + agents + "(CLAUDE.md: the same as AGENTS.md)\n", overview);
+        Assert.Contains("Cursor rule 1.", overview);
+        // Outside the overview's own size: the rest of it is all there.
+        Assert.Contains("Main files and what they define:", overview);
+        Assert.True(overview.Length - agents.Length <= ProjectOverview.MaxChars);
+
+        var lines = Enumerable.Range(1, 3000).Select(i => $"- Note {i}: something learned about part {i}.");
+        Write("notes/AGENTS.md", string.Join("\n", lines) + "\n");
+        File.Delete(Path.Combine(project, "CLAUDE.md"));
+        overview = (await Run(Ctx(), project)).Text;
+        Assert.Contains("(AGENTS.md, 3,000 lines, too long to give whole: its start and its end)\n- Note 1: something", overview);
+        Assert.Contains("- Note 3000: something learned about part 3000.", overview);
+        var skipped = System.Text.RegularExpressions.Regex.Match(overview, @"… lines (\d+)-(\d+) left out: read_file path=""(.+?)"" offset=(\d+) limit=(\d+) reads them\n");
+        Assert.True(skipped.Success);
+        var (first, last) = (int.Parse(skipped.Groups[1].Value), int.Parse(skipped.Groups[2].Value));
+        Assert.Equal(Path.Combine(project, "AGENTS.md"), skipped.Groups[3].Value);
+        Assert.Equal(first, int.Parse(skipped.Groups[4].Value));
+        Assert.Equal(last - first + 1, int.Parse(skipped.Groups[5].Value));
+        Assert.Contains($"- Note {first - 1}: ", overview);
+        Assert.DoesNotContain($"- Note {first}: ", overview);
+        Assert.DoesNotContain($"- Note {last}: ", overview);
+        Assert.Contains($"- Note {last + 1}: ", overview);
+        Assert.True(overview.Length <= ProjectOverview.MaxChars + ProjectOverview.MaxNotesChars + 200);
     }
 
     [Fact]
@@ -568,6 +608,58 @@ public class FolderIndexTests : IDisposable
     }
 
     [Fact]
+    public async Task A_projects_notes_for_agents_come_with_the_first_call_in_it_once()
+    {
+        var read = new ReadFileTool();
+        var ok = new ToolResult("1\tprint(1)");
+        var held = new List<string>();
+        var ctx = Ctx();
+        ctx.InConversation = text => held.Any(h => h.Contains(text, StringComparison.Ordinal));
+
+        // Too small to index: the notes alone.
+        Directory.CreateDirectory(Path.Combine(_dir, "small", ".git"));
+        Write("small/main.py", "print(1)");
+        Write("small/AGENTS.md", "# Agents\n\n## Notes\n- Run it with python -X utf8.\n");
+        var notes = ProjectOverview.ProjectNotes(Path.Combine(_dir, "small"));
+        Assert.Equal("(AGENTS.md, 4 lines, all of it)\n# Agents\n\n## Notes\n- Run it with python -X utf8.\n", notes);
+        var small = new ProjectNudge();
+        var note = small.Check(read, Args(Path.Combine(_dir, "small", "main.py")), ok, ctx);
+        Assert.Equal($"[Sloperator] {Path.Combine(_dir, "small")} is a project (a git repository) with {ProjectNudge.NotesLead}\n{notes.TrimEnd()}", note);
+        Assert.True(ProjectNudge.GivesNotes(note!));
+        Assert.False(ProjectNudge.AsksToIndex(note!));
+        Assert.Null(small.Check(read, Args(Path.Combine(_dir, "small", "main.py")), ok, ctx)); // once per project
+        // A new message's session doesn't give them again while the conversation holds them, unchanged.
+        held.Add(note!);
+        Assert.Null(new ProjectNudge().Check(read, Args(Path.Combine(_dir, "small", "main.py")), ok, ctx));
+        Write("small/AGENTS.md", "# Agents\n\n## Notes\n- Run it with python -X utf8.\n- The tests need a .env.\n");
+        Assert.Contains("- The tests need a .env.", new ProjectNudge().Check(read, Args(Path.Combine(_dir, "small", "main.py")), ok, ctx));
+        // Without index_folder too; and a small project without notes gets nothing, as before.
+        held.Clear();
+        Assert.NotNull(new ProjectNudge().Check(read, Args(Path.Combine(_dir, "small", "main.py")), ok, ctx, canIndex: false));
+        Directory.CreateDirectory(Path.Combine(_dir, "bare", ".git"));
+        Write("bare/main.py", "print(1)");
+        Assert.Null(new ProjectNudge().Check(read, Args(Path.Combine(_dir, "bare", "main.py")), ok, ctx));
+
+        // Big enough to index: one note says to index it and gives the notes, which the overview then doesn't repeat.
+        var project = Path.Combine(_dir, "big");
+        Directory.CreateDirectory(Path.Combine(project, ".git"));
+        for (var i = 0; i < ProjectNudge.MinFiles; i++)
+            Write($"big/src/File{i}.cs", "class C {}");
+        Write("big/CLAUDE.md", "Build with dotnet build -c Release.\n");
+        note = new ProjectNudge().Check(read, Args(Path.Combine(project, "src", "File1.cs")), ok, ctx);
+        Assert.StartsWith(ProjectNudge.Note(project, "a git repository") + "\nIts " + ProjectNudge.NotesLead + "\n(CLAUDE.md, 1 line, all of it)\nBuild with dotnet build -c Release.", note);
+        Assert.True(ProjectNudge.AsksToIndex(note!) && ProjectNudge.GivesNotes(note!));
+        held.Add(note!);
+        var overview = (await Run(ctx, project)).Text;
+        Assert.Contains("Notes for AI agents in the project:\n(CLAUDE.md: given whole in Sloperator's note on this project above, as it is now)", overview);
+        Assert.DoesNotContain("dotnet build -c Release", overview);
+        // Without index_folder, the notes alone.
+        Assert.False(ProjectNudge.AsksToIndex(new ProjectNudge().Check(read, Args(Path.Combine(project, "src", "File1.cs")), ok, Ctx(), canIndex: false)!));
+
+        static string Args(string path) => new JsonObject { ["path"] = path }.ToJsonString();
+    }
+
+    [Fact]
     public void The_project_a_path_is_in_is_found_by_what_it_has()
     {
         Directory.CreateDirectory(Path.Combine(_dir, "repo", ".git"));
@@ -613,6 +705,51 @@ public class FolderIndexTests : IDisposable
         Assert.Single(session.History, m => m.Content?.StartsWith("[Sloperator]") == true);
         Assert.DoesNotContain(session.History, m => m.Role == Llm.ChatRole.Tool && m.Content!.Contains("[Sloperator]"));
         Assert.Contains($"Asked the model to index {project} before going through its files.", observer.Notices);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task The_agent_gets_a_small_projects_notes_once_across_messages_with_or_without_the_index(bool index)
+    {
+        var project = Path.Combine(_dir, "tiny");
+        Directory.CreateDirectory(Path.Combine(project, ".git"));
+        Write("tiny/main.py", "print('hello')");
+        Write("tiny/AGENTS.md", "## Notes\n- Run it with python -X utf8.\n");
+        var read = new JsonObject { ["path"] = Path.Combine(project, "main.py") }.ToJsonString();
+        var server = new ScriptedServer(
+            Sse.ToolCall("c1", "read_file", read),
+            Sse.ToolCall("c2", "read_file", read),
+            Sse.Text("It prints hello."),
+            Sse.ToolCall("c3", "read_file", read),
+            Sse.Text("Still hello."));
+        var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = _dir, IndexDirectory = _store };
+        var session = new AgentSession(new Llm.OpenAiChatClient(new HttpClient(server), "http://test", null), new Llm.ChatRequestOptions(),
+            ToolRegistry.CreateDefault(includeScreenTools: false, includeIndex: index), ctx, "system prompt");
+
+        var observer = new RecordingObserver();
+        await session.RunAsync("What does main.py print?", observer, CancellationToken.None);
+        await session.RunAsync("And now?", observer, CancellationToken.None);
+
+        // After the first call in the project only, in a message of its own, not again for the next message.
+        var c1 = session.History.FindIndex(m => m.ToolCallId == "c1");
+        Assert.Equal(ProjectNudge.Note(project, "a git repository", ProjectOverview.ProjectNotes(project), index: false), session.History[c1 + 1].Content);
+        Assert.Contains("- Run it with python -X utf8.", session.History[c1 + 1].Content);
+        Assert.Single(session.History, m => m.Content?.StartsWith("[Sloperator]") == true);
+        Assert.Equal([$"Gave the model the notes for AI agents in {project}."], observer.Notices.Where(n => n.Contains(project)));
+    }
+
+    [Fact]
+    public void The_prompt_asks_for_notes_in_the_projects_AGENTS_md_with_or_without_the_index()
+    {
+        foreach (var index in new[] { true, false })
+        {
+            var prompt = SystemPrompt.Build("Test OS", null, "C:\\", "", folderIndex: index);
+            Assert.Contains("A project's AGENTS.md (or its CLAUDE.md, when it has only that) in its top folder holds notes for AI agents", prompt);
+            Assert.Contains("under a \"## Notes\" heading; make AGENTS.md if the project has neither", prompt);
+            Assert.Contains("never change the user's lines, and never write secrets there", prompt);
+            Assert.Contains("Say in your reply what you noted.", prompt);
+        }
     }
 
     [Fact]

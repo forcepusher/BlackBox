@@ -16,7 +16,8 @@ internal static partial class ProjectOverview
     /// <summary>The longest overview, about 1,400 tokens: an orientation, which a small model reads along with everything after it.</summary>
     internal const int MaxChars = 5_500;
 
-    public static string Build(FolderIndex index, IndexChanges changes)
+    /// <param name="given">Whether the conversation already holds a text: the project's notes given whole with Sloperator's note on the project aren't given again.</param>
+    public static string Build(FolderIndex index, IndexChanges changes, Func<string, bool>? given = null)
     {
         var files = index.Files.Values.ToList();
         var read = files.Where(f => f.Kind is FileKind.Text or FileKind.Document).ToList();
@@ -34,11 +35,18 @@ internal static partial class ProjectOverview
 
         Section(sb, "What it is", Kind(index, files), 700);
         Section(sb, "README", Readme(index, files), 400);
-        Section(sb, "Notes for AI agents in the project", AgentNotes(index, files), 600);
+        // The project's own notes come whole and outside the overview's size: they are where the
+        // agent writes down what the next task in the project needs, at their end.
+        var notes = ProjectNotes(index.Root);
+        if (notes.Length > 0 && given?.Invoke(notes.TrimEnd()) == true)
+            notes = $"({string.Join(" and ", NotesFiles(index.Root).Select(Path.GetFileName))}: given whole in Sloperator's note on this project above, as it is now)\n";
+        var before = sb.Length;
+        Section(sb, "Notes for AI agents in the project", notes + AgentNotes(index, files), notes.Length + 600);
+        var notesChars = Math.Min(notes.Length, sb.Length - before);
         Section(sb, "Languages", Languages(read), 200);
         Section(sb, "Folders (files in each)", Folders(files), 700);
         var footer = Footer(index, files);
-        var room = MaxChars - sb.Length - footer.Length - 100;
+        var room = MaxChars - (sb.Length - notesChars) - footer.Length - 100;
         if (room > 300)
             Section(sb, "Main files and what they define", Map(index, read, room), room);
         sb.Append(footer);
@@ -257,10 +265,75 @@ internal static partial class ProjectOverview
         return readme is null ? null : Opening(index.FullPath(readme), 6, Show(readme.Path));
     }
 
-    /// <summary>The files a project keeps for AI agents (CLAUDE.md, AGENTS.md, .cursorrules…): its conventions, said for exactly this.</summary>
+    /// <summary>
+    /// The most of a project's AGENTS.md and CLAUDE.md the overview carries, together: 32 KiB, what
+    /// Codex reads of AGENTS.md by default (<c>project_doc_max_bytes</c>).
+    /// </summary>
+    internal const int MaxNotesChars = 32 * 1024;
+
+    /// <summary>
+    /// A project's AGENTS.md and CLAUDE.md, each whole (the agent adds its notes at their end), up to
+    /// <see cref="MaxNotesChars"/> between them; past that the start and the end of a file, and
+    /// where to read the lines between. Empty when the project has neither. Read from the disk, not
+    /// the index, as <see cref="Agent.ProjectNudge"/> gives them for a project it hasn't indexed, and
+    /// an AGENTS.md left out of git is the project's notes all the same.
+    /// </summary>
+    internal static string ProjectNotes(string root)
+    {
+        var sb = new StringBuilder();
+        var shown = new Dictionary<string, string>();
+        foreach (var full in NotesFiles(root))
+        {
+            var name = Path.GetFileName(full);
+            if (Read(full)?.ReplaceLineEndings("\n").TrimEnd() is not { Length: > 0 } text)
+                continue;
+            var lines = text.Split('\n');
+            var count = $"{lines.Length:N0} line{(lines.Length == 1 ? "" : "s")}";
+            // CLAUDE.md is often a link to AGENTS.md, or a copy of it.
+            if (shown.FirstOrDefault(s => s.Value == text).Key is { } same)
+            {
+                sb.Append($"({name}: the same as {same})\n");
+                continue;
+            }
+            shown[name] = text;
+            var room = MaxNotesChars - sb.Length;
+            if (text.Length <= room)
+            {
+                sb.Append($"({name}, {count}, all of it)\n").Append(text).Append('\n');
+                continue;
+            }
+            // Its start (the project's own rules, as a rule) and its end (the latest notes), half the room each.
+            int head = 0, tail = lines.Length, used = 0;
+            while (head < tail && used + lines[head].Length + 1 <= room / 2)
+                used += lines[head++].Length + 1;
+            used = 0;
+            while (tail > head && used + lines[tail - 1].Length + 1 <= room / 2)
+                used += lines[--tail].Length + 1;
+            sb.Append($"({name}, {count}, too long to give whole: its start and its end)\n");
+            foreach (var line in lines[..head])
+                sb.Append(line).Append('\n');
+            sb.Append($"… lines {head + 1}-{tail} left out: read_file path=\"{full}\" offset={head + 1} limit={tail - head} reads them\n");
+            foreach (var line in lines[tail..])
+                sb.Append(line).Append('\n');
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>A project's AGENTS.md and CLAUDE.md in its top folder, AGENTS.md first.</summary>
+    private static List<string> NotesFiles(string root)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(root).Where(f => Path.GetFileName(f).ToLowerInvariant() is "agents.md" or "claude.md")
+                .OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return []; }
+    }
+
+    /// <summary>The files other tools keep for AI agents (.cursorrules, Copilot's instructions…): their start, as conventions said for exactly this.</summary>
     private static string? AgentNotes(FolderIndex index, List<IndexedFile> files)
     {
-        var notes = files.Where(f => Depth(f.Path) == 0 && Path.GetFileName(f.Path).ToLowerInvariant() is "claude.md" or "agents.md" or ".cursorrules" or "gemini.md" or ".windsurfrules"
+        var notes = files.Where(f => Depth(f.Path) == 0 && Path.GetFileName(f.Path).ToLowerInvariant() is ".cursorrules" or "gemini.md" or ".windsurfrules"
                                      || f.Path.Equals(".github/copilot-instructions.md", StringComparison.OrdinalIgnoreCase)
                                      || f.Path.StartsWith(".cursor/rules/", StringComparison.OrdinalIgnoreCase))
             .OrderBy(f => f.Path, StringComparer.OrdinalIgnoreCase).Take(3).ToList();

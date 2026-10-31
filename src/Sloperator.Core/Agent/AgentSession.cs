@@ -521,10 +521,16 @@ public sealed partial class AgentSession(
                         notes.Add(lookItUp);
                         observer.OnNotice("Asked the model to look this up with web_search before its next try.");
                     }
-                    if (tools.Find("index_folder") is not null && _projects.Check(ToolCallRepair.ResolveTool(call.Name, tools), call.Arguments, result, toolContext) is { } indexIt)
+                    if (_projects.Check(ToolCallRepair.ResolveTool(call.Name, tools), call.Arguments, result, toolContext, tools.Find("index_folder") is not null) is { } project)
                     {
-                        notes.Add(indexIt);
-                        observer.OnNotice($"Asked the model to index {ProjectNudge.RootIn(indexIt)} before going through its files.");
+                        notes.Add(project);
+                        var root = ProjectNudge.RootIn(project);
+                        observer.OnNotice((ProjectNudge.AsksToIndex(project), ProjectNudge.GivesNotes(project)) switch
+                        {
+                            (true, true) => $"Asked the model to index {root} before going through its files, and gave it the project's notes for AI agents.",
+                            (true, false) => $"Asked the model to index {root} before going through its files.",
+                            _ => $"Gave the model the notes for AI agents in {root}.",
+                        });
                     }
                     // A model that can't see gets no picture (an MCP tool's, say): its server
                     // refused that request and every one after it, since the conversation keeps it.

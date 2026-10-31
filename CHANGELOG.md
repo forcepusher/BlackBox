@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   however far you zoom and **Code** shows their source to select lines of. The agent sees what an SVG
   draws when it reads one, and writes design mockups as SVG files, so you see a mockup right in the
   chat. Pictures an SVG links on the web aren't fetched. Sloperator.exe is about 1.5 MB bigger.
+- The agent keeps notes in a project's `AGENTS.md`: when it learns something the next task there
+  would need (how to build or test it, what failed and what worked, a choice you made), it adds a
+  line under "Notes" at the end, makes the file if there is none, and says so in its reply. It reads
+  the whole file when it starts on the project (before, only its first lines), `CLAUDE.md` too.
 
 ### Changed
 - Video generator looks like the other side panels: how the piece shown was made sits in a column
