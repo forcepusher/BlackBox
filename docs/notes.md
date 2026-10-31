@@ -3553,7 +3553,7 @@ one most lines end in, read again 300 ms after typing rests). The editor keeps t
 in the line break of the line they are on (AvaloniaEdit does; `CodeEditorTests` checks an LF and a CRLF
 file), and Save writes the encoding the file was read in. Another encoding picked is written on the next
 Save, as Visual Studio's Advanced Save Options and VS Code's Save with Encoding do (`CodeFile.Encoding` vs
-`SavedEncoding`), and counts as an edit not saved till then; Reload takes it back. One that can't write a
+`SavedEncoding`), and counts as an edit not saved till then; Discard takes it back. One that can't write a
 character of the text is refused, the bar saying which and on what line ("Windows-1252 can't write "✓"
 (line 3): kept UTF-8"). Other line breaks picked rewrite every line's (`CodeFile.WithLineBreaks`), one
 edit that Ctrl+Z undoes. Checked in the app: Ship.cs (UTF-8, LF) with CRLF and UTF-8 with BOM picked
@@ -3583,7 +3583,13 @@ so another file clicked, the panel closed or another chat leave them; the file's
 bar says "not saved". The open file changed on disk (the agent's edit_file, another program): with no
 edits here, the editor shows the disk's text, only what differs replaced (`CodeEditorViewModel.Replace`)
 so the caret and the view before it stay; with edits, the bar says so, Save writes the edits over it and
-Reload takes the disk's. A file deleted on disk stays open; Save writes it again.
+Discard takes the disk's. A file deleted on disk stays open; Save writes it again, Discard closes it.
+The button beside Save reads **Discard** while there are edits not saved, an encoding picked among them (the
+user, 2026-10-31: Reload "should also switch to Discard when you made changes and didn't save them yet"),
+with File changes' Discard icon: the file as it is on disk again, edits and pick thrown away. With nothing
+edited it reads Reload, greyed, as the file shows the disk's text by itself then (`RevertName`, `CanRevert`).
+Checked in the app: CRLF picked on Ship.cs turned it to Discard, and Discard put it back to LF, the file
+untouched.
 
 **Lines selected go into the chat's box** (the user's rule, 2026-10-28: a card only for what was
 picked): 150 ms after the selection rests, as "Lines 31-38 · Game.cs" ("Line 4", "Whole file" for all of
@@ -3609,7 +3615,7 @@ first is left where it is in the upper half of the view, else brought a quarter 
 the folder isn't followed: it would take the tree from the folder the user chose. Turned on, Watch goes
 to the agent's last change and lights it again. Every button of the panel's bars is there from the start
 and greyed while it has nothing to do (the user, 2026-10-31: bar buttons never come and go mid-task):
-Wrap and Watch, and Save and Reload over the file even with none open. Checked in the app with a stand-in agent
+Wrap and Watch, and Save and Reload (Discard) over the file even with none open. Checked in the app with a stand-in agent
 (2026-10-31): with Game.cs open, its edit_file on Ship.cs opened Ship.cs with the three lines it added lit.
 **Wrap** beside it (the user's question, 2026-10-31; `panels.wrapCode`, on by default as File changes'):
 long lines wrap inside the panel under their own start (AvaloniaEdit's `WordWrap`), one number a line, so

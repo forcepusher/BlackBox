@@ -348,9 +348,20 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
 
     /// <summary>Edited since it was read or saved.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FileStatus))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyPropertyChangedFor(nameof(FileStatus), nameof(RevertName), nameof(RevertTip))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ReloadCommand))]
     private bool _isUnsaved;
+
+    /// <summary>
+    /// The button beside Save: Discard while there are edits not saved (the user, 2026-10-31: Reload
+    /// "should also switch to Discard when you made changes and didn't save them yet"), else Reload,
+    /// greyed, as the file shows what the disk has by itself then.
+    /// </summary>
+    public string RevertName => IsUnsaved ? "Discard" : "Reload";
+
+    public string RevertTip => IsUnsaved
+        ? "Throw away the edits not saved: the file as it is on disk"
+        : "The file shows what is on disk by itself while nothing is edited here";
 
     /// <summary>Changed on disk (by the agent, another program) while it had edits here not saved: Save keeps those, Reload takes the disk's.</summary>
     [ObservableProperty]
@@ -376,7 +387,7 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
             if (EncodingProblem is { } encoding)
                 return $"{where} · {encoding}";
             if (ChangedOnDisk)
-                return File.Exists(path) ? $"{where} · changed on disk too: Save keeps yours, Reload takes the file's" : $"{where} · deleted on disk: Save writes it again";
+                return File.Exists(path) ? $"{where} · changed on disk too: Save keeps yours, Discard takes the file's" : $"{where} · deleted on disk: Save writes it again";
             return IsUnsaved ? $"{where} · not saved" : where;
         }
     }
@@ -611,16 +622,31 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         OnPropertyChanged(nameof(EncodingName));
     }
 
-    /// <summary>Reload: the file as it is on disk, in place of the edits not saved.</summary>
-    [RelayCommand(CanExecute = nameof(ChangedOnDisk))]
+    private bool CanRevert() => IsUnsaved || ChangedOnDisk;
+
+    /// <summary>Discard (Reload with nothing edited): the file as it is on disk, in place of the edits not saved and an encoding picked.</summary>
+    [RelayCommand(CanExecute = nameof(CanRevert))]
     private async Task ReloadAsync()
     {
         if (_file is not { } file || Document is not { } document)
             return;
         // The encoding picked goes with the edits: the file's own comes back.
         file.Encoding = file.SavedEncoding;
-        if (await file.ReadAgainAsync(CancellationToken.None) is not { } text || Document != document)
+        var text = await file.ReadAgainAsync(CancellationToken.None);
+        if (Document != document)
             return;
+        if (text is null)
+        {
+            // Deleted on disk: with the edits thrown away nothing is left of it to show.
+            if (!File.Exists(file.Path))
+            {
+                _chat.CodeDrafts.Remove(file.Path);
+                if (Tree.Find(file.Path) is { } row)
+                    row.IsUnsaved = false;
+                CloseFile();
+            }
+            return;
+        }
         Replace(document, text);
         document.UndoStack.MarkAsOriginalFile();
         ChangedOnDisk = false;

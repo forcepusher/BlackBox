@@ -76,7 +76,7 @@
       </ListBox>
       <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
 
-      <!-- Save (Ctrl+S) and Reload, there from the start and greyed while there is nothing to do (the
+      <!-- Save (Ctrl+S) and Reload (Discard with edits not saved), there from the start and greyed while there is nothing to do (the
            user, 2026-10-31: bar buttons never come and go mid-task), the file's path in the folder with
            whether it is saved; under the code, its language, encoding and line breaks. -->
       <DockPanel Grid.Column="2">
@@ -89,11 +89,13 @@
                   <TextBlock Text="Save" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
+              <!-- Discard while there are edits not saved (File changes' Discard icon), else Reload, greyed. -->
               <Button Classes="ghost small act" Command="{Binding ReloadCommand}" ToolTip.ShowOnDisabled="True"
-                      ToolTip.Tip="Take the file as it is on disk, in place of the edits here, once both changed" AutomationProperties.Name="Reload">
+                      ToolTip.Tip="{Binding RevertTip}" AutomationProperties.Name="{Binding RevertName}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                  <PathIcon Width="12" Height="12" Data="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
-                  <TextBlock Text="Reload" VerticalAlignment="Center" />
+                  <PathIcon Width="12" Height="12" IsVisible="{Binding !IsUnsaved}" Data="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+                  <PathIcon Width="12" Height="12" IsVisible="{Binding IsUnsaved}" Data="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z" />
+                  <TextBlock Text="{Binding RevertName}" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
             </StackPanel>
