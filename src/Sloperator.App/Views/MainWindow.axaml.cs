@@ -381,15 +381,15 @@ public partial class MainWindow : Window
     /// <summary>
     /// The chat's right-click menu, one for the whole log: Copy for selected text, Undo message and
     /// everything below on a message of the user's, then Compact context. It opens before a text
-    /// block's own menu (Copy alone) could. A picture or file keeps its own (Copy image or Copy file,
-    /// see <see cref="CopyMenu"/>).
+    /// block's own menu (Copy alone) could. A picture or file keeps its own (Open in Inspector, Copy
+    /// image or Copy file, see <see cref="FileMenu"/>).
     /// </summary>
     private void OnChatMenu(object? sender, ContextRequestedEventArgs e)
     {
         if (e.Source is not Control source)
             return;
         var between = source.GetSelfAndVisualAncestors().OfType<Control>().TakeWhile(c => !ReferenceEquals(c, ChatScroll)).ToList();
-        if (between.Any(c => c.ContextMenu is not null || CopyMenu.Has(c)))
+        if (between.Any(c => c.ContextMenu is not null || FileMenu.Has(c)))
             return;
         e.Handled = true;
         var menu = new ContextMenu { ItemsSource = ChatMenuItems(source) };
@@ -568,7 +568,7 @@ public partial class MainWindow : Window
         if (index < 0 || (Screens.ScreenFromWindow(this) ?? Screens.Primary) is not { } screen)
             return false;
         _viewer?.Close();
-        var viewer = _viewer = MediaViewer.On(screen, entries, index, Vm.Previews); // the chat's screen
+        var viewer = _viewer = MediaViewer.On(screen, entries, index, Vm.Previews, Vm); // the chat's screen
         viewer.Closed += (_, _) =>
         {
             if (ReferenceEquals(_viewer, viewer))

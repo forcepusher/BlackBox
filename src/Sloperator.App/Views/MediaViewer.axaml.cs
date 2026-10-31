@@ -35,13 +35,17 @@ public partial class MediaViewer : Window
     }
 
     /// <summary>A viewer of <paramref name="entries"/> from <paramref name="index"/>, placed on <paramref name="screen"/>, where it then goes full screen.</summary>
-    public static MediaViewer On(Avalonia.Platform.Screen screen, List<MediaEntry> entries, int index, PreviewServices previews) => new()
+    public static MediaViewer On(Avalonia.Platform.Screen screen, List<MediaEntry> entries, int index, PreviewServices previews, MainWindowViewModel? chat) => new()
     {
         DataContext = new MediaViewerViewModel(entries, index, previews, screen.Bounds.Width),
+        Chat = chat,
         Position = screen.Bounds.Position,
         Width = screen.Bounds.Width / screen.Scaling,
         Height = screen.Bounds.Height / screen.Scaling,
     };
+
+    /// <summary>The chat it was opened from, whose side panels a file's right-click menu opens it in (see <see cref="FileMenu"/>).</summary>
+    public MainWindowViewModel? Chat { get; private init; }
 
     /// <summary>The mouse moved: the bar and the arrows are back, until it rests again.</summary>
     private void Awake()

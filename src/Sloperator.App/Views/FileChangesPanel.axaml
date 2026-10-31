@@ -256,8 +256,8 @@
               <TextBlock Classes="muted" Text="{Binding Target}" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="LeadingCharacterEllipsis" ToolTip.Tip="{Binding Target}" />
             </DockPanel>
           </Border>
-          <!-- Every row of the diff; clicked lines are picked into the chat's box. -->
-          <ListBox x:Name="DiffList" Classes="diff" Classes.wrap="{Binding Wrap}" ItemsSource="{Binding Rows}" Selection="{Binding Selection}" SelectionMode="Multiple"
+          <!-- Every row of the diff; clicked lines are picked into the chat's box. A right-click on a file's name gives the file's menu. -->
+          <ListBox x:Name="DiffList" Classes="diff" Classes.wrap="{Binding Wrap}" ItemsSource="{Binding Rows}" Selection="{Binding Selection}" SelectionMode="Multiple" ContextRequested="OnFileMenu"
                    AutomationProperties.Name="Diff">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:DiffRow">

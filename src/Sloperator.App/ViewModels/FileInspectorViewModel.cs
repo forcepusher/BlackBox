@@ -29,7 +29,7 @@ namespace Sloperator.App.ViewModels;
 /// selection Sloperator can't read. A stretch dragged over a sound goes in as "0.80-1.45 s · song.mp3",
 /// with a picture of it. Pictures, frames, pages and sounds zoom and pan.
 /// </summary>
-public sealed partial class FileInspectorViewModel : ObservableObject, ISidePanel
+public sealed partial class FileInspectorViewModel : ObservableObject, IFilePanel
 {
     private readonly PreviewServices _previews;
     private readonly MainWindowViewModel? _chat;

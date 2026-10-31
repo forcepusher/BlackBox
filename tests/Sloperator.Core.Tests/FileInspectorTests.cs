@@ -45,6 +45,39 @@ public class FileInspectorTests : IDisposable
             }
     }
 
+    // A file's right-click menu offers the Code editor for these, told by the name alone (none of them is written).
+    [Theory]
+    [InlineData("notes.md", true)]
+    [InlineData("data.csv", true)]
+    [InlineData("page.html", true)]
+    [InlineData("icon.svg", true)]
+    [InlineData("Program.cs", true)]
+    [InlineData("settings.json", true)]
+    [InlineData("build.ps1", true)]
+    [InlineData("photo.png", false)]
+    [InlineData("clip.mp4", false)]
+    [InlineData("song.mp3", false)]
+    [InlineData("chair.glb", false)]
+    [InlineData("report.pdf", false)]
+    [InlineData("letter.docx", false)]
+    [InlineData("sheet.xlsx", false)]
+    [InlineData("letter.rtf", false)]
+    public void Text_formats_by_extension(string name, bool text) => Assert.Equal(text, FileInspector.IsText(Path.Combine(_dir, name)));
+
+    [Fact]
+    public void A_file_of_no_known_kind_is_text_by_its_start()
+    {
+        Assert.True(FileInspector.IsText(Write("README", "plain words\n")));
+        Assert.True(FileInspector.IsText(Write(".gitignore", "bin/\nobj/\n")));
+        var binary = Path.Combine(_dir, "blob.bin");
+        File.WriteAllBytes(binary, [0x4D, 0x5A, 0x00, 0x01, 0x02]);
+        Assert.False(FileInspector.IsText(binary));
+        Assert.False(FileInspector.IsText(Path.Combine(_dir, "gone.bin")));
+        Assert.False(FileInspector.IsText(_dir));
+        // A share is never read from: its server may be off.
+        Assert.False(FileInspector.IsText(@"\\nobody-here\share\README"));
+    }
+
     [Fact]
     public void Other_files_are_text_unless_they_hold_binary()
     {

@@ -36,8 +36,8 @@
           </StackPanel>
         </ToggleButton>
         <Panel>
-          <!-- Copy file (or Copy image) on a right-click, as on the file under it. -->
-          <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" ClipToBounds="True" Margin="0,0,4,0" Background="Transparent" views:CopyMenu.File="{Binding Path}"
+          <!-- The file's menu on a right-click (Open in Code editor, Copy file or Copy image), as on the file under it. -->
+          <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" ClipToBounds="True" Margin="0,0,4,0" Background="Transparent" views:FileMenu.File="{Binding Path}"
                       IsVisible="{Binding HasFile}">
             <TextBlock Text="{Binding FileName}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}" />
             <TextBlock Classes="muted" Text="{Binding Details}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding Details}" />

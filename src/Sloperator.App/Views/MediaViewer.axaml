@@ -53,13 +53,13 @@
   <Window.DataTemplates>
     <DataTemplate DataType="vm:ViewerPicture">
       <views:PictureZoom Source="{Binding Image}" BesideClicked="OnBesideClicked"
-                         views:CopyMenu.Image="{Binding Image}" views:CopyMenu.Data="{Binding Data}" views:CopyMenu.File="{Binding Path}" />
+                         views:FileMenu.Image="{Binding Image}" views:FileMenu.Data="{Binding Data}" views:FileMenu.File="{Binding Path}" />
     </DataTemplate>
 
     <DataTemplate DataType="vm:AnimationPreview">
       <Panel Background="Transparent" PointerReleased="OnBackdropReleased">
         <Image Source="{Binding Image}" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality" HorizontalAlignment="Center" VerticalAlignment="Center"
-               views:CopyMenu.Image="{Binding Image}" views:CopyMenu.File="{Binding Path}" />
+               views:FileMenu.Image="{Binding Image}" views:FileMenu.File="{Binding Path}" />
       </Panel>
     </DataTemplate>
 
@@ -83,7 +83,7 @@
         <Panel Background="Transparent" PointerReleased="OnBackdropReleased">
           <Image Source="{Binding Frame}" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality" HorizontalAlignment="Center" VerticalAlignment="Center"
                  PointerReleased="OnVideoReleased" AutomationProperties.Name="Play or pause video"
-                 views:CopyMenu.Image="{Binding Frame}" views:CopyMenu.File="{Binding Path}" />
+                 views:FileMenu.Image="{Binding Frame}" views:FileMenu.File="{Binding Path}" />
         </Panel>
       </DockPanel>
     </DataTemplate>
@@ -121,9 +121,9 @@
               <PathIcon Width="12" Height="12" Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
             </Button>
           </StackPanel>
-          <!-- Its name has Copy image or Copy file on a right-click too, also for a document, whose view has none. -->
+          <!-- Its name has the file's menu on a right-click too, also for a document, whose view has none. -->
           <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" Background="Transparent"
-                      views:CopyMenu.File="{Binding Current.Path}" views:CopyMenu.Data="{Binding Current.Picture}">
+                      views:FileMenu.File="{Binding Current.Path}" views:FileMenu.Data="{Binding Current.Picture}">
             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             <TextBlock Classes="muted" Text="{Binding Details}" VerticalAlignment="Center" />
             <TextBlock Classes="muted" Text="{Binding Counter}" VerticalAlignment="Center" />

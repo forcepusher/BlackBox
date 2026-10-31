@@ -97,6 +97,36 @@ public static partial class FileInspector
             ".rb", ".php", ".lua", ".gd", ".shader", ".hlsl", ".glsl", ".sql", ".ps1", ".bat", ".cmd", ".sh"]),
     ];
 
+    /// <summary>
+    /// A file in a format that is text, to edit as such (the Code editor's, on a file's right-click
+    /// menu): Markdown, a table, a web page or an SVG, and the code and text of <see cref="PickerTypes"/>,
+    /// by their extension. A picture, video, sound, 3D model, PDF or Office file never is. A file of no
+    /// kind its name tells (README, .gitignore, a .props) is when its start reads as text, looked at only
+    /// on this PC's own drives: on a share whose server is off, the menu would wait for it.
+    /// </summary>
+    public static bool IsText(string path)
+    {
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        if (ext is ".html" or ".htm" or ".xhtml" or ".svg" || PickerTypes.Any(t => t.Kind is InspectorKind.Markdown or InspectorKind.Table or InspectorKind.Text && t.Extensions.Contains(ext)))
+            return true;
+        if (PickerTypes.Any(t => t.Extensions.Contains(ext)) || MediaPreview.KindOf(path) != "other")
+            return false;
+        return OnOwnDrive(path) && LooksLikeText(path);
+    }
+
+    private static bool OnOwnDrive(string path)
+    {
+        try
+        {
+            return !path.StartsWith(@"\\", StringComparison.Ordinal) && Path.GetPathRoot(path) is { Length: > 0 } root
+                   && new DriveInfo(root).DriveType is DriveType.Fixed or DriveType.Removable;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>The most of a file <see cref="Hex"/> shows: its start.</summary>
     public const int MaxHexBytes = 64 * 1024;
 
