@@ -21,12 +21,32 @@ public partial class TitleBar : UserControl
     /// </summary>
     public const double Room = 33;
 
+    public static readonly StyledProperty<Control?> StatusProperty =
+        AvaloniaProperty.Register<TitleBar, Control?>(nameof(Status));
+
     private Window? _window;
 
     public TitleBar()
     {
         InitializeComponent();
         IsVisible = false;
+    }
+
+    /// <summary>
+    /// What sits beside the buttons, left of minimize: the chat window's server status. It takes the
+    /// pointer as the buttons do (not the caption), so its tooltips show.
+    /// </summary>
+    public Control? Status
+    {
+        get => GetValue(StatusProperty);
+        set => SetValue(StatusProperty, value);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == StatusProperty)
+            StatusHost.Content = change.NewValue;
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -100,7 +120,7 @@ public partial class TitleBar : UserControl
                 handled = true;
                 var hit = Platform.Windows.WindowsPlatform.FrameHitTest(hwnd, lParam);
                 return hit != HTCLIENT ? hit : Over(MaximizeButton, lParam) ? HTMAXBUTTON
-                    : Over(this, lParam) && !Over(MinimizeButton, lParam) && !Over(CloseButton, lParam) ? HTCAPTION : HTCLIENT;
+                    : Over(this, lParam) && !Over(MinimizeButton, lParam) && !Over(CloseButton, lParam) && !Over(StatusHost, lParam) ? HTCAPTION : HTCLIENT;
             case WM_NCMOUSEMOVE:
                 _pointer = new PixelPoint((short)(lParam & 0xFFFF), (short)((lParam >> 16) & 0xFFFF));
                 Hover(wParam == HTMAXBUTTON);

@@ -6,26 +6,43 @@ namespace Sloperator.App.Views;
 /// <summary>
 /// A row that shows each of its children whole or not at all, never cut short with "…": left to
 /// right, the first always, each next one only while it and every one before it fit in full. The
-/// top bar's server status (the user, 2026-10-30): in a narrow window, or beside a long Side panel
-/// name, the words go and the dot stays, its tooltip saying them.
+/// server status (the user, 2026-10-30): in a narrow window the words go and the dot stays, its
+/// tooltip saying them. <see cref="FromRight"/> turns it round: laid against the right edge, the last
+/// always, each one before it only while it and every one after it fit.
 /// </summary>
 public class WholeRow : Panel
 {
     /// <summary>Room to spare for layout rounding: a part as wide as what is left still fits.</summary>
     private const double Slack = 0.01;
 
+    public static readonly StyledProperty<bool> FromRightProperty =
+        AvaloniaProperty.Register<WholeRow, bool>(nameof(FromRight));
+
+    static WholeRow() => AffectsMeasure<WholeRow>(FromRightProperty);
+
     public WholeRow() => ClipToBounds = true;
+
+    /// <summary>The last child kept first and the row against the right edge, where the clip still hides what doesn't fit.</summary>
+    public bool FromRight
+    {
+        get => GetValue(FromRightProperty);
+        set => SetValue(FromRightProperty, value);
+    }
+
+    /// <summary>The children in the order they are kept: the first of them always.</summary>
+    private IEnumerable<Control> InOrder() => FromRight ? Enumerable.Reverse(Children) : Children;
 
     protected override Size MeasureOverride(Size availableSize)
     {
         double width = 0, height = 0;
         var fits = true;
-        for (var i = 0; i < Children.Count; i++)
+        var first = true;
+        foreach (var child in InOrder())
         {
-            var child = Children[i];
             child.Measure(new Size(double.PositiveInfinity, availableSize.Height));
-            if (i > 0 && width + child.DesiredSize.Width > availableSize.Width + Slack)
+            if (!first && width + child.DesiredSize.Width > availableSize.Width + Slack)
                 fits = false;
+            first = false;
             if (!fits || !child.IsVisible)
                 continue;
             width += child.DesiredSize.Width;
@@ -36,18 +53,20 @@ public class WholeRow : Panel
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        double x = 0;
+        double used = 0;
         var fits = true;
-        for (var i = 0; i < Children.Count; i++)
+        var first = true;
+        foreach (var child in InOrder())
         {
-            var child = Children[i];
             var width = child.DesiredSize.Width;
-            if (i > 0 && x + width > finalSize.Width + Slack)
+            if (!first && used + width > finalSize.Width + Slack)
                 fits = false;
-            // One that doesn't fit is put past the right edge, where the clip hides it.
-            child.Arrange(new Rect(fits ? x : finalSize.Width, 0, width, finalSize.Height));
+            first = false;
+            // One that doesn't fit is put past the edge it is laid from, where the clip hides it.
+            var x = FromRight ? (fits ? finalSize.Width - used - width : -width) : fits ? used : finalSize.Width;
+            child.Arrange(new Rect(x, 0, width, finalSize.Height));
             if (fits && child.IsVisible)
-                x += width;
+                used += width;
         }
         return finalSize;
     }
