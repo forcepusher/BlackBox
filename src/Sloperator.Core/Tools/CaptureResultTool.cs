@@ -76,13 +76,19 @@ public sealed partial class CaptureResultTool : Tool
                            "when you capture the result, to show the two side by side.";
                 return Task.FromResult(new ToolResult(text, ForModel(image, ctx.GetScreenSpace(screen)), ImageCaption: "What the user now sees of your work:", Files: [file]));
             }
-            using var both = Compose(before.Picture, image);
+            // Marked only where the two line up pixel for pixel: the same window or box, the same size.
+            var (marks, changed) = before.Picture.Width == frame.Width && before.Picture.Height == frame.Height ? Changes(before.Picture, frame) : (null, 0);
+            using var both = Compose(before.Picture, image, marks);
             var compared = Path.Combine(folder, $"capture-{number}-compared.png");
             using (var png = both.Encode(SKEncodedImageFormat.Png, 100))
             using (var stream = File.Create(compared))
                 png.SaveTo(stream);
             var shown = $"Captured {what} as capture {number}, {frame.Width}x{frame.Height}, and put it after {before.Name}: " +
                         $"the user sees the two side by side, labelled Before and After, the last you capture under your final reply{captioned}. " +
+                        (marks is null ? "They differ in size, so what changed isn't marked. "
+                            : marks.Count == 0 && changed > 0 ? "Only a few pixels changed, too few to box (a character or two, a caret, a clock): zoom in to check your change landed. "
+                            : marks.Count == 0 ? "No visible change between them: if you changed something there, it didn't land, or it is outside what you captured. "
+                            : $"{marks.Count} changed {(marks.Count == 1 ? "region is" : "regions are")} boxed on the After. ") +
                         "If the change doesn't show, fix that and capture it again.";
             return Task.FromResult(new ToolResult(shown, ForModel(both, ctx.GetScreenSpace(screen)), ImageCaption: "What the user now sees of your work, before and after:", Files: [compared]));
         }
@@ -208,12 +214,21 @@ public sealed partial class CaptureResultTool : Tool
         }
     }
 
+    /// <summary>Where the after differs from the before, of the same size, and how many pixels changed at all (see <see cref="ChangeBoxes"/>).</summary>
+    private static (List<SKRectI> Boxes, int Changed) Changes(SKBitmap before, RawImage after)
+    {
+        using var bgra = before.ColorType == SKColorType.Bgra8888 && before.RowBytes == before.Width * 4 ? null : before.Copy(SKColorType.Bgra8888);
+        var boxes = ChangeBoxes.Find((bgra ?? before).GetPixelSpan(), after.Bgra, after.Width, after.Height, out var changed);
+        return (boxes, changed);
+    }
+
     /// <summary>
     /// Before and after in one picture, each under its label, at one scale (the smaller one's,
     /// never enlarged): side by side, or one over the other, whichever comes out nearer 4:3, as the
     /// chat shows a picture at most 480 wide and two wide windows side by side came out a strip.
     /// </summary>
-    internal static SKImage Compose(SKBitmap before, SKImage after)
+    /// <param name="marks">Boxes on the After around what changed, in its own pixels; none for null or empty.</param>
+    internal static SKImage Compose(SKBitmap before, SKImage after, IReadOnlyList<SKRectI>? marks = null)
     {
         // The band and gap grow with the pictures, so a label on a 4K capture reads like one on a small one.
         var unit = Math.Max(1.0, Math.Max(after.Width, after.Height) / 1600.0);
@@ -244,13 +259,32 @@ public sealed partial class CaptureResultTool : Tool
         {
             Draw(beforeImage, "Before", 0, 0, wideBefore, height);
             Draw(after, "After", wideBefore + gap, 0, wideAfter, height);
+            Mark(wideBefore + gap, band);
         }
         else
         {
             Draw(beforeImage, "Before", 0, 0, width, tallBefore);
             Draw(after, "After", 0, band + tallBefore + gap, width, tallAfter);
+            Mark(0, band + tallBefore + gap + band);
         }
         return surface.Snapshot();
+
+        // Marks only come with two pictures of one size, drawn at that size: their pixels are the After's.
+        // 2 px of the accent, on whole pixels, between 1 px of near-black, to show on light and on dark.
+        void Mark(int x, int y)
+        {
+            if (marks is not { Count: > 0 })
+                return;
+            var line = 2 * (int)Math.Round(unit);
+            using var dark = new SKPaint { Color = new SKColor(0x16, 0x16, 0x16), Style = SKPaintStyle.Stroke, StrokeWidth = line + 2 * (int)Math.Round(unit), IsAntialias = false };
+            using var accent = new SKPaint { Color = new SKColor(0xFC, 0xC2, 0x1B), Style = SKPaintStyle.Stroke, StrokeWidth = line, IsAntialias = false };
+            foreach (var m in marks)
+            {
+                var r = new SKRect(x + m.Left, y + m.Top, x + m.Right, y + m.Bottom);
+                canvas.DrawRect(r, dark);
+                canvas.DrawRect(r, accent);
+            }
+        }
 
         static int Scaled(int side, int other, int otherTo) => Math.Max(1, (int)Math.Round((double)side * otherTo / other));
         static double Off43(int w, int h) => Math.Abs(Math.Log((double)w / h / (4.0 / 3)));

@@ -22,7 +22,7 @@ internal sealed class ClickCheck
     private const double FarShare = 0.001;
 
     /// <summary>A pixel counts as changed when a colour channel moves by more than this.</summary>
-    private const int Threshold = 24;
+    internal const int Threshold = 24;
 
     /// <summary>When nothing has changed yet, how long to keep looking for a slow reaction.</summary>
     private static readonly TimeSpan[] Rechecks = [TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(700)];

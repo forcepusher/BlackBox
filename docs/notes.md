@@ -2671,8 +2671,8 @@ a box maps like a click's x/y. The user gets a PNG in the chat's folder (`Data/c
 apart from the numbered pictures the conversation names, so undo doesn't drop it and deleting the
 chat does), shown open on the card as a file preview; the model gets the same crop as a JPEG at the
 zoom's quality, no larger than a screenshot of that screen. The app names the chat when a run starts
-for this. When the run ends, its last capture also shows in its last reply, under the words, with
-the caption (`ChatEntry.Capture`/`Caption`, so a reopened chat has it). A "done" claim whose only
+for this. When the run ends, its last capture also shows in its last reply, under the words, as the same
+picture preview the card has (name, size, Inspect, a click for full screen), with the caption under it (`ChatEntry.Capture`/`Caption`, so a reopened chat has it). A "done" claim whose only
 calls are looks ends the turn, but not when one of them is `capture_result`.
 
 **Before and after**: each capture says its number (capture-N.png). With `before` the new one is still kept as
@@ -2681,6 +2681,13 @@ capture-N.png, and the user (and the model) get `capture-N-compared.png`: the tw
 one over the other, whichever comes out nearer 4:3 (the chat shows a picture at most 480 wide, and two
 wide windows side by side were a strip). The prompt asks for a capture before changing something already
 on screen. A `before` that isn't there is an argument error before anything is captured.
+When the two are the same size (the same window or box), what changed is boxed on the After: pixels
+change as ClickCheck counts them (a channel moving by more than 24), gathered in 16 px cells (4 changed
+pixels or more); cells up to one apart make a region, and a region needs 80 changed pixels, so a
+blinking caret (about 40) or a clock's digit gets none; nearby boxes join, at most 6. A box is 2 px of
+the accent between 1 px of #161616, on whole pixels, 3 px out from the change. The model is told how
+many regions changed; that only a few pixels did (a digit, a caret), too few to box, so it zooms in to
+check; or that nothing visible did (a hint the work didn't land).
 
 Models often fumble tool-call syntax, so Sloperator repairs calls on the fly: Qwen XML, Gemma 4 and
 JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…) and misnamed

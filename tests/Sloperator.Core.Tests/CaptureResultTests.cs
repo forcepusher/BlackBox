@@ -222,8 +222,8 @@ public class CaptureResultTests : IDisposable
             Assert.Equal(SKColors.Red, png.GetPixel(150, 140));
             Assert.Equal(SKColors.Blue, png.GetPixel(316 + 150, 140));
             // Labels in the band over each.
-            Assert.True(Enumerable.Range(0, 300).Any(x => Enumerable.Range(0, 40).Any(y => png.GetPixel(x, y).Red > 200 && png.GetPixel(x, y).Blue > 200)));
-            Assert.True(Enumerable.Range(316, 300).Any(x => Enumerable.Range(0, 40).Any(y => png.GetPixel(x, y).Red > 200 && png.GetPixel(x, y).Blue > 200)));
+            Assert.Contains(Enumerable.Range(0, 300), x => Enumerable.Range(0, 40).Any(y => png.GetPixel(x, y).Red > 200 && png.GetPixel(x, y).Blue > 200));
+            Assert.Contains(Enumerable.Range(316, 300), x => Enumerable.Range(0, 40).Any(y => png.GetPixel(x, y).Red > 200 && png.GetPixel(x, y).Blue > 200));
         }
         // The model sees the comparison too.
         Assert.Equal((616, 240), SizeOf(result.Image!));
@@ -245,6 +245,94 @@ public class CaptureResultTests : IDisposable
         await Capture(ctx, Box(0, 0, 400, 300));
         var matched = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 200, ["height"] = 150, ["before"] = 3 });
         Assert.Equal((416, 190), SizeOf(File.ReadAllBytes(matched.Files![0])));
+    }
+
+    /// <summary>A white page of BGRA rows with dark rectangles on it, as a sheet's cells or a caret.</summary>
+    private static byte[] Page(int width, int height, params SKRectI[] dark)
+    {
+        var pixels = new byte[width * height * 4];
+        Array.Fill(pixels, (byte)255);
+        foreach (var r in dark)
+            for (var y = r.Top; y < r.Bottom; y++)
+                for (var x = r.Left; x < r.Right; x++)
+                    (pixels[(y * width + x) * 4], pixels[(y * width + x) * 4 + 1], pixels[(y * width + x) * 4 + 2]) = (40, 40, 40);
+        return pixels;
+    }
+
+    [Fact]
+    public void One_changed_cell_gives_one_box_around_it()
+    {
+        // A number typed into one cell of a sheet: its digits are a few dark strokes close together.
+        var after = Page(400, 300, new SKRectI(200, 100, 204, 114), new SKRectI(208, 100, 212, 114), new SKRectI(216, 100, 220, 114), new SKRectI(224, 100, 228, 114));
+        var box = Assert.Single(ChangeBoxes.Find(Page(400, 300), after, 400, 300, out _));
+        Assert.Equal(new SKRectI(197, 97, 231, 117), box);
+    }
+
+    [Fact]
+    public void A_caret_blink_or_antialiasing_noise_gives_no_box()
+    {
+        var caret = Page(400, 300, new SKRectI(50, 50, 52, 70));
+        Assert.Empty(ChangeBoxes.Find(Page(400, 300), caret, 400, 300, out _));
+        // A slight shift in colour all over (another antialiasing, a theme's tint) is under the threshold.
+        var tinted = Page(400, 300);
+        for (var i = 0; i < tinted.Length; i += 4)
+            tinted[i] = 240;
+        Assert.Empty(ChangeBoxes.Find(Page(400, 300), tinted, 400, 300, out _));
+    }
+
+    [Fact]
+    public void Changes_close_together_are_one_box_and_far_apart_are_few()
+    {
+        // A paragraph's words: one box. Two edits at opposite corners: two.
+        var words = Enumerable.Range(0, 12).Select(i => new SKRectI(40 + i % 6 * 30, 40 + i / 6 * 20, 60 + i % 6 * 30, 52 + i / 6 * 20)).ToArray();
+        Assert.Single(ChangeBoxes.Find(Page(400, 300), Page(400, 300, words), 400, 300, out _));
+        Assert.Equal(2, ChangeBoxes.Find(Page(400, 300), Page(400, 300, new SKRectI(10, 10, 40, 30), new SKRectI(350, 260, 390, 290)), 400, 300, out _).Count);
+        // Changes everywhere (a page scrolled): no confetti of boxes.
+        var everywhere = Enumerable.Range(0, 100).Select(i => new SKRectI(i % 10 * 40, i / 10 * 30, i % 10 * 40 + 12, i / 10 * 30 + 10)).ToArray();
+        Assert.InRange(ChangeBoxes.Find(Page(400, 300), Page(400, 300, everywhere), 400, 300, out _).Count, 1, 6);
+    }
+
+    [Fact]
+    public async Task The_model_is_told_how_many_regions_changed_or_that_nothing_did()
+    {
+        var platform = new FakePlatform { Screens = [Plain], Desktop = Filled(SKColors.White) };
+        var ctx = Ctx(platform);
+        await Capture(ctx, Box(0, 0, 300, 200));
+        var same = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["before"] = 1 });
+        Assert.Contains("No visible change between them", same.Text);
+
+        // One digit changed (4,200 to 4,300): too few pixels for a box, but not "no change".
+        var digit = Filled(SKColors.White);
+        for (var y = 50; y < 60; y++)
+            for (var x = 70; x < 73; x++)
+                digit.Bgra[(y * digit.Width + x) * 4] = 0;
+        platform.Desktop = digit;
+        var small = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["before"] = 1 });
+        Assert.Contains("Only a few pixels changed, too few to box", small.Text);
+        Assert.DoesNotContain("No visible change", small.Text);
+
+        // A cell filled in: one box, accent-coloured, on the After only.
+        var desktop = Filled(SKColors.White);
+        for (var y = 80; y < 100; y++)
+            for (var x = 100; x < 160; x++)
+                desktop.Bgra[(y * desktop.Width + x) * 4 + 1] = 0;
+        platform.Desktop = desktop;
+        var changed = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["before"] = 1 });
+        Assert.Contains("1 changed region is boxed on the After", changed.Text);
+        using (var both = SKBitmap.Decode(changed.Files![0]))
+        {
+            // Side by side: the After starts at 316, under a 40 px band. The box is 3 px out from the cell, 2 px of the accent.
+            var accent = new SKColor(0xFC, 0xC2, 0x1B);
+            Assert.Equal(accent, both.GetPixel(316 + 97, 40 + 90));
+            Assert.Equal(accent, both.GetPixel(316 + 96, 40 + 90));
+            Assert.Equal(new SKColor(0x16, 0x16, 0x16), both.GetPixel(316 + 95, 40 + 90));
+            Assert.DoesNotContain(Enumerable.Range(0, 300), x => Enumerable.Range(40, 200).Any(y => both.GetPixel(x, y) == accent));
+        }
+
+        // A before of another size: nothing is marked.
+        await Capture(ctx, Box(0, 0, 200, 100));
+        var other = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["before"] = 5 });
+        Assert.Contains("differ in size, so what changed isn't marked", other.Text);
     }
 
     [Fact]

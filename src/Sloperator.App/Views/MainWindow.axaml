@@ -623,16 +623,8 @@
                 <views:MarkdownView Source="{Binding ShownText}" IsVisible="{Binding HasText}" />
                 <!-- The picture of its work the run ended with (capture_result), under the words, the model's caption under it. -->
                 <StackPanel Spacing="4" IsVisible="{Binding HasCapture}" Margin="0,2,0,0">
-                  <ContentControl Content="{Binding Capture}">
-                    <ContentControl.ContentTemplate>
-                      <DataTemplate x:DataType="vm:ImagePreview">
-                        <Button Classes="bare" Click="OnPictureClick" HorizontalAlignment="Left" ToolTip.Tip="See it full screen"
-                                views:FileMenu.Image="{Binding Image}" views:FileMenu.File="{Binding Path}" AutomationProperties.Name="{Binding FileName}">
-                          <Image Source="{Binding Image}" MaxWidth="{Binding ShownWidth}" MaxHeight="480" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
-                        </Button>
-                      </DataTemplate>
-                    </ContentControl.ContentTemplate>
-                  </ContentControl>
+                  <!-- The standard picture preview, as on the call's card: name, size, Inspect, Show in folder, a click for full screen. -->
+                  <ContentControl Content="{Binding Capture}" />
                   <TextBlock Classes="muted" Text="{Binding Caption}" IsVisible="{Binding HasCaption}" TextWrapping="Wrap" />
                 </StackPanel>
                 <TextBlock Classes="muted" Text="{Binding TypingText}" IsVisible="{Binding ShowTypingDots}" />

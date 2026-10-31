@@ -74,11 +74,12 @@ public sealed class CaptureReplyTests : IDisposable
         Assert.Equal((last, "The chart, by month"), inReply);
         Assert.False(inEarlier);
         Assert.Equal((last, "The chart, by month"), loaded);
-        // Under the words, the caption under the picture, each 4 px apart or more.
+        // The standard picture preview, as on the call's card (its name, Inspect), under the words, the caption under it, 4 px apart or more.
         Assert.True(layout.Picture.Height > 0, "the picture isn't shown");
-        Assert.True(layout.Picture.Top >= layout.TextBottom + 4, $"picture at {layout.Picture.Top}, text ends at {layout.TextBottom}");
-        Assert.True(layout.CaptionTop >= layout.Picture.Bottom + 4, $"caption at {layout.CaptionTop}, picture ends at {layout.Picture.Bottom}");
-        Assert.Equal(240, layout.Picture.Width);
+        Assert.True(layout.Footer, "the preview has no name or Inspect under the picture");
+        Assert.True(layout.Preview.Contains(layout.Picture), $"picture {layout.Picture} outside its preview {layout.Preview}");
+        Assert.True(layout.Preview.Top >= layout.TextBottom + 4, $"preview at {layout.Preview.Top}, text ends at {layout.TextBottom}");
+        Assert.True(layout.CaptionTop >= layout.Preview.Bottom + 4, $"caption at {layout.CaptionTop}, preview ends at {layout.Preview.Bottom}");
     }
 
     [Fact]
@@ -105,8 +106,8 @@ public sealed class CaptureReplyTests : IDisposable
         Assert.Null(MainWindowViewModel.ToEntry(new AssistantMessageItem { Text = "x", IsStreaming = false }).Capture);
     }
 
-    /// <summary>The reply in the chat's own templates: where its words end, its picture, and where its caption starts.</summary>
-    private static (double TextBottom, Rect Picture, double CaptionTop) Laid(AssistantMessageItem reply)
+    /// <summary>The reply in the chat's own templates: where its words end, its preview and picture, whether the preview names the file, and where its caption starts.</summary>
+    private static (double TextBottom, Rect Preview, Rect Picture, bool Footer, double CaptionTop) Laid(AssistantMessageItem reply)
     {
         // The picture is read in the background.
         for (var i = 0; i < 200 && reply.Capture?.Image is null; i++)
@@ -119,6 +120,8 @@ public sealed class CaptureReplyTests : IDisposable
         ((Panel)scroll.Parent!).Children.Remove(scroll);
         scroll.GetLogicalDescendantsOfType<ItemsControl>().First().ItemsSource = new[] { reply };
         var window = new Window { Width = 900, Height = 900, Content = scroll };
+        // The file previews' templates are the main window's.
+        window.DataTemplates.AddRange(main.DataTemplates);
         window.Show();
         Dispatcher.UIThread.RunJobs();
         window.UpdateLayout();
@@ -127,8 +130,11 @@ public sealed class CaptureReplyTests : IDisposable
             Rect Box(Control c) => new(c.TranslatePoint(new Point(0, 0), scroll)!.Value, c.Bounds.Size);
             var text = scroll.GetVisualDescendants().OfType<MarkdownView>().Single(m => m.IsEffectivelyVisible);
             var picture = scroll.GetVisualDescendants().OfType<Image>().Single(i => i.Source == reply.Capture!.Image && i.IsEffectivelyVisible);
+            var preview = picture.GetVisualAncestors().OfType<Border>().First(b => b.Classes.Contains("preview"));
+            var footer = preview.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == reply.Capture!.FileName && t.IsEffectivelyVisible)
+                && preview.GetVisualDescendants().OfType<Button>().Any(b => Equals(b.Content, "Inspect") && b.IsEffectivelyVisible);
             var caption = scroll.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == reply.Caption && t.IsEffectivelyVisible);
-            return (Box(text).Bottom, Box(picture), Box(caption).Top);
+            return (Box(text).Bottom, Box(preview), Box(picture), footer, Box(caption).Top);
         }
         finally
         {
