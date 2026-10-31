@@ -3315,14 +3315,14 @@ resize in `FileInspectorView`) that scrolls past that; it stays on from one file
 greyed for one that doesn't say how it was made (`PromptTip` says why). Until 2026-10-31 it was
 "Prompt" in the panel's top bar; the user had it renamed, then moved out of that bar, as it isn't a way to
 select as Text and Area are; it sat in the corner over the file beside the zoom buttons, shown only for a file
-with prompts, until the user had both put in a bar along the foot as the Code editor's (same day). It is in the panel only
-(`CanPick`), so the full-screen viewer's peek at a document doesn't carry it.
+with prompts, until the user had both put in a bar along the foot as the Code editor's (same day). It is in the full-screen viewer too
+(greyed for most documents there), so the bar is the same wherever the file is shown (the user, 2026-10-31: "Keep the bottom bar always visible").
 
 **The bar under the file** (`Border.bar.slim.foot`, Padding 8,4, in `FileInspectorView` so the
-full-screen viewer's document has it too, its zoom only): **âˆ’**, the zoom ("Fit" or a percentage, back to fit)
+full-screen viewer's document has it too): **−**, the zoom ("Fit" or a percentage, back to fit)
 and **+** at its left, Prompt metadata at its right, as the Code editor's zoom buttons and status sit under its code.
 Every control is there for every file, greyed (`Button.act`, `ToolTip.ShowOnDisabled`) where it does
-nothing: the zoom for a file that doesn't zoom ("This file doesn't zoom", "Open a file first"), âˆ’ and Fit at
+nothing: the zoom for a file that doesn't zoom ("This file doesn't zoom", "Open a file first"), − and Fit at
 fit, + at the most (`CanZoomIn`/`CanZoomOut`, told by `OnPropertyChanged` as CanZoom follows many
 properties). The user's rule (2026-10-31): bar controls never appear, vanish or move mid-task. Being under
 the file, not over it, they are out of Area's still without hiding them for the frame it is read in. A message sent

@@ -66,8 +66,10 @@ public sealed class InspectorBarTests : IDisposable
 
             // The buttons never moved.
             Assert.Equal(where, zoomIn.TranslatePoint(new Point(0, 0), window));
-            // Prompt metadata is the panel's (it has a chat): not in the full-screen viewer's view.
-            Assert.False(window.GetVisualDescendants().OfType<ToggleButton>().Single(b => AutomationProperties.GetName(b) == "Prompt metadata").IsVisible);
+            // Prompt metadata is there too, greyed: the bar is the same everywhere, the full-screen viewer as well.
+            var prompt = window.GetVisualDescendants().OfType<ToggleButton>().Single(b => AutomationProperties.GetName(b) == "Prompt metadata");
+            Assert.True(prompt.IsVisible);
+            Assert.False(prompt.IsEffectivelyEnabled);
             window.Close();
             return 0;
         });
