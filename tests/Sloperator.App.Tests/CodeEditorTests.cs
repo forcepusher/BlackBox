@@ -181,6 +181,14 @@ public sealed class CodeEditorTests : IDisposable
     public void The_lines_watch_lights_go_in_runs() =>
         Assert.Equal([(4, 6), (9, 9), (12, 13)], CodeEditorViewModel.Runs([13, 4, 5, 6, 9, 12, 5]));
 
+    [Fact]
+    public void Every_language_on_the_menu_has_highlighting_and_plain_text_none()
+    {
+        foreach (var language in Core.Projects.CodeLanguages.Names)
+            Assert.True(CodeView.Definition(language) is not null, language);
+        Assert.Null(CodeView.Definition(null));
+    }
+
     [Theory]
     [InlineData("Game.cs", "C#")]
     [InlineData("App.tsx", "JavaScript")]
@@ -191,7 +199,7 @@ public sealed class CodeEditorTests : IDisposable
     [InlineData("notes.txt", null)]
     [InlineData("paper.tex", null)]
     public void A_file_is_highlighted_as_its_kind(string file, string? highlighting) =>
-        Assert.Equal(highlighting, CodeView.For(file)?.Name);
+        Assert.Equal(highlighting, CodeView.Definition(Core.Projects.CodeLanguages.Of(file))?.Name);
 
     [Fact]
     public void Every_colour_avalonia_edit_names_is_one_of_the_apps_or_the_codes_own()

@@ -370,6 +370,37 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
 
     // ---- encoding and line breaks ----------------------------------------------------------------
 
+    /// <summary>The language the file is highlighted as (one of <see cref="CodeLanguages.Names"/>); null for plain text.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LanguageName))]
+    private string? _language;
+
+    /// <summary>On its button in the file's bar: "C#", "Plain text".</summary>
+    public string LanguageName => Document is null ? "Language" : Language ?? CodeLanguages.PlainText;
+
+    /// <summary>Whether the language menu's entry is the one shown; null for Automatic, ticked while nothing was picked for the kind.</summary>
+    internal bool IsLanguage(string? name) => _file is { } file && (name is null
+        ? !_chat.Panels.CodeLanguages.ContainsKey(CodeLanguages.Key(file.Path))
+        : _chat.Panels.CodeLanguages.TryGetValue(CodeLanguages.Key(file.Path), out var picked) && picked == name);
+
+    /// <summary>
+    /// Another language picked for the file (a "Plain text" too), kept in settings for every file of its kind
+    /// (the user, 2026-10-31: "manually select highlighting if the file format is weird"); null, Automatic:
+    /// the one its extension says again.
+    /// </summary>
+    internal void PickLanguage(string? name)
+    {
+        if (_file is not { } file)
+            return;
+        var key = CodeLanguages.Key(file.Path);
+        if (name is null)
+            _chat.Panels.CodeLanguages.Remove(key);
+        else
+            _chat.Panels.CodeLanguages[key] = name;
+        _chat.SavePanels();
+        Language = CodeLanguages.For(file.Path, _chat.Panels.CodeLanguages);
+    }
+
     /// <summary>
     /// The encoding the file is written in on Save, on its button in the file's bar: its own when opened
     /// (the user, 2026-10-31: "use currently used line endings and encoding"), another when picked.
@@ -475,7 +506,10 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         EncodingProblem = null;
         document.UndoStack.PropertyChanged += OnUndoChanged;
         document.TextChanged += OnTextChanged;
+        // Before the text: the editor highlights it as it shows it.
+        Language = CodeLanguages.For(file.Path, _chat.Panels.CodeLanguages);
         Document = document;
+        OnPropertyChanged(nameof(LanguageName));
         ReadLineBreaks();
         UpdateUnsaved();
         OnPropertyChanged(nameof(EncodingName));
@@ -498,8 +532,10 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         ChangedOnDisk = false;
         SaveProblem = null;
         EncodingProblem = null;
+        Language = null;
         OnPropertyChanged(nameof(EncodingName));
         OnPropertyChanged(nameof(LineBreakName));
+        OnPropertyChanged(nameof(LanguageName));
     }
 
     private void CloseFile()

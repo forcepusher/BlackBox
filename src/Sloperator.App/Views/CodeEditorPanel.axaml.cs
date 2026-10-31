@@ -69,6 +69,9 @@ public partial class CodeEditorPanel : UserControl
             Pick(Core.Projects.CodeFile.NameOf(encoding), _vm?.IsEncoding(encoding) == true, () => _vm?.PickEncoding(encoding)));
         LineBreakButton.Entries = () => Core.Projects.CodeFile.LineBreaks.Select(lineBreak =>
             Pick(lineBreak.Name, _vm?.IsLineBreak(lineBreak.Break) == true, () => _vm?.PickLineBreak(lineBreak.Break)));
+        // Automatic (the language the extension says), each language, Plain text: one picked is kept for the file's kind.
+        LanguageButton.Entries = () => ((IEnumerable<string?>)[null, .. Core.Projects.CodeLanguages.Names, Core.Projects.CodeLanguages.PlainText]).Select(name =>
+            Pick(name ?? "Automatic", _vm?.IsLanguage(name) == true, () => _vm?.PickLanguage(name)));
         Tree.AddHandler(TappedEvent, OnTreeTapped);
         Tree.AddHandler(KeyDownEvent, OnTreeKey, RoutingStrategies.Tunnel);
     }
@@ -106,13 +109,15 @@ public partial class CodeEditorPanel : UserControl
     {
         if (e.PropertyName == nameof(CodeEditorViewModel.Document))
             ShowDocument();
+        else if (e.PropertyName == nameof(CodeEditorViewModel.Language))
+            Editor.SyntaxHighlighting = CodeView.Definition(_vm?.Language);
     }
 
-    /// <summary>The file open in the editor, highlighted by its kind, indented with tabs where it is.</summary>
+    /// <summary>The file open in the editor, highlighted as its language, indented with tabs where it is.</summary>
     private void ShowDocument()
     {
         var document = _vm?.Document;
-        Editor.SyntaxHighlighting = _vm?.OpenPath is { } path ? CodeView.For(path) : null;
+        Editor.SyntaxHighlighting = document is null ? null : CodeView.Definition(_vm?.Language);
         Editor.Document = document ?? new TextDocument();
         Editor.Options.ConvertTabsToSpaces = document is null || !IndentsWithTabs(document);
     }

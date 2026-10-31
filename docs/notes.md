@@ -3478,8 +3478,8 @@ coloured headings, and a 300-page test PDF drew sharp at the panel's width, whit
 panel, page 151 in place at half way.
 
 ### Code editor
-**Code editor** in the Side panel dropdown (`CodeEditorViewModel`, `CodeEditorPanel`; least 560, as
-File changes) is a bare VS Code beside the chat (the user's request, 2026-10-31): a folder's files in a
+**Code editor** in the Side panel dropdown (`CodeEditorViewModel`, `CodeEditorPanel`; least 640, for
+its bars, see Language) is a bare VS Code beside the chat (the user's request, 2026-10-31): a folder's files in a
 tree on the left, the file clicked open on the right to read and edit, Ctrl+S to save. It is drawn as
 File changes is: the same bar, a 230 list of one-line rows (`ListBox.files`, now in App.axaml for both),
 the same foldout arrow (`PathIcon.fold`) and greyed action button (`Button.act`).
@@ -3522,7 +3522,7 @@ the tree and the highlighting as the Debug build does (a Python file, checked 20
 
 **Encoding and line breaks** (the user, 2026-10-31: "use currently used line endings and encoding", and
 settings to change them "like it is in VS code or studio, when switching it converts the whole file"):
-two menu buttons at the right of the file's bar (`MenuButton`, `ghost menu small`, greyed with no file
+two menu buttons at the right of the bar under the code (see Language below) (`MenuButton`, `ghost menu small`, greyed with no file
 open, there from the start) show the file's encoding ("UTF-8", "UTF-8 with BOM", "UTF-16 LE", "UTF-16 BE"
 or the PC's ANSI code page, "Windows-1252": `CodeFile.Encodings`, the ones read_file tells files apart by)
 and its line breaks ("CRLF", "LF", "Mixed" when its lines end in more than one; `CodeFile.LineBreakOf`, the
@@ -3535,6 +3535,17 @@ character of the text is refused, the bar saying which and on what line ("Window
 (line 3): kept UTF-8"). Other line breaks picked rewrite every line's (`CodeFile.WithLineBreaks`), one
 edit that Ctrl+Z undoes. Checked in the app: Ship.cs (UTF-8, LF) with CRLF and UTF-8 with BOM picked
 showed "not saved", and Save wrote EF BB BF and \r\n.
+
+**Language** (the user, 2026-10-31: "manually select highlighting if the file format is weird"): a third
+menu button beside the encoding's, the three now in a bar along the foot of the code (`Border.bar.slim.foot`,
+as a code editor's status bar), as the file bar over the code had no room for them and Save, Reload and
+the path at the panel's least width; that least is 640 (was 560), where the widest labels ("Visual Basic",
+"UTF-8 with BOM", "Mixed") still fit. Its menu has Automatic (the language the extension says, `CodeLanguages.Of`),
+the fifteen languages by friendly names (`CodeLanguages.Names`: "SQL" for AvaloniaEdit's TSQL, "Diff" for
+Patch, "Visual Basic" for VB; `CodeView.Definition` maps them back) and Plain text. A pick is kept in
+settings.json for every file of the kind (`panels.codeLanguages`, by extension, or by the name of a file
+with none: "dockerfile"), so a GDScript project's .gd files all open as Python once one is set. Checked in
+the app: levels.py picked as Plain text lost its colours and the pick was saved under ".py".
 
 **Edits not saved** are kept per window (`MainWindowViewModel.CodeDrafts`, by path) from the first key,
 so another file clicked, the panel closed or another chat leave them; the file's row has a dot and its

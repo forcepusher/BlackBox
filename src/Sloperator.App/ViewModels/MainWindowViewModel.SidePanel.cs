@@ -74,7 +74,7 @@ public sealed partial class MainWindowViewModel
         new(FileInspectorName, "Look inside any file", 420, 0,
             vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir),
             OpenIn: "Inspector", Opens: path => !LocalFolder(path)),
-        new("Code editor", "Browse and edit a folder's files", 560, 0,
+        new("Code editor", "Browse and edit a folder's files", 640, 0,
             vm => new CodeEditorViewModel(vm),
             OpenIn: "Code editor", Opens: Core.Documents.FileInspector.IsText),
         new("Video generator", "Plan and make a video shot by shot", 770, 633,

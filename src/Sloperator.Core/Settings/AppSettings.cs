@@ -378,6 +378,9 @@ public sealed class PanelSettings
 
     /// <summary>Code editor: long lines wrap inside the panel, under their own start, rather than run off its right edge.</summary>
     public bool WrapCode { get; set; } = true;
+
+    /// <summary>Code editor: the language picked for a kind of file, by its extension (or its name with none), in place of the one its extension says; "Plain text" for none.</summary>
+    public Dictionary<string, string> CodeLanguages { get; set; } = [];
 }
 
 /// <summary>What Sloperator tells the user outside its windows.</summary>

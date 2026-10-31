@@ -99,33 +99,20 @@ public sealed class CodeView : TextEditor
     protected override IVisualLineTransformer CreateColorizer(IHighlightingDefinition highlightingDefinition) => new DarkColorizer(highlightingDefinition);
 
     /// <summary>
-    /// The highlighting for a file, by its extension: AvaloniaEdit's own, and for the kinds it has none
-    /// of, the nearest it has (TypeScript as JavaScript, XAML and project files as XML, shaders as C++).
-    /// Markdown without its headings in bigger letters, which a code editor's lines don't take. Null
-    /// for the rest (and TeX, whose definition AvaloniaEdit can't load).
+    /// AvaloniaEdit's highlighting for a language of the Code editor's menu (<see cref="Core.Projects.CodeLanguages"/>):
+    /// Markdown without its headings in bigger letters, which a code editor's lines don't take. Null for
+    /// plain text, and for one AvaloniaEdit can't load.
     /// </summary>
-    public static IHighlightingDefinition? For(string path)
+    public static IHighlightingDefinition? Definition(string? language)
     {
-        var name = Path.GetExtension(path).ToLowerInvariant() switch
+        var name = language switch
         {
-            ".cs" or ".csx" => "C#",
-            ".js" or ".mjs" or ".cjs" or ".jsx" or ".ts" or ".mts" or ".cts" or ".tsx" => "JavaScript",
-            ".html" or ".htm" => "HTML",
-            ".css" or ".scss" or ".less" => "CSS",
-            ".c" or ".cc" or ".cpp" or ".cxx" or ".h" or ".hh" or ".hpp" or ".hxx" or ".inl" or ".hlsl" or ".glsl" or ".shader" or ".cginc" or ".compute" or ".usf" or ".ush" => "C++",
-            ".java" or ".kt" or ".kts" => "Java",
-            ".ps1" or ".psm1" or ".psd1" => "PowerShell",
-            ".php" => "PHP",
-            ".py" or ".pyw" => "Python",
-            ".sql" => "TSQL",
-            ".vb" => "VB",
-            ".xml" or ".xaml" or ".axaml" or ".csproj" or ".vbproj" or ".fsproj" or ".vcxproj" or ".props" or ".targets" or ".slnx" or ".resx"
-                or ".config" or ".manifest" or ".nuspec" or ".svg" or ".xsd" or ".xsl" or ".xslt" or ".plist" or ".uxml" => "XML",
-            ".md" or ".markdown" => "MarkDown",
-            ".json" or ".jsonc" or ".json5" or ".asmdef" or ".uplugin" or ".uproject" => "Json",
-            ".patch" or ".diff" => "Patch",
-            ".boo" => "Boo",
-            _ => null,
+            "Markdown" => "MarkDown",
+            "JSON" => "Json",
+            "SQL" => "TSQL",
+            "Diff" => "Patch",
+            "Visual Basic" => "VB",
+            _ => language,
         };
         try
         {

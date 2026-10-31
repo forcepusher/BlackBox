@@ -103,6 +103,28 @@ public class CodeEditorFilesTests : IDisposable
         Assert.Equal((name, mixed), (CodeFile.NameOfBreak(lineBreak), isMixed));
     }
 
+    [Theory]
+    [InlineData(@"C:\game\src\Ship.cs", "C#")]
+    [InlineData(@"C:\game\Water.shader", "C++")]
+    [InlineData(@"C:\game\player.gd", null)]
+    [InlineData(@"C:\game\Dockerfile", null)]
+    public void A_file_is_highlighted_as_its_extension_says(string path, string? language) =>
+        Assert.Equal(language, CodeLanguages.Of(path));
+
+    [Fact]
+    public void A_language_picked_for_a_kind_of_file_holds_for_every_file_of_it()
+    {
+        // Kept by extension, or by the name of a file with none, as settings.json keeps them.
+        var picked = new Dictionary<string, string> { [CodeLanguages.Key(@"C:\game\player.GD")] = "Python", ["dockerfile"] = "PowerShell", [".cs"] = CodeLanguages.PlainText, [".java"] = "Brainfuck" };
+
+        Assert.Equal("Python", CodeLanguages.For(@"D:\other\enemy.gd", picked));
+        Assert.Equal("PowerShell", CodeLanguages.For(@"C:\game\Dockerfile", picked));
+        Assert.Null(CodeLanguages.For(@"C:\game\src\Ship.cs", picked));
+        // A name no longer offered: as the extension says.
+        Assert.Equal("Java", CodeLanguages.For(@"C:\game\Main.java", picked));
+        Assert.Equal("XML", CodeLanguages.For(@"C:\game\Game.csproj", picked));
+    }
+
     [Fact]
     public void Other_line_breaks_picked_end_every_line_in_them() =>
         Assert.Equal("a\nb\nc\nd", CodeFile.WithLineBreaks("a\r\nb\nc\rd", "\n"));
