@@ -3480,7 +3480,7 @@ stays scrolled where it was and keeps its selection. The file open is grey in it
 goes with a message: nothing of the tree does. A click on a folder folds or unfolds it, on a file opens
 it; Enter, Left and Right as in Explorer's tree; a right-click has Show in folder and Copy file.
 
-**The editor** is AvaloniaEdit (MIT, `Avalonia.AvaloniaEdit` 12.0.0, about 0.6 MB; its Fluent theme in
+**The editor** is AvaloniaEdit (MIT, `Avalonia.AvaloniaEdit` 12.0.0: the trimmed exe grew 0.25 MB, 26.34 to 26.59; its Fluent theme in
 App.axaml) as `CodeView`: line numbers 8 in from the panel's edge, no dotted line after them, Consolas 12
 as the diff, the line with the caret a card's shade, no links followed by a click, tabs kept for a file
 indented with tabs. Highlighting is AvaloniaEdit's own (C#, JavaScript, HTML, CSS, C++, Java, PowerShell,
@@ -3491,7 +3491,8 @@ languages, but bring several MB of grammars to the exe. TeX's definition doesn't
 A file is read as read_file reads it and saved in the encoding it was read in (`CodeFile`: a signature
 kept or left out, the ANSI code page kept, written through a file beside it as edit_file does; a
 PowerShell script typed past ASCII gets UTF-8's signature); line breaks stay as they are in the text.
-Not opened: a file with a zero byte in its first 8 KB, or over 5 MB.
+Not opened: a file with a zero byte in its first 8 KB, or over 5 MB. The published exe (fully trimmed) draws
+the tree and the highlighting as the Debug build does (a Python file, checked 2026-10-31).
 
 **Edits not saved** are kept per window (`MainWindowViewModel.CodeDrafts`, by path) from the first key,
 so another file clicked, the panel closed or another chat leave them; the file's row has a dot and its
