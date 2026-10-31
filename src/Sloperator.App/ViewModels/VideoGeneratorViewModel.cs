@@ -212,7 +212,13 @@ public sealed partial class VideoGeneratorViewModel : ObservableObject, ISidePan
     private double _timelineWidth = 800;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EndX), nameof(HasLength))]
     private double _length;
+
+    /// <summary>Where the video ends on the timeline: a light grey line down every row, its length on the ruler.</summary>
+    public double EndX => Lead + Length * Pps;
+
+    public bool HasLength => Length > 0;
 
     /// <summary>Where the next clip's place is on the Video clips row, after the last: a click there adds it.</summary>
     [ObservableProperty]
@@ -257,6 +263,7 @@ public sealed partial class VideoGeneratorViewModel : ObservableObject, ISidePan
         AddShotX = Lead + length * Pps + 4;
         TimelineWidth = Math.Max(Lead + end * Pps, AddReferenceX + CardWidth) + 240;
         OnPropertyChanged(nameof(PlayheadX));
+        OnPropertyChanged(nameof(EndX));
         OnPropertyChanged(nameof(LengthText));
         OnPropertyChanged(nameof(SoundLinesHeight));
         // What the bars' buttons can do follows the clips and sound lines: greyed, never hidden.
