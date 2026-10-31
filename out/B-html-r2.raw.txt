@@ -1,0 +1,252 @@
+
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 1280px;
+    height: 800px;
+    overflow: hidden;
+    font-family: "Segoe UI", sans-serif;
+    background: #1b1b1f;
+    color: #e6e6e6;
+  }
+  .page {
+    width: 1280px;
+    height: 800px;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+  }
+  .title {
+    font-size: 24px;
+    font-weight: 600;
+    margin: 0 0 20px 8px;
+  }
+  .content {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+  .nav {
+    width: 250px;
+    flex: 0 0 250px;
+    background: #232329;
+    border: 1px solid #2e2e36;
+    border-radius: 8px;
+    padding: 12px 0;
+  }
+  .nav-item {
+    padding: 12px 20px;
+    font-size: 14px;
+    color: #b8b8c0;
+    cursor: default;
+    border-left: 3px solid transparent;
+  }
+  .nav-item.selected {
+    background: #2f2f57;
+    color: #ffffff;
+    border-left: 3px solid #4f6ef7;
+  }
+  .nav-item .sub {
+    display: block;
+    font-size: 11px;
+    color: #7a7a85;
+    margin-top: 2px;
+  }
+  .nav-item.selected .sub {
+    color: #aab3e8;
+  }
+  .panel {
+    flex: 1;
+    background: #232329;
+    border: 1px solid #2e2e36;
+    border-radius: 8px;
+    margin-left: 20px;
+    padding: 24px 28px;
+  }
+  .panel h2 {
+    margin: 0 0 6px 0;
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .panel .hint {
+    font-size: 12px;
+    color: #8a8a94;
+    margin: 0 0 10px 0;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    padding: 16px 0;
+    border-bottom: 1px solid #2e2e36;
+  }
+  .row:last-child {
+    border-bottom: none;
+  }
+  .row-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-right: 24px;
+  }
+  .row-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #f0f0f0;
+    margin-bottom: 4px;
+  }
+  .row-desc {
+    font-size: 12px;
+    color: #8a8a94;
+    line-height: 1.45;
+    max-width: 540px;
+  }
+  .control {
+    flex: 0 0 auto;
+  }
+  /* toggle */
+  .toggle {
+    width: 46px;
+    height: 24px;
+    background: #3a3a44;
+    border-radius: 12px;
+    position: relative;
+  }
+  .toggle .knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #c8c8d0;
+  }
+  .toggle.on {
+    background: #4f6ef7;
+  }
+  .toggle.on .knob {
+    left: 25px;
+    background: #ffffff;
+  }
+  /* dropdown */
+  .dropdown {
+    position: relative;
+  }
+  .dropdown select {
+    font-family: "Segoe UI", sans-serif;
+    font-size: 13px;
+    color: #e6e6e6;
+    background: #2c2c34;
+    border: 1px solid #3d3d48;
+    border-radius: 5px;
+    padding: 6px 28px 6px 10px;
+    width: 160px;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+  }
+  .dropdown .arrow {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid #9a9aa5;
+    pointer-events: none;
+  }
+  /* textbox */
+  .textbox {
+    font-family: "Segoe UI", sans-serif;
+    font-size: 13px;
+    color: #e6e6e6;
+    background: #2c2c34;
+    border: 1px solid #3d3d48;
+    border-radius: 5px;
+    padding: 6px 10px;
+    width: 200px;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1 class="title">Settings</h1>
+  <div class="content">
+    <nav class="nav">
+      <div class="nav-item selected">General<span class="sub">Basics, language, startup</span></div>
+      <div class="nav-item">Account<span class="sub">Profile and sign-in</span></div>
+      <div class="nav-item">Appearance<span class="sub">Themes and layout</span></div>
+      <div class="nav-item">Privacy<span class="sub">Data and permissions</span></div>
+      <div class="nav-item">Notifications<span class="sub">Alerts and sounds</span></div>
+      <div class="nav-item">Advanced<span class="sub">Developer options</span></div>
+    </nav>
+    <section class="panel">
+      <h2>General</h2>
+      <p class="hint">These settings apply to your entire workspace.</p>
+
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Interface theme</div>
+          <div class="row-desc">Choose the color scheme for the whole application. Dark mode reduces eye strain in low-light environments.</div>
+        </div>
+        <div class="control dropdown">
+          <select>
+            <option>Dark</option>
+            <option>Light</option>
+            <option>System default</option>
+          </select>
+          <div class="arrow"></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Desktop notifications</div>
+          <div class="row-desc">Show a system popup when new activity arrives in your account. You can silence them during focus sessions.</div>
+        </div>
+        <div class="control"><div class="toggle on"><div class="knob"></div></div></div>
+      </div>
+
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Display name</div>
+          <div class="row-desc">This name appears next to your contributions and in shared workspaces. It can contain letters, numbers, and a few symbols.</div>
+        </div>
+        <div class="control"><input class="textbox" type="text" value="Alex Rivera"></div>
+      </div>
+
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Automatic updates</div>
+          <div class="row-desc">Download and install the latest version in the background so you always run the most recent build.</div>
+        </div>
+        <div class="control"><div class="toggle"><div class="knob"></div></div></div>
+      </div>
+
+      <div class="row">
+        <div class="row-text">
+          <div class="row-label">Startup page</div>
+          <div class="row-desc">Decide which view opens when the application launches. The last-used view restores where you left off.</div>
+        </div>
+        <div class="control dropdown">
+          <select>
+            <option>Last used</option>
+            <option>Dashboard</option>
+            <option>Inbox</option>
+            <option>Home</option>
+          </select>
+          <div class="arrow"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+</body>
+</html>

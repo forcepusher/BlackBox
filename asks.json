@@ -1,0 +1,6 @@
+﻿[
+ { "id": "A", "w": 1280, "h": 800, "ask": "A sign-in screen for a dark desktop app called Sloperator: logo and name top-left, a centred card with Email and Password fields, a yellow (#FCC21B) Continue button, a \"Forgot password?\" link, and a \"New here? Create an account\" line under the card." },
+ { "id": "B", "w": 1280, "h": 800, "ask": "A dark settings page: a left navigation list of 6 sections with one selected; on the right a General section with 5 rows. Each row has a label, a grey description of one or two lines that has to wrap, and a control on the right (toggles, a dropdown, a text box)." },
+ { "id": "C", "w": 1440, "h": 900, "ask": "A light analytics dashboard: a top bar with a title and a date range picker, 4 stat cards each with a number and a change percentage, a bar chart of 12 months with axis labels, and a table of 6 orders (id, customer, date, amount, status badge)." },
+ { "id": "D", "w": 390, "h": 844, "ask": "A phone chat screen: a header with the contact's name and avatar, 8 message bubbles of mixed length from both sides (some 3 or more lines long), timestamps, and an input bar with a send button." }
+]

@@ -1,0 +1,99 @@
+
+
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
+  <!-- background -->
+  <rect width="1280" height="800" fill="#1e1f27"/>
+  <!-- left panel -->
+  <rect x="0" y="0" width="280" height="800" fill="#17181f"/>
+  <line x1="280" y1="0" x2="280" y2="800" stroke="#2a2c36" stroke-width="1"/>
+
+  <text x="28" y="52" font-family="Segoe UI, sans-serif" font-size="22" font-weight="600" fill="#e8eaf0">Settings</text>
+
+  <!-- nav: General (selected) -->
+  <rect x="12" y="84" width="256" height="46" rx="8" fill="#2b2d3a"/>
+  <rect x="12" y="84" width="4" height="46" rx="2" fill="#5b8cff"/>
+  <!-- gear icon -->
+  <circle cx="40" cy="107" r="7" fill="none" stroke="#8fb0ff" stroke-width="2"/>
+  <circle cx="40" cy="107" r="2.4" fill="#8fb0ff"/>
+  <g stroke="#8fb0ff" stroke-width="2" stroke-linecap="round">
+    <line x1="40" y1="97" x2="40" y2="100"/>
+    <line x1="40" y1="114" x2="40" y2="117"/>
+    <line x1="30" y1="107" x2="33" y2="107"/>
+    <line x1="47" y1="107" x2="50" y2="107"/>
+  </g>
+  <text x="64" y="112" font-family="Segoe UI, sans-serif" font-size="15" font-weight="600" fill="#ffffff">General</text>
+
+  <!-- nav: Appearance -->
+  <circle cx="40" cy="163" r="7" fill="none" stroke="#8a8f98" stroke-width="2"/>
+  <path d="M40 156 a7 7 0 0 1 0 14 z" fill="#8a8f98"/>
+  <text x="64" y="168" font-family="Segoe UI, sans-serif" font-size="15" fill="#b6bac2">Appearance</text>
+
+  <!-- nav: Notifications -->
+  <path d="M35 168 L45 168 L44 176 a2 2 0 0 1 -8 0 z M38 181 a2 2 0 0 0 4 0" transform="translate(0,-59)" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round"/>
+  <text x="64" y="214" font-family="Segoe UI, sans-serif" font-size="15" fill="#b6bac2">Notifications</text>
+
+  <!-- nav: Privacy -->
+  <path d="M40 268 l7 3 v6 c0 5 -3.5 8 -7 9 c-3.5 -1 -7 -4 -7 -9 v-6 z" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linejoin="round"/>
+  <text x="64" y="260" font-family="Segoe UI, sans-serif" font-size="15" fill="#b6bac2">Privacy</text>
+
+  <!-- nav: Accounts -->
+  <circle cx="40" cy="302" r="4.5" fill="none" stroke="#8a8f98" stroke-width="2"/>
+  <path d="M31 315 a9 9 0 0 1 18 0" fill="none" stroke="#8a8f98" stroke-width="2" stroke-linecap="round"/>
+  <text x="64" y="306" font-family="Segoe UI, sans-serif" font-size="15" fill="#b6bac2">Accounts</text>
+
+  <!-- nav: Advanced -->
+  <g stroke="#8a8f98" stroke-width="2" stroke-linecap="round">
+    <line x1="31" y1="348" x2="49" y2="348"/>
+    <line x1="31" y1="355" x2="49" y2="355"/>
+    <line x1="31" y1="362" x2="49" y2="362"/>
+  </g>
+  <circle cx="36" cy="348" r="2.2" fill="#17181f" stroke="#8a8f98" stroke-width="1.6"/>
+  <circle cx="45" cy="355" r="2.2" fill="#17181f" stroke="#8a8f98" stroke-width="1.6"/>
+  <circle cx="38" cy="362" r="2.2" fill="#17181f" stroke="#8a8f98" stroke-width="1.6"/>
+  <text x="64" y="358" font-family="Segoe UI, sans-serif" font-size="15" fill="#b6bac2">Advanced</text>
+
+  <!-- right panel header -->
+  <text x="320" y="92" font-family="Segoe UI, sans-serif" font-size="28" font-weight="600" fill="#e8eaf0">General</text>
+  <text x="320" y="120" font-family="Segoe UI, sans-serif" font-size="14" fill="#9a9fab">Basic preferences for your account and workspace.</text>
+
+  <!-- Row 1 : Display name + text box -->
+  <text x="320" y="202" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" fill="#e8eaf0">Display name</text>
+  <text x="320" y="226" font-family="Segoe UI, sans-serif" font-size="13" fill="#9a9fab">The name shown to other people in chat, status bars and shared</text>
+  <text x="320" y="244" font-family="Segoe UI, sans-serif" font-size="13" fill="#9a9fab">sessions. It is limited to 32 characters.</text>
+  <rect x="920" y="190" width="260" height="36" rx="6" fill="#22242e" stroke="#3a3c48" stroke-width="1"/>
+  <text x="936" y="213" font-family="Segoe UI, sans-serif" font-size="14" fill="#d7dae2">Ada Lovelace</text>
+  <line x1="320" y1="260" x2="1180" y2="260" stroke="#2a2c36" stroke-width="1"/>
+
+  <!-- Row 2 : Startup + dropdown -->
+  <text x="320" y="308" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" fill="#e8eaf0">Start up with</text>
+  <text x="320" y="332" font-family="Segoe UI, sans-serif" font-size="13" fill="#9a9fab">Choose what to open when the application launches. You can switch</text>
+  <text x="320" y="350" font-family="Segoe UI, sans-serif" font-size="13" fill="#9a9fab">it later from the quick menu in the top bar.</text>
+  <rect x="940" y="296" width="240" height="36" rx="6" fill="#22242e" stroke="#3a3c48" stroke-width="1"/>
+  <text x="956" y="319" font-family="Segoe UI, sans-serif" font-size="14" fill="#d7dae2">Restore last window</text>
+  <polyline points="1152,312 1158,318 1164,312" fill="none" stroke="#9a9fab" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="320" y1="370" x2="1180" y2="370" stroke="#2a2c36" stroke-width="1"/>
+
+  <!-- Row 3 : Hardware acceleration + toggle ON -->
+  <text x="320" y="414" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" fill="#e8eaf0">Hardware acceleration</text>
+  <text x="320" y="438" font-family="Segoe UI, sans-serif" font-size="13" fill="#9a9fab">Use your GPU to render the interface. Disabling this can help on</text>
+  <text x="320" y="456" font-family="Segoe UI, sans-serif" font-size="13" fill="#9a9fab">older machines but may reduce overall performance.</text>
+  <rect x="1132" y="406" width="44" height="24" rx="12" fill="#5b8cff"/>
+  <circle cx="1166" cy="418" r="9" fill="#ffffff"/>
+  <line x1="320" y1="480" x2="1180" y2="480" stroke="#2a2c36" stroke-width="1"/>
+
+  <!-- Row 4 : Automatic updates + toggle OFF -->
+  <text x="320" y="520" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" fill="#e8eaf0">Automatic updates</text>
+  <text x="320" y="544" font-family="Segoe UI, sans-serif" font-size="13" fill="#9a9fab">Download and install new versions in the background when the</text>
+  <text x="320" y="562" font-family="Segoe UI, sans-serif" font-size="13" fill="#9a9fab">application is idle and you are not typing.</text>
+  <rect x="1132" y="512" width="44" height="24" rx="12" fill="#3a3c48"/>
+  <circle cx="1144" cy="524" r="9" fill="#cfd3dc"/>
+  <line x1="320" y1="590" x2="1180" y2="590" stroke="#2a2c36" stroke-width="1"/>
+
+  <!-- Row 5 : Compact layout + toggle ON -->
+  <text x="320" y="626" font-family="Segoe UI, sans-serif" font-size="16" font-weight="600" fill="#e8eaf0">Compact layout</text>
+  <text x="320" y="650" font-family="Segoe UI, sans-serif" font-size="13" fill="#9a9fab">Reduce padding and row heights to fit more content on smaller</text>
+  <text x="320" y="668" font-family="Segoe UI, sans-serif" font-size="13" fill="#9a9fab">screens. Takes effect after the application restarts.</text>
+  <rect x="1132" y="618" width="44" height="24" rx="12" fill="#5b8cff"/>
+  <circle cx="1166" cy="630" r="9" fill="#ffffff"/>
+  <line x1="320" y1="700" x2="1180" y2="700" stroke="#2a2c36" stroke-width="1"/>
+</svg>

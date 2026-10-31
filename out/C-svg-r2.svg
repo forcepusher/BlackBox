@@ -1,0 +1,170 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" font-family="Segoe UI, sans-serif">
+  <!-- Background -->
+  <rect width="1440" height="900" fill="#f4f6f9"/>
+
+  <!-- ===================== TOP BAR ===================== -->
+  <rect x="0" y="0" width="1440" height="64" fill="#ffffff"/>
+  <line x1="0" y1="64" x2="1440" y2="64" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="24" y="40" font-size="20" font-weight="600" fill="#111827">Analytics Dashboard</text>
+
+  <!-- Date range picker -->
+  <rect x="1120" y="14" width="296" height="36" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1"/>
+  <!-- calendar icon -->
+  <rect x="1136" y="25" width="14" height="13" rx="2" fill="none" stroke="#6b7280" stroke-width="1.5"/>
+  <line x1="1139" y1="23" x2="1139" y2="28" stroke="#6b7280" stroke-width="1.5"/>
+  <line x1="1147" y1="23" x2="1147" y2="28" stroke="#6b7280" stroke-width="1.5"/>
+  <line x1="1136" y1="30" x2="1150" y2="30" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="1162" y="37" font-size="13" fill="#374151">Jan 1, 2024  –  Dec 31, 2024</text>
+  <!-- dropdown caret -->
+  <polygon points="1394,29 1402,29 1398,35" fill="#6b7280"/>
+
+  <!-- ===================== STAT CARDS ===================== -->
+  <!-- Card 1: Revenue -->
+  <rect x="24" y="88" width="336" height="110" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="48" y="122" font-size="13" fill="#6b7280">Total Revenue</text>
+  <text x="48" y="158" font-size="28" font-weight="700" fill="#111827">$284,920</text>
+  <polygon points="48,178 56,178 52,172" fill="#16a34a"/>
+  <text x="62" y="183" font-size="13" font-weight="600" fill="#16a34a">12.4%</text>
+  <text x="108" y="183" font-size="12" fill="#9ca3af">vs last year</text>
+
+  <!-- Card 2: Orders -->
+  <rect x="376" y="88" width="336" height="110" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="400" y="122" font-size="13" fill="#6b7280">Total Orders</text>
+  <text x="400" y="158" font-size="28" font-weight="700" fill="#111827">3,842</text>
+  <polygon points="400,178 408,178 404,172" fill="#16a34a"/>
+  <text x="414" y="183" font-size="13" font-weight="600" fill="#16a34a">8.1%</text>
+  <text x="453" y="183" font-size="12" fill="#9ca3af">vs last year</text>
+
+  <!-- Card 3: Customers -->
+  <rect x="728" y="88" width="336" height="110" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="752" y="122" font-size="13" fill="#6b7280">Active Customers</text>
+  <text x="752" y="158" font-size="28" font-weight="700" fill="#111827">1,267</text>
+  <polygon points="752,172 760,172 756,178" fill="#dc2626"/>
+  <text x="766" y="183" font-size="13" font-weight="600" fill="#dc2626">2.3%</text>
+  <text x="803" y="183" font-size="12" fill="#9ca3af">vs last year</text>
+
+  <!-- Card 4: Avg Order Value -->
+  <rect x="1080" y="88" width="336" height="110" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="1104" y="122" font-size="13" fill="#6b7280">Avg. Order Value</text>
+  <text x="1104" y="158" font-size="28" font-weight="700" fill="#111827">$74.15</text>
+  <polygon points="1104,178 1112,178 1108,172" fill="#16a34a"/>
+  <text x="1118" y="183" font-size="13" font-weight="600" fill="#16a34a">3.6%</text>
+  <text x="1156" y="183" font-size="12" fill="#9ca3af">vs last year</text>
+
+  <!-- ===================== BAR CHART ===================== -->
+  <rect x="24" y="222" width="1392" height="330" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="48" y="256" font-size="16" font-weight="600" fill="#111827">Monthly Revenue</text>
+  <text x="196" y="256" font-size="12" fill="#9ca3af">2024</text>
+
+  <!-- Gridlines + Y labels -->
+  <line x1="80" y1="290" x2="1364" y2="290" stroke="#eef0f3"/>
+  <line x1="80" y1="345" x2="1364" y2="345" stroke="#eef0f3"/>
+  <line x1="80" y1="400" x2="1364" y2="400" stroke="#eef0f3"/>
+  <line x1="80" y1="455" x2="1364" y2="455" stroke="#eef0f3"/>
+  <line x1="80" y1="510" x2="1364" y2="510" stroke="#d1d5db"/>
+  <text x="70" y="294" font-size="11" fill="#9ca3af" text-anchor="end">$200k</text>
+  <text x="70" y="349" font-size="11" fill="#9ca3af" text-anchor="end">$150k</text>
+  <text x="70" y="404" font-size="11" fill="#9ca3af" text-anchor="end">$100k</text>
+  <text x="70" y="459" font-size="11" fill="#9ca3af" text-anchor="end">$50k</text>
+  <text x="70" y="514" font-size="11" fill="#9ca3af" text-anchor="end">$0</text>
+
+  <!-- Bars -->
+  <g fill="#4f7cff">
+    <rect x="105.5"  y="419.8" width="56" height="90.2"  rx="4"/>
+    <rect x="212.5"  y="405.5" width="56" height="104.5" rx="4"/>
+    <rect x="319.5"  y="389"   width="56" height="121"   rx="4"/>
+    <rect x="426.5"  y="402.2" width="56" height="107.8" rx="4"/>
+    <rect x="533.5"  y="372.5" width="56" height="137.5" rx="4"/>
+    <rect x="640.5"  y="356"   width="56" height="154"   rx="4"/>
+    <rect x="747.5"  y="364.8" width="56" height="145.2" rx="4"/>
+    <rect x="854.5"  y="339.5" width="56" height="170.5" rx="4"/>
+    <rect x="961.5"  y="347.2" width="56" height="162.8" rx="4"/>
+    <rect x="1068.5" y="325.2" width="56" height="184.8" rx="4"/>
+    <rect x="1175.5" y="309.8" width="56" height="200.2" rx="4"/>
+    <rect x="1282.5" y="295.5" width="56" height="214.5" rx="4"/>
+  </g>
+
+  <!-- X axis month labels -->
+  <g font-size="12" fill="#6b7280" text-anchor="middle">
+    <text x="133.5"  y="534">Jan</text>
+    <text x="240.5"  y="534">Feb</text>
+    <text x="347.5"  y="534">Mar</text>
+    <text x="454.5"  y="534">Apr</text>
+    <text x="561.5"  y="534">May</text>
+    <text x="668.5"  y="534">Jun</text>
+    <text x="775.5"  y="534">Jul</text>
+    <text x="882.5"  y="534">Aug</text>
+    <text x="989.5"  y="534">Sep</text>
+    <text x="1096.5" y="534">Oct</text>
+    <text x="1203.5" y="534">Nov</text>
+    <text x="1310.5" y="534">Dec</text>
+  </g>
+
+  <!-- ===================== ORDERS TABLE ===================== -->
+  <rect x="24" y="576" width="1392" height="300" rx="10" fill="#ffffff" stroke="#e5e7eb"/>
+  <text x="48" y="610" font-size="16" font-weight="600" fill="#111827">Recent Orders</text>
+
+  <!-- Header -->
+  <rect x="32" y="624" width="1376" height="28" fill="#f9fafb"/>
+  <line x1="32" y1="652" x2="1408" y2="652" stroke="#e5e7eb"/>
+  <g font-size="12" font-weight="600" fill="#6b7280">
+    <text x="56"  y="642">ORDER ID</text>
+    <text x="180" y="642">CUSTOMER</text>
+    <text x="480" y="642">DATE</text>
+    <text x="900" y="642" text-anchor="end">AMOUNT</text>
+    <text x="960" y="642">STATUS</text>
+  </g>
+
+  <!-- Row 1 -->
+  <text x="56"  y="680" font-size="13" fill="#374151">#ORD-1024</text>
+  <text x="180" y="680" font-size="13" fill="#111827">Sarah Chen</text>
+  <text x="480" y="680" font-size="13" fill="#374151">Dec 28, 2024</text>
+  <text x="900" y="680" font-size="13" fill="#111827" text-anchor="end" font-weight="600">$1,249.00</text>
+  <rect x="960" y="663" width="78" height="22" rx="11" fill="#e6f4ea"/>
+  <text x="999" y="678" font-size="12" fill="#1e7e34" text-anchor="middle">Completed</text>
+
+  <!-- Row 2 -->
+  <rect x="32" y="688" width="1376" height="36" fill="#fafbfc"/>
+  <text x="56"  y="712" font-size="13" fill="#374151">#ORD-1023</text>
+  <text x="180" y="712" font-size="13" fill="#111827">Marcus Webb</text>
+  <text x="480" y="712" font-size="13" fill="#374151">Dec 27, 2024</text>
+  <text x="900" y="712" font-size="13" fill="#111827" text-anchor="end" font-weight="600">$342.50</text>
+  <rect x="960" y="695" width="80" height="22" rx="11" fill="#e8f0fe"/>
+  <text x="1000" y="710" font-size="12" fill="#1a56db" text-anchor="middle">Processing</text>
+
+  <!-- Row 3 -->
+  <text x="56"  y="744" font-size="13" fill="#374151">#ORD-1022</text>
+  <text x="180" y="744" font-size="13" fill="#111827">Elena Rodriguez</text>
+  <text x="480" y="744" font-size="13" fill="#374151">Dec 27, 2024</text>
+  <text x="900" y="744" font-size="13" fill="#111827" text-anchor="end" font-weight="600">$899.99</text>
+  <rect x="960" y="727" width="78" height="22" rx="11" fill="#e6f4ea"/>
+  <text x="999" y="742" font-size="12" fill="#1e7e34" text-anchor="middle">Completed</text>
+
+  <!-- Row 4 -->
+  <rect x="32" y="752" width="1376" height="36" fill="#fafbfc"/>
+  <text x="56"  y="776" font-size="13" fill="#374151">#ORD-1021</text>
+  <text x="180" y="776" font-size="13" fill="#111827">David Okafor</text>
+  <text x="480" y="776" font-size="13" fill="#374151">Dec 26, 2024</text>
+  <text x="900" y="776" font-size="13" fill="#111827" text-anchor="end" font-weight="600">$156.20</text>
+  <rect x="960" y="759" width="58" height="22" rx="11" fill="#e0f2fe"/>
+  <text x="989" y="774" font-size="12" fill="#0369a1" text-anchor="middle">Shipped</text>
+
+  <!-- Row 5 -->
+  <text x="56"  y="808" font-size="13" fill="#374151">#ORD-1020</text>
+  <text x="180" y="808" font-size="13" fill="#111827">Priya Sharma</text>
+  <text x="480" y="808" font-size="13" fill="#374151">Dec 25, 2024</text>
+  <text x="900" y="808" font-size="13" fill="#111827" text-anchor="end" font-weight="600">$2,140.00</text>
+  <rect x="960" y="791" width="72" height="22" rx="11" fill="#fdecea"/>
+  <text x="996" y="806" font-size="12" fill="#c0392b" text-anchor="middle">Cancelled</text>
+
+  <!-- Row 6 -->
+  <rect x="32" y="816" width="1376" height="36" fill="#fafbfc"/>
+  <text x="56"  y="840" font-size="13" fill="#374151">#ORD-1019</text>
+  <text x="180" y="840" font-size="13" fill="#111827">Tom Becker</text>
+  <text x="480" y="840" font-size="13" fill="#374151">Dec 24, 2024</text>
+  <text x="900" y="840" font-size="13" fill="#111827" text-anchor="end" font-weight="600">$428.75</text>
+  <rect x="960" y="823" width="78" height="22" rx="11" fill="#e6f4ea"/>
+  <text x="999" y="838" font-size="12" fill="#1e7e34" text-anchor="middle">Completed</text>
+
+  <line x1="32" y1="856" x2="1408" y2="856" stroke="#eef0f3"/>
+</svg>

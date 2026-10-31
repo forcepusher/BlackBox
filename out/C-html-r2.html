@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Analytics Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; background: #f4f6fa; }
+
+  .page { width: 1440px; height: 900px; display: flex; flex-direction: column; padding: 18px 28px; }
+
+  /* Top bar */
+  .topbar { height: 52px; background: #ffffff; border: 1px solid #e3e8f0; border-radius: 10px;
+    display: flex; align-items: center; justify-content: space-between; padding: 0 24px; flex: 0 0 auto; }
+  .topbar h1 { font-size: 20px; font-weight: 600; color: #1f2937; }
+  .topbar .subtitle { font-size: 12px; color: #8a94a6; margin-top: 2px; }
+  .daterange { display: flex; align-items: center; gap: 10px; }
+  .daterange label { font-size: 13px; color: #6b7280; }
+  .daterange select { padding: 6px 10px; font-size: 13px; color: #374151; border: 1px solid #d5dbe6;
+    border-radius: 6px; background: #ffffff; }
+  .daterange .apply { padding: 6px 16px; font-size: 13px; color: #ffffff; background: #4f6ef7;
+    border: none; border-radius: 6px; cursor: pointer; }
+
+  /* Stat cards */
+  .cards { display: flex; gap: 18px; margin-top: 16px; flex: 0 0 auto; }
+  .card { flex: 1; background: #ffffff; border: 1px solid #e3e8f0; border-radius: 10px; padding: 16px 20px; }
+  .card .label { font-size: 13px; color: #6b7280; margin-bottom: 6px; }
+  .card .number { font-size: 28px; font-weight: 700; color: #1f2937; }
+  .card .change { font-size: 13px; margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+  .up { color: #16a34a; }
+  .down { color: #dc2626; }
+  .change .vs { color: #9aa3b2; }
+
+  /* Chart */
+  .chart-panel { background: #ffffff; border: 1px solid #e3e8f0; border-radius: 10px; margin-top: 16px;
+    padding: 16px 22px 12px; height: 296px; flex: 0 0 auto; }
+  .chart-panel h2 { font-size: 15px; font-weight: 600; color: #1f2937; margin-bottom: 12px; }
+  .chart-wrap { display: flex; height: 232px; }
+  .y-axis { width: 48px; display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 24px; }
+  .y-axis span { font-size: 11px; color: #9aa3b2; text-align: right; transform: translateY(50%); }
+  .plot { flex: 1; display: flex; flex-direction: column; }
+  .bars-area { flex: 1; position: relative; border-left: 1px solid #d5dbe6; border-bottom: 1px solid #d5dbe6;
+    display: flex; align-items: flex-end; padding: 0 10px; }
+  .gridline { position: absolute; left: 0; right: 0; border-top: 1px dashed #edf0f5; }
+  .bar-slot { flex: 1; display: flex; justify-content: center; height: 100%; align-items: flex-end; }
+  .bar { width: 58%; background: linear-gradient(180deg, #6b85fa, #4f6ef7); border-radius: 4px 4px 0 0;
+    position: relative; }
+  .bar .val { position: absolute; top: -17px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #6b7280; }
+  .x-axis { display: flex; padding: 6px 10px 0; }
+  .x-axis span { flex: 1; text-align: center; font-size: 11px; color: #9aa3b2; }
+
+  /* Table */
+  .table-panel { background: #ffffff; border: 1px solid #e3e8f0; border-radius: 10px; margin-top: 16px;
+    padding: 16px 22px 10px; flex: 1 1 auto; min-height: 0; }
+  .table-panel h2 { font-size: 15px; font-weight: 600; color: #1f2937; margin-bottom: 10px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #8a94a6;
+    padding: 7px 12px; border-bottom: 1px solid #e3e8f0; }
+  td { font-size: 13px; color: #374151; padding: 8px 12px; border-bottom: 1px solid #eef1f6; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .b-paid { background: #e7f7ee; color: #15803d; }
+  .b-pending { background: #fdf3df; color: #b45309; }
+  .b-refunded { background: #fde8e8; color: #b91c1c; }
+  .b-shipped { background: #e8edfd; color: #4353c9; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div>
+      <h1>Analytics Overview</h1>
+      <div class="subtitle">Sales performance summary</div>
+    </div>
+    <div class="daterange">
+      <label for="from">From</label>
+      <select id="from">
+        <option>Jan 1, 2025</option>
+        <option selected>Jan 1, 2024</option>
+        <option>Jul 1, 2023</option>
+      </select>
+      <label for="to">To</label>
+      <select id="to">
+        <option selected>Dec 31, 2024</option>
+        <option>Jun 30, 2025</option>
+      </select>
+      <button class="apply">Apply</button>
+    </div>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="cards">
+    <div class="card">
+      <div class="label">Total Revenue</div>
+      <div class="number">$482,910</div>
+      <div class="change up">&#9650; 12.4% <span class="vs">vs last year</span></div>
+    </div>
+    <div class="card">
+      <div class="label">Orders</div>
+      <div class="number">8,254</div>
+      <div class="change up">&#9650; 6.1% <span class="vs">vs last year</span></div>
+    </div>
+    <div class="card">
+      <div class="label">Avg. Order Value</div>
+      <div class="number">$58.50</div>
+      <div class="change down">&#9660; 2.3% <span class="vs">vs last year</span></div>
+    </div>
+    <div class="card">
+      <div class="label">Customers</div>
+      <div class="number">3,127</div>
+      <div class="change up">&#9650; 18.9% <span class="vs">vs last year</span></div>
+    </div>
+  </div>
+
+  <!-- Bar chart -->
+  <div class="chart-panel">
+    <h2>Monthly Revenue — 2024</h2>
+    <div class="chart-wrap">
+      <div class="y-axis">
+        <span>$55k</span><span>$45k</span><span>$35k</span><span>$25k</span><span>$15k</span><span>$5k</span>
+      </div>
+      <div class="plot">
+        <div class="bars-area">
+          <div class="gridline" style="bottom:20%"></div>
+          <div class="gridline" style="bottom:40%"></div>
+          <div class="gridline" style="bottom:60%"></div>
+          <div class="gridline" style="bottom:80%"></div>
+          <div class="bar-slot"><div class="bar" style="height:44%"><span class="val">24k</span></div></div>
+          <div class="bar-slot"><div class="bar" style="height:49%"><span class="val">27k</span></div></div>
+          <div class="bar-slot"><div class="bar" style="height:58%"><span class="val">32k</span></div></div>
+          <div class="bar-slot"><div class="bar" style="height:54%"><span class="val">30k</span></div></div>
+          <div class="bar-slot"><div class="bar" style="height:63%"><span class="val">35k</span></div></div>
+          <div class="bar-slot"><div class="bar" style="height:68%"><span class="val">37k</span></div></div>
+          <div class="bar-slot"><div class="bar" style="height:61%"><span class="val">34k</span></div></div>
+          <div class="bar-slot"><div class="bar" style="height:72%"><span class="val">40k</span></div></div>
+          <div class="bar-slot"><div class="bar" style="height:78%"><span class="val">43k</span></div></div>
+          <div class="bar-slot"><div class="bar" style="height:70%"><span class="val">38k</span></div></div>
+          <div class="bar-slot"><div class="bar" style="height:86%"><span class="val">47k</span></div></div>
+          <div class="bar-slot"><div class="bar" style="height:96%"><span class="val">53k</span></div></div>
+        </div>
+        <div class="x-axis">
+          <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span>
+          <span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Orders table -->
+  <div class="table-panel">
+    <h2>Recent Orders</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:110px">Order ID</th>
+          <th>Customer</th>
+          <th style="width:140px">Date</th>
+          <th style="width:120px">Amount</th>
+          <th style="width:130px">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>#10482</td>
+          <td>Olivia Bennett</td>
+          <td>Dec 28, 2024</td>
+          <td>$249.00</td>
+          <td><span class="badge b-paid">Paid</span></td>
+        </tr>
+        <tr>
+          <td>#10481</td>
+          <td>Marcus Chen</td>
+          <td>Dec 27, 2024</td>
+          <td>$89.50</td>
+          <td><span class="badge b-pending">Pending</span></td>
+        </tr>
+        <tr>
+          <td>#10480</td>
+          <td>Sofia Ramirez</td>
+          <td>Dec 27, 2024</td>
+          <td>$512.75</td>
+          <td><span class="badge b-shipped">Shipped</span></td>
+        </tr>
+        <tr>
+          <td>#10479</td>
+          <td>James O'Connor</td>
+          <td>Dec 26, 2024</td>
+          <td>$164.20</td>
+          <td><span class="badge b-paid">Paid</span></td>
+        </tr>
+        <tr>
+          <td>#10478</td>
+          <td>Priya Sharma</td>
+          <td>Dec 25, 2024</td>
+          <td>$37.99</td>
+          <td><span class="badge b-refunded">Refunded</span></td>
+        </tr>
+        <tr>
+          <td>#10477</td>
+          <td>Lucas Meyer</td>
+          <td>Dec 24, 2024</td>
+          <td>$731.40</td>
+          <td><span class="badge b-pending">Pending</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>
