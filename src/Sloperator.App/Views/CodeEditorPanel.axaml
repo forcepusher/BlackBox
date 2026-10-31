@@ -77,11 +77,29 @@
       <GridSplitter Grid.Column="1" ResizeDirection="Columns" />
 
       <!-- Save (Ctrl+S) and Reload, there from the start and greyed while there is nothing to do (the
-           user, 2026-10-31: bar buttons never come and go mid-task), and the file's path in the folder
-           with whether it is saved. -->
+           user, 2026-10-31: bar buttons never come and go mid-task), the file's path in the folder with
+           whether it is saved, and its encoding and line breaks. -->
       <DockPanel Grid.Column="2">
         <Border DockPanel.Dock="Top" Classes="bar" Padding="8">
           <DockPanel>
+            <!-- The file's encoding and line breaks, as a code editor's status bar shows them: its own when
+                 opened; another picked converts the whole file (the user, 2026-10-31). Greyed with no file. -->
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0">
+              <views:MenuButton x:Name="EncodingButton" Classes="ghost menu small" IsEnabled="{Binding HasFile}" ToolTip.ShowOnDisabled="True"
+                                ToolTip.Tip="Encoding: another one picked writes the whole file in it when you save" AutomationProperties.Name="Encoding">
+                <DockPanel>
+                  <PathIcon DockPanel.Dock="Right" Classes="arrow" />
+                  <TextBlock Text="{Binding EncodingName}" VerticalAlignment="Center" />
+                </DockPanel>
+              </views:MenuButton>
+              <views:MenuButton x:Name="LineBreakButton" Classes="ghost menu small" IsEnabled="{Binding HasFile}" ToolTip.ShowOnDisabled="True"
+                                ToolTip.Tip="Line breaks: others picked end every line in them" AutomationProperties.Name="Line breaks">
+                <DockPanel>
+                  <PathIcon DockPanel.Dock="Right" Classes="arrow" />
+                  <TextBlock Text="{Binding LineBreakName}" VerticalAlignment="Center" />
+                </DockPanel>
+              </views:MenuButton>
+            </StackPanel>
             <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8">
               <Button Classes="ghost small act" Command="{Binding SaveCommand}" ToolTip.ShowOnDisabled="True" ToolTip.Tip="Save (Ctrl+S)" AutomationProperties.Name="Save">
                 <StackPanel Orientation="Horizontal" Spacing="8">

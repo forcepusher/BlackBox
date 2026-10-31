@@ -3494,6 +3494,22 @@ PowerShell script typed past ASCII gets UTF-8's signature); line breaks stay as 
 Not opened: a file with a zero byte in its first 8 KB, or over 5 MB. The published exe (fully trimmed) draws
 the tree and the highlighting as the Debug build does (a Python file, checked 2026-10-31).
 
+**Encoding and line breaks** (the user, 2026-10-31: "use currently used line endings and encoding", and
+settings to change them "like it is in VS code or studio, when switching it converts the whole file"):
+two menu buttons at the right of the file's bar (`MenuButton`, `ghost menu small`, greyed with no file
+open, there from the start) show the file's encoding ("UTF-8", "UTF-8 with BOM", "UTF-16 LE", "UTF-16 BE"
+or the PC's ANSI code page, "Windows-1252": `CodeFile.Encodings`, the ones read_file tells files apart by)
+and its line breaks ("CRLF", "LF", "Mixed" when its lines end in more than one; `CodeFile.LineBreakOf`, the
+one most lines end in, read again 300 ms after typing rests). The editor keeps them: Enter and a paste put
+in the line break of the line they are on (AvaloniaEdit does; `CodeEditorTests` checks an LF and a CRLF
+file), and Save writes the encoding the file was read in. Another encoding picked is written on the next
+Save, as Visual Studio's Advanced Save Options and VS Code's Save with Encoding do (`CodeFile.Encoding` vs
+`SavedEncoding`), and counts as an edit not saved till then; Reload takes it back. One that can't write a
+character of the text is refused, the bar saying which and on what line ("Windows-1252 can't write "✓"
+(line 3): kept UTF-8"). Other line breaks picked rewrite every line's (`CodeFile.WithLineBreaks`), one
+edit that Ctrl+Z undoes. Checked in the app: Ship.cs (UTF-8, LF) with CRLF and UTF-8 with BOM picked
+showed "not saved", and Save wrote EF BB BF and \r\n.
+
 **Edits not saved** are kept per window (`MainWindowViewModel.CodeDrafts`, by path) from the first key,
 so another file clicked, the panel closed or another chat leave them; the file's row has a dot and its
 bar says "not saved". The open file changed on disk (the agent's edit_file, another program): with no

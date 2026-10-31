@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Highlighting;
 using Sloperator.App.ViewModels;
@@ -149,6 +150,31 @@ public sealed class CodeEditorTests : IDisposable
         Assert.Equal("THREE\nfour", document.GetText(start, length));
         Assert.Equal(5, caret.Offset);
         Assert.False(caret.IsDeleted);
+    }
+
+    [Theory]
+    [InlineData("a\nb\n")]
+    [InlineData("a\r\nb\r\n")]
+    public void Enter_and_a_paste_keep_the_files_own_line_breaks(string text)
+    {
+        HeadlessApp.Run(() =>
+        {
+            var lineBreak = text.Contains('\r') ? "\r\n" : "\n";
+            var editor = new CodeView { Document = new TextDocument(text) };
+            new Window { Content = editor, Width = 400, Height = 300 }.Show();
+            editor.CaretOffset = 1;
+            editor.TextArea.PerformTextInput("\n");
+            Assert.Equal($"a{lineBreak}{lineBreak}b{lineBreak}", editor.Text);
+
+            editor.Document.Text = text;
+            editor.CaretOffset = 1;
+            var clipboard = TopLevel.GetTopLevel(editor)!.Clipboard!;
+            clipboard.SetTextAsync("x\r\ny\nz").GetAwaiter().GetResult();
+            editor.Paste();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal($"ax{lineBreak}y{lineBreak}z{lineBreak}b{lineBreak}", editor.Text);
+            return true;
+        });
     }
 
     [Fact]

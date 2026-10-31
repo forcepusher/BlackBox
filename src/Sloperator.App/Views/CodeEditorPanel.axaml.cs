@@ -64,11 +64,24 @@ public partial class CodeEditorPanel : UserControl
             line.Stroke = Brushes.Transparent;
             line.Margin = new Thickness(4, 0, 4, 0);
         }
+        // The encodings and line breaks offered, the file's own ticked: one picked converts the whole file.
+        EncodingButton.Entries = () => Core.Projects.CodeFile.Encodings.Select(encoding =>
+            Pick(Core.Projects.CodeFile.NameOf(encoding), _vm?.IsEncoding(encoding) == true, () => _vm?.PickEncoding(encoding)));
+        LineBreakButton.Entries = () => Core.Projects.CodeFile.LineBreaks.Select(lineBreak =>
+            Pick(lineBreak.Name, _vm?.IsLineBreak(lineBreak.Break) == true, () => _vm?.PickLineBreak(lineBreak.Break)));
         Tree.AddHandler(TappedEvent, OnTreeTapped);
         Tree.AddHandler(KeyDownEvent, OnTreeKey, RoutingStrategies.Tunnel);
     }
 
     private static IBrush Brush(string key) => (IBrush)Application.Current!.FindResource(key)!;
+
+    /// <summary>An entry of the encoding or line-break menu: a radio item, ticked for the file's.</summary>
+    private static Control Pick(string name, bool current, Action pick)
+    {
+        var item = new MenuItem { Header = name, ToggleType = MenuItemToggleType.Radio, IsChecked = current };
+        item.Click += (_, _) => pick();
+        return item;
+    }
 
     protected override void OnDataContextChanged(EventArgs e)
     {

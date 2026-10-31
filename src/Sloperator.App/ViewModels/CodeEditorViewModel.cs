@@ -360,10 +360,84 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
             var where = Folder is { } root && IsIn(path, root) ? Path.GetRelativePath(root, path) : path;
             if (SaveProblem is { } problem)
                 return $"{where} · not saved: {problem}";
+            if (EncodingProblem is { } encoding)
+                return $"{where} · {encoding}";
             if (ChangedOnDisk)
                 return File.Exists(path) ? $"{where} · changed on disk too: Save keeps yours, Reload takes the file's" : $"{where} · deleted on disk: Save writes it again";
             return IsUnsaved ? $"{where} · not saved" : where;
         }
+    }
+
+    // ---- encoding and line breaks ----------------------------------------------------------------
+
+    /// <summary>
+    /// The encoding the file is written in on Save, on its button in the file's bar: its own when opened
+    /// (the user, 2026-10-31: "use currently used line endings and encoding"), another when picked.
+    /// </summary>
+    public string EncodingName => _file is { } file && Document is not null ? CodeFile.NameOf(file.Encoding) : "Encoding";
+
+    /// <summary>The line breaks its lines end in ("CRLF", "LF"), "Mixed" when not all the same.</summary>
+    public string LineBreakName => Document is null ? "Line breaks" : _mixedBreaks ? "Mixed" : CodeFile.NameOfBreak(_lineBreak);
+
+    private string _lineBreak = "\r\n";
+    private bool _mixedBreaks;
+
+    /// <summary>Another encoding that can't write the text: why it wasn't taken.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FileStatus))]
+    private string? _encodingProblem;
+
+    internal bool IsEncoding(System.Text.Encoding encoding) => _file is { } file && CodeFile.Same(file.Encoding, encoding);
+
+    internal bool IsLineBreak(string lineBreak) => !_mixedBreaks && _lineBreak == lineBreak;
+
+    /// <summary>
+    /// Another encoding picked: the whole file is written in it on the next Save, as Visual Studio's
+    /// Advanced Save Options and VS Code's Save with Encoding do; till then it counts as an edit not
+    /// saved. Refused, with why, when the text has a character it can't write (a "✓" in Windows-1252).
+    /// </summary>
+    internal void PickEncoding(System.Text.Encoding encoding)
+    {
+        if (_file is not { } file || Document is not { } document)
+            return;
+        if (CodeFile.Unwritable(document.Text, encoding) is { } bad)
+        {
+            EncodingProblem = $"{CodeFile.NameOf(encoding)} can't write \"{bad.Char}\" (line {bad.Line}): kept {CodeFile.NameOf(file.Encoding)}";
+            return;
+        }
+        EncodingProblem = null;
+        file.Encoding = encoding;
+        UpdateUnsaved();
+        OnPropertyChanged(nameof(EncodingName));
+    }
+
+    /// <summary>Other line breaks picked: every line of the file ends in them, an edit (undone by Ctrl+Z) that Save writes.</summary>
+    internal void PickLineBreak(string lineBreak)
+    {
+        if (Document is not { } document)
+            return;
+        var text = CodeFile.WithLineBreaks(document.Text, lineBreak);
+        if (text != document.Text)
+            Replace(document, text);
+        ReadLineBreaks();
+    }
+
+    /// <summary>Which line breaks the text has now: read once typing rests (a 5 MB file isn't read at each key).</summary>
+    private void ReadLineBreaks()
+    {
+        _breaksTimer?.Stop();
+        if (Document is { } document)
+            (_lineBreak, _mixedBreaks) = CodeFile.LineBreakOf(document.Text);
+        OnPropertyChanged(nameof(LineBreakName));
+    }
+
+    private DispatcherTimer? _breaksTimer;
+
+    private void OnTextChanged(object? sender, EventArgs e)
+    {
+        _breaksTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) => ReadLineBreaks());
+        _breaksTimer.Stop();
+        _breaksTimer.Start();
     }
 
     /// <summary>A file clicked in the tree, or dropped on the panel: open in the editor, with its edits not saved yet if it has some.</summary>
@@ -398,9 +472,13 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         FileProblem = null;
         SaveProblem = null;
         ChangedOnDisk = false;
+        EncodingProblem = null;
         document.UndoStack.PropertyChanged += OnUndoChanged;
+        document.TextChanged += OnTextChanged;
         Document = document;
-        IsUnsaved = !document.UndoStack.IsOriginalFile;
+        ReadLineBreaks();
+        UpdateUnsaved();
+        OnPropertyChanged(nameof(EncodingName));
     }
 
     /// <summary>The file open goes from the editor; edited and not saved, it is kept as a draft, to come back with its edits.</summary>
@@ -408,13 +486,20 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
     {
         Unpick();
         if (Document is { } document)
+        {
             document.UndoStack.PropertyChanged -= OnUndoChanged;
+            document.TextChanged -= OnTextChanged;
+        }
+        _breaksTimer?.Stop();
         _file = null;
         Document = null;
         FileProblem = null;
         IsUnsaved = false;
         ChangedOnDisk = false;
         SaveProblem = null;
+        EncodingProblem = null;
+        OnPropertyChanged(nameof(EncodingName));
+        OnPropertyChanged(nameof(LineBreakName));
     }
 
     private void CloseFile()
@@ -432,7 +517,15 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
     {
         if (e.PropertyName != nameof(UndoStack.IsOriginalFile) || _file is not { } file || Document is not { } document)
             return;
-        IsUnsaved = !document.UndoStack.IsOriginalFile;
+        UpdateUnsaved();
+    }
+
+    /// <summary>Edited (or another encoding picked) since it was read or saved: the draft kept or let go, its row's mark with it.</summary>
+    private void UpdateUnsaved()
+    {
+        if (_file is not { } file || Document is not { } document)
+            return;
+        IsUnsaved = !document.UndoStack.IsOriginalFile || file.EncodingChanged;
         if (IsUnsaved)
             _chat.CodeDrafts[file.Path] = new CodeDraft(file, document);
         else
@@ -464,17 +557,26 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         // Typed on while it was written: that is still to save.
         if (Document == document && document.Text == text)
             document.UndoStack.MarkAsOriginalFile();
+        // Saved in another encoding, with no edit to mark: the file is as shown now.
+        UpdateUnsaved();
+        OnPropertyChanged(nameof(EncodingName));
     }
 
     /// <summary>Reload: the file as it is on disk, in place of the edits not saved.</summary>
     [RelayCommand(CanExecute = nameof(ChangedOnDisk))]
     private async Task ReloadAsync()
     {
-        if (_file is not { } file || Document is not { } document || await file.ReadAgainAsync(CancellationToken.None) is not { } text || Document != document)
+        if (_file is not { } file || Document is not { } document)
+            return;
+        // The encoding picked goes with the edits: the file's own comes back.
+        file.Encoding = file.SavedEncoding;
+        if (await file.ReadAgainAsync(CancellationToken.None) is not { } text || Document != document)
             return;
         Replace(document, text);
         document.UndoStack.MarkAsOriginalFile();
         ChangedOnDisk = false;
+        UpdateUnsaved();
+        OnPropertyChanged(nameof(EncodingName));
     }
 
     /// <summary>
@@ -488,6 +590,9 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         var text = await file.ReadAgainAsync(CancellationToken.None);
         if (Document != document)
             return;
+        // Written again, it may be in another encoding, which it is saved in from now on.
+        OnPropertyChanged(nameof(EncodingName));
+        UpdateUnsaved();
         if (text is null)
         {
             // Deleted: kept here, for Save to write again.
@@ -661,7 +766,11 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         _watcher?.Dispose();
         _watcher = null;
         _opening?.Cancel();
+        _breaksTimer?.Stop();
         if (Document is { } document)
+        {
             document.UndoStack.PropertyChanged -= OnUndoChanged;
+            document.TextChanged -= OnTextChanged;
+        }
     }
 }

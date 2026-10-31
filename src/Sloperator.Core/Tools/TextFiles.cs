@@ -17,7 +17,7 @@ internal static class TextFiles
     static TextFiles() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
     /// <summary>The PC's ANSI code page (Windows-1252 on an English or Western European Windows); Latin-1 where there is none.</summary>
-    private static Encoding Ansi
+    internal static Encoding Ansi
     {
         get
         {

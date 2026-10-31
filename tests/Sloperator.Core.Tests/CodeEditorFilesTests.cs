@@ -92,6 +92,46 @@ public class CodeEditorFilesTests : IDisposable
         Assert.Equal(Encoding.UTF8.GetPreamble(), File.ReadAllBytes(path)[..3]);
     }
 
+    [Theory]
+    [InlineData("a\r\nb\r\n", "CRLF", false)]
+    [InlineData("a\nb\nc", "LF", false)]
+    [InlineData("a\nb\r\nc\n", "LF", true)]
+    [InlineData("one line", "CRLF", false)]
+    public void A_files_line_breaks_are_the_ones_most_of_its_lines_end_in(string text, string name, bool mixed)
+    {
+        var (lineBreak, isMixed) = CodeFile.LineBreakOf(text);
+        Assert.Equal((name, mixed), (CodeFile.NameOfBreak(lineBreak), isMixed));
+    }
+
+    [Fact]
+    public void Other_line_breaks_picked_end_every_line_in_them() =>
+        Assert.Equal("a\nb\nc\nd", CodeFile.WithLineBreaks("a\r\nb\nc\rd", "\n"));
+
+    [Fact]
+    public async Task Another_encoding_picked_is_written_on_save_and_every_encoding_read_is_offered()
+    {
+        var path = Make("notes.txt", "Zoë\n");
+        var (file, _) = await CodeFile.ReadAsync(path, CancellationToken.None);
+        Assert.Contains(CodeFile.Encodings, e => CodeFile.Same(e, file!.Encoding));
+        Assert.Equal("UTF-8", CodeFile.NameOf(file!.Encoding));
+
+        file.Encoding = CodeFile.Encodings.First(e => CodeFile.NameOf(e) == "UTF-16 LE");
+        Assert.True(file.EncodingChanged);
+        await file.SaveAsync(file.Text, CancellationToken.None);
+
+        Assert.False(file.EncodingChanged);
+        Assert.Equal([0xFF, 0xFE, (byte)'Z', 0], File.ReadAllBytes(path)[..4]);
+        Assert.Equal(CodeFile.Encodings.Count, CodeFile.Encodings.Select(CodeFile.NameOf).Distinct().Count());
+    }
+
+    [Fact]
+    public void An_encoding_that_cant_write_a_character_says_which_and_where()
+    {
+        var ansi = CodeFile.Encodings[^1];
+        Assert.Equal(('✓', 2), CodeFile.Unwritable("plain\ndone ✓", ansi));
+        Assert.Null(CodeFile.Unwritable("plain\ndone ✓", CodeFile.Encodings[0]));
+    }
+
     [Fact]
     public async Task A_binary_or_huge_file_is_not_opened_and_says_why()
     {

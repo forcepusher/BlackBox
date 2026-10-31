@@ -11,8 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   you open in it (Open folder, or drop one on it), kept with the chat, else the project the agent
   changed files in. **Wrap** and **Watch**, as in File changes: long lines wrap, and the file the
   agent edits opens at the lines it changed, lit a moment. **Open in Code editor** on a file's
-  right-click menu opens a text file there. Lines you select go into the message box, so you can ask
-  about them.
+  right-click menu opens a text file there. The file's bar shows its encoding and line breaks, which
+  the editor keeps; picking others converts the whole file (encodings on Save). Lines you select go
+  into the message box, so you can ask about them.
 - Settings → Advanced → Updates shows which version of Sloperator is running.
 - The agent shows you a picture of what it made: a window or a part of the screen, at full
   resolution, under its final reply with a caption. Click it to see it full size.
