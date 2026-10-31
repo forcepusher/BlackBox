@@ -187,11 +187,13 @@ public sealed class CodeEditorTests : IDisposable
             var editor = new CodeView { Document = new TextDocument(string.Join("\n", Enumerable.Range(1, 300).Select(i => $"line {i}"))), FontSize = 12 };
             var window = new Window { Content = editor, Width = 600, Height = 400 };
             window.Show();
-            editor.ScrollToVerticalOffset(2000);
+            editor.ScrollToLine(150);
+            window.UpdateLayout();
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             var view = editor.TextArea.TextView;
             int LineAt(double y) => view.GetDocumentLineByVisualTop(view.VerticalOffset + y).LineNumber;
             var under = LineAt(200);
+            Assert.True(under > 100, $"scrolled to {under}");
 
             window.MouseWheel(new Point(200, 200), new Vector(0, 1), RawInputModifiers.Control);
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -207,6 +209,31 @@ public sealed class CodeEditorTests : IDisposable
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.Equal(CodeEditorViewModel.MinFontSize, editor.FontSize);
             Assert.True(view.VerticalOffset > offset);
+            return true;
+        });
+    }
+
+    [Fact]
+    public void The_zoom_buttons_size_keeps_the_top_line_at_the_top()
+    {
+        HeadlessApp.Run(() =>
+        {
+            var editor = new CodeView { Document = new TextDocument(string.Join("\n", Enumerable.Range(1, 300).Select(i => $"line {i}"))), FontSize = 12 };
+            var window = new Window { Content = editor, Width = 600, Height = 400 };
+            window.Show();
+            var view = editor.TextArea.TextView;
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            editor.ScrollToLine(150);
+            window.UpdateLayout();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var top = view.GetDocumentLineByVisualTop(view.VerticalOffset).LineNumber;
+            Assert.True(top > 100, $"scrolled to {top}");
+
+            editor.FontSize = 16;
+            window.UpdateLayout();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(top, view.GetDocumentLineByVisualTop(view.VerticalOffset).LineNumber);
             return true;
         });
     }

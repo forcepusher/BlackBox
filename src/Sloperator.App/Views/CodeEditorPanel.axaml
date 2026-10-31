@@ -104,6 +104,20 @@
         </Border>
         <Border DockPanel.Dock="Bottom" Classes="bar slim foot" Padding="8,4">
           <DockPanel>
+            <!-- At its left, the zoom (the user, 2026-10-31): out, back to 100%, in, as the File inspector's
+                 buttons; Ctrl+wheel and Ctrl+0 do the same. Greyed with no file. -->
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="4">
+              <Button Classes="ghost icon small act" Command="{Binding ZoomOutCommand}" ToolTip.ShowOnDisabled="True"
+                      ToolTip.Tip="Smaller text (Ctrl+wheel down)" AutomationProperties.Name="Zoom out">
+                <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
+              </Button>
+              <Button Classes="ghost small act" MinWidth="48" HorizontalContentAlignment="Center" Command="{Binding ZoomResetCommand}" Content="{Binding ZoomText}"
+                      ToolTip.ShowOnDisabled="True" ToolTip.Tip="Back to 100% (Ctrl+0)" AutomationProperties.Name="Zoom to 100%" />
+              <Button Classes="ghost icon small act" Command="{Binding ZoomInCommand}" ToolTip.ShowOnDisabled="True"
+                      ToolTip.Tip="Bigger text (Ctrl+wheel up)" AutomationProperties.Name="Zoom in">
+                <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+              </Button>
+            </StackPanel>
             <!-- The file's language, encoding and line breaks, at the right of a bar along the foot of the code
                  as a code editor's status bar shows them: its own when opened; another language picked is kept
                  for the kind, another encoding or line breaks convert the whole file (the user, 2026-10-31).

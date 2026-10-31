@@ -131,9 +131,32 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
 
     /// <summary>The size of the code's text (the user, 2026-10-31: Ctrl+wheel zooms it, as in VS Code); kept in settings.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ZoomText))]
+    [NotifyCanExecuteChangedFor(nameof(ZoomInCommand), nameof(ZoomOutCommand), nameof(ZoomResetCommand))]
     private double _fontSize;
 
     public const double DefaultFontSize = 12, MinFontSize = 8, MaxFontSize = 36;
+
+    /// <summary>How big the text is against its usual size, on the button between − and + (as the File inspector's zoom says it).</summary>
+    public string ZoomText => $"{FontSize / DefaultFontSize * 100:0}%";
+
+    private bool CanZoomOut() => HasFile && FontSize > MinFontSize;
+
+    private bool CanZoomIn() => HasFile && FontSize < MaxFontSize;
+
+    private bool CanZoomReset() => HasFile && FontSize != DefaultFontSize;
+
+    /// <summary>The bar under the code's − (the user, 2026-10-31: "zoom buttons below"), as Ctrl+wheel down a notch.</summary>
+    [RelayCommand(CanExecute = nameof(CanZoomOut))]
+    private void ZoomOut() => FontSize = Math.Max(MinFontSize, FontSize - 1);
+
+    /// <summary>+, as Ctrl+wheel up a notch.</summary>
+    [RelayCommand(CanExecute = nameof(CanZoomIn))]
+    private void ZoomIn() => FontSize = Math.Min(MaxFontSize, FontSize + 1);
+
+    /// <summary>The percentage between them, as Ctrl+0: back to the usual size.</summary>
+    [RelayCommand(CanExecute = nameof(CanZoomReset))]
+    private void ZoomReset() => FontSize = DefaultFontSize;
 
     partial void OnFontSizeChanged(double value)
     {
@@ -329,6 +352,7 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
     /// <summary>The text of the file open, as typed; null with none.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasFile), nameof(OpenPath), nameof(EmptyText), nameof(FileStatus))]
+    [NotifyCanExecuteChangedFor(nameof(ZoomInCommand), nameof(ZoomOutCommand), nameof(ZoomResetCommand))]
     private TextDocument? _document;
 
     private CodeFile? _file;

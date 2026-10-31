@@ -24,6 +24,26 @@ public sealed class CodeView : TextEditor
     /// <summary>What a touchpad's wheel turned short of a notch, kept for the next turn.</summary>
     private double _wheel;
 
+    /// <summary>Set while Ctrl+wheel sets the size: it keeps the line under the pointer itself.</summary>
+    private bool _wheelZoom;
+
+    /// <summary>The size set another way (the zoom buttons, Ctrl+0): the line at the top of the view stays at the top.</summary>
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property != FontSizeProperty || _wheelZoom || Document is null || !TextArea.TextView.VisualLinesValid)
+            return;
+        var view = TextArea.TextView;
+        // Read with the old sizes, which the view has till it is laid out again.
+        if (view.GetDocumentLineByVisualTop(view.VerticalOffset) is not { } top)
+            return;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (!top.IsDeleted)
+                ScrollToVerticalOffset(view.GetVisualTopByDocumentLine(top.LineNumber));
+        }, Avalonia.Threading.DispatcherPriority.Background);
+    }
+
     /// <summary>
     /// Ctrl+wheel (the user, 2026-10-31): the text a size bigger or smaller a notch, between
     /// <see cref="ViewModels.CodeEditorViewModel.MinFontSize"/> and <see cref="ViewModels.CodeEditorViewModel.MaxFontSize"/>,
@@ -48,7 +68,9 @@ public sealed class CodeView : TextEditor
         // Where the line's top is from the pointer (at or above it), before the new size.
         var above = line is null ? 0 : view.GetVisualTopByDocumentLine(line.LineNumber) - view.VerticalOffset - at;
         var ratio = size / FontSize;
-        FontSize = size;
+        _wheelZoom = true;
+        try { FontSize = size; }
+        finally { _wheelZoom = false; }
         if (line is null)
             return;
         UpdateLayout();

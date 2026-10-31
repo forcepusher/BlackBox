@@ -3501,7 +3501,7 @@ coloured headings, and a 300-page test PDF drew sharp at the panel's width, whit
 panel, page 151 in place at half way.
 
 ### Code editor
-**Code editor** in the Side panel dropdown (`CodeEditorViewModel`, `CodeEditorPanel`; least 640, for
+**Code editor** in the Side panel dropdown (`CodeEditorViewModel`, `CodeEditorPanel`; least 736, for
 its bars, see Language) is a bare VS Code beside the chat (the user's request, 2026-10-31): a folder's files in a
 tree on the left, the file clicked open on the right to read and edit, Ctrl+S to save. It is drawn as
 File changes is: the same bar, a 230 list of one-line rows (`ListBox.files`, now in App.axaml for both),
@@ -3562,7 +3562,7 @@ showed "not saved", and Save wrote EF BB BF and \r\n.
 **Language** (the user, 2026-10-31: "manually select highlighting if the file format is weird"): a third
 menu button beside the encoding's, the three now in a bar along the foot of the code (`Border.bar.slim.foot`,
 as a code editor's status bar), as the file bar over the code had no room for them and Save, Reload and
-the path at the panel's least width; that least is 640 (was 560), where the widest labels ("Visual Basic",
+the path at the panel's least width; that least is 736 (was 560; 640 before the zoom buttons below), where the widest labels ("Visual Basic",
 "UTF-8 with BOM", "Mixed") still fit. Its menu has Automatic (the language the extension says, `CodeLanguages.Of`),
 the fifteen languages by friendly names (`CodeLanguages.Names`: "SQL" for AvaloniaEdit's TSQL, "Diff" for
 Patch, "Visual Basic" for VB; `CodeView.Definition` maps them back) and Plain text. A pick is kept in
@@ -3577,6 +3577,12 @@ Ctrl+0 puts it back to 12. The size is kept in settings.json (`panels.codeFontSi
 the view model. A posted WM_MOUSEWHEEL's MK_CONTROL doesn't reach Avalonia (it reads Ctrl from the keyboard),
 so `CodeEditorTests` checks it with Avalonia's headless input instead: up a notch at line N, N still under
 the pointer; thirty down stops at 8; without Ctrl the code scrolls and the size stays.
+The zoom buttons (the user, 2026-10-31: "the zoom buttons below since you made a bottom bar") sit at the
+left of the bar under the code, as the File inspector's: − , the size against the usual one ("125%"; a click
+puts it back, as Ctrl+0) and +, a size a click; greyed with no file, − at 8 and + at 36, the percentage at
+100%. A size set that way keeps the line at the top of the view at the top (`CodeView.OnPropertyChanged`,
+read with the old line heights before the view is laid out again). Checked in the app: + three times took
+Game.cs from 100% to 125% and the setting to 15.
 
 **Edits not saved** are kept per window (`MainWindowViewModel.CodeDrafts`, by path) from the first key,
 so another file clicked, the panel closed or another chat leave them; the file's row has a dot and its
