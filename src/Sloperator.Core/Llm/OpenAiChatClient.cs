@@ -188,6 +188,8 @@ public sealed partial class OpenAiChatClient
     // Set once the server rejected our non-standard fields, so later requests stay plain.
     private bool _reasoningRejected;
     private bool _extrasRejected;
+    // Our own fields the server refused by name; only these are left out of later requests.
+    private readonly HashSet<string> _refusedFields = new(StringComparer.Ordinal);
 
     /// <summary>
     /// How long sending a request may go without any of it getting through before the connection
@@ -266,7 +268,8 @@ public sealed partial class OpenAiChatClient
             return await CompleteClaudeAsync(messages, tools, options, onDelta, ct, onSending).ConfigureAwait(false);
         var sendReasoning = options.SendReasoning && !_reasoningRejected;
         var sendExtras = !_extrasRejected;
-        var payload = Encoding.UTF8.GetBytes(BuildRequest(messages, tools, options, sendReasoning, sendExtras, PromptShifts.GetValueOrDefault(_baseUrl)).ToJsonString());
+        var request = BuildRequest(messages, tools, options, sendReasoning, sendExtras, PromptShifts.GetValueOrDefault(_baseUrl), _refusedFields);
+        var payload = Encoding.UTF8.GetBytes(request.ToJsonString());
         // Cancelled when sending stalls. Once the request is out, only Stop ends the wait: a
         // server reading a long prompt sends nothing for minutes.
         using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -301,8 +304,18 @@ public sealed partial class OpenAiChatClient
                 }
                 if (status is 400 or 422 && (sendReasoning || sendExtras) && LooksLikeUnknownField(err))
                 {
-                    _reasoningRejected |= sendReasoning;
-                    _extrasRejected |= sendExtras;
+                    // A server that names the field it refuses gets only that one left out:
+                    // proxyapi.ru refuses chat_template_kwargs ("Extra inputs are not permitted") but
+                    // takes reasoning_effort, and with all of them gone Claude's thinking came as an
+                    // empty block with a signature. Otherwise all of ours go.
+                    var named = RefusedFields(request, options, err);
+                    if (named.Count > 0)
+                        _refusedFields.UnionWith(named);
+                    else
+                    {
+                        _reasoningRejected |= sendReasoning;
+                        _extrasRejected |= sendExtras;
+                    }
                     return await CompleteAsync(messages, tools, options, onDelta, ct, onSending).ConfigureAwait(false);
                 }
                 if (status == 429)
@@ -549,8 +562,9 @@ public sealed partial class OpenAiChatClient
     }
 
     /// <param name="promptShift">Blank lines in front of the system prompt (see <see cref="ShiftPrompt"/>).</param>
+    /// <param name="refused">Our own fields the server refused by name, left out of the request and its messages.</param>
     internal static JsonObject BuildRequest(IReadOnlyList<ChatMessage> messages, IReadOnlyList<ToolDefinition> tools, ChatRequestOptions options,
-        bool sendReasoning = false, bool sendExtras = true, int promptShift = 0)
+        bool sendReasoning = false, bool sendExtras = true, int promptShift = 0, IReadOnlySet<string>? refused = null)
     {
         var msgs = new JsonArray();
         foreach (var m in messages)
@@ -602,7 +616,30 @@ public sealed partial class OpenAiChatClient
                 req["reasoning_effort"] = effort;
         }
 
+        foreach (var field in refused ?? Enumerable.Empty<string>())
+        {
+            req.Remove(field);
+            foreach (var m in msgs.OfType<JsonObject>())
+                m.Remove(field);
+        }
         return req;
+    }
+
+    /// <summary>
+    /// Those of our own fields in <paramref name="request"/> (not the standard ones) that the
+    /// error names: "chat_template_kwargs: Extra inputs are not permitted", "Unrecognized request
+    /// argument supplied: top_k", "messages.1.reasoning_content: …".
+    /// </summary>
+    internal static List<string> RefusedFields(JsonObject request, ChatRequestOptions options, string err)
+    {
+        var ours = new List<string> { "stream_options", "reasoning_effort", "reasoning_content", "reasoning_details" };
+        if (options.Extra is not null)
+            ours.AddRange(options.Extra.Select(e => e.Key));
+        var sent = request["messages"] is JsonArray msgs ? msgs.OfType<JsonObject>().SelectMany(m => m.Select(f => f.Key)) : [];
+        return ours.Distinct()
+            .Where(f => request.ContainsKey(f) || sent.Contains(f))
+            .Where(f => Regex.IsMatch(err, $@"(?<![\w]){Regex.Escape(f)}(?![\w])"))
+            .ToList();
     }
 
     private static JsonObject SerializeMessage(ChatMessage m, bool sendReasoning)

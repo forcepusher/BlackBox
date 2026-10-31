@@ -2204,6 +2204,14 @@ High); the picked one stays saved for the next model. The command-line runner ta
 Thinking models get their earlier reasoning sent back each step (`reasoning_content`,
 `preserve_thinking`), as the Qwen3.5+ and Gemma 4 templates expect.
 
+A strict server that answers 400/422 to one of these fields gets it left out from then on. When its
+error names fields of ours (`chat_template_kwargs: Extra inputs are not permitted`, `Unrecognized
+request argument supplied: top_k`, `messages.1.reasoning_content: …`), only those go; when it names
+none, all of them do (effort, `stream_options`, the extras and the earlier thinking). proxyapi.ru
+(2026-11-01, anthropic/claude-opus-5-5) refuses `chat_template_kwargs` and takes the rest: when
+everything was dropped with it, Claude still thought but sent only an empty block with a signature,
+as through OpenRouter with no effort, so no thinking showed.
+
 **The agent connects it too**: asked to connect, switch to or use another model (LM Studio on this PC,
 Claude, OpenRouter, a server the user names), the agent uses its `model_server` tool. `connect` takes
 the address, the key the user gave (an address already in use keeps its own, as does one in the

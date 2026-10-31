@@ -79,6 +79,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   picked stops at its end. Animations (GIF, WebP, APNG) play there again too.
 - A sound plays from exactly where you start it: an MP3 started up to half a second off and a FLAC
   up to a tenth of a second late, in the File inspector and the chat's players.
+- Claude's thinking shows again through servers that turn down one of Sloperator's request fields by
+  name (proxyapi.ru refuses `chat_template_kwargs`): only that field is left out now, so the effort
+  and the earlier thinking still go.
 
 ### Removed
 - The blob logo is gone from the window's title bar; the title starts where it was. The taskbar

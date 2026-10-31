@@ -471,6 +471,46 @@ public class AgentSessionTests
     }
 
     [Fact]
+    public async Task Only_the_field_a_server_names_is_dropped()
+    {
+        // proxyapi.ru, 2026-11-01: with every extra dropped, reasoning_effort went too and Claude's
+        // thinking came as an empty block with a signature.
+        var server = new ScriptedServer(Sse.Text("ok"), Sse.Text("ok again"));
+        server.Failures.Enqueue((System.Net.HttpStatusCode.BadRequest, """{"error": {"message": "chat_template_kwargs: Extra inputs are not permitted", "type": "invalid_request_error", "param": null, "code": null}}"""));
+        var client = new OpenAiChatClient(new HttpClient(server), "http://test", null);
+        var options = new ChatRequestOptions
+        {
+            SendReasoning = true,
+            Extra = new JsonObject { ["chat_template_kwargs"] = new JsonObject { ["preserve_thinking"] = true } },
+            Effort = "xhigh",
+        };
+        List<ChatMessage> history = [ChatMessage.User("hi"), new ChatMessage { Role = ChatRole.Assistant, Content = "hello", Reasoning = "greet back" }, ChatMessage.User("again")];
+
+        await client.CompleteAsync(history, [], options, null, CancellationToken.None);
+        await client.CompleteAsync(history, [], options, null, CancellationToken.None);
+
+        Assert.Equal(3, server.Requests.Count);
+        Assert.NotNull(server.Requests[0]["chat_template_kwargs"]);
+        foreach (var request in server.Requests.Skip(1))
+        {
+            Assert.Null(request["chat_template_kwargs"]);
+            Assert.Equal("xhigh", (string?)request["reasoning_effort"]);
+            Assert.NotNull(request["stream_options"]);
+            Assert.Equal("greet back", (string?)request["messages"]![1]!["reasoning_content"]);
+        }
+    }
+
+    [Fact]
+    public void A_refusal_names_a_field_only_as_a_whole_word()
+    {
+        var request = OpenAiChatClient.BuildRequest([ChatMessage.User("hi")], [], new ChatRequestOptions { Effort = "high" });
+
+        Assert.Equal(["reasoning_effort"], OpenAiChatClient.RefusedFields(request, new ChatRequestOptions(), "reasoning_effort: Extra inputs are not permitted"));
+        Assert.Empty(OpenAiChatClient.RefusedFields(request, new ChatRequestOptions(), "reasoning is not supported for this model"));
+        Assert.Empty(OpenAiChatClient.RefusedFields(request, new ChatRequestOptions(), "messages.0.reasoning_content: Extra inputs are not permitted")); // not sent
+    }
+
+    [Fact]
     public void Middle_steps_are_dropped_last_keeping_the_task_and_recent_steps()
     {
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
