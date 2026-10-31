@@ -102,10 +102,11 @@ public sealed class VideoRuler : Control
         {
             var x = Math.Round(Lead + s * Pps) + 0.5;
             var label = s % labelEvery == 0;
-            context.DrawLine(VideoColors.Tick, new Point(x, h - (label ? 10 : 5)), new Point(x, h));
+            // Ticks up the row's height, a time's from near its top and the time at its top (the user,
+            // 2026-10-31: in the 40-high row, short ticks and a centred time looked lost).
+            context.DrawLine(VideoColors.Tick, new Point(x, label ? 4 : h - 14), new Point(x, h));
             if (label)
-                // In the row's middle, level with the play button beside the ruler.
-                VideoColors.Draw(context, $"{s / 60}:{s % 60:00}", x + 3, Math.Round(h / 2 - 7), 10, VideoColors.Muted, 60);
+                VideoColors.Draw(context, $"{s / 60}:{s % 60:00}", x + 3, 3, 10, VideoColors.Muted, 60);
         }
         if (Length > 0)
         {
