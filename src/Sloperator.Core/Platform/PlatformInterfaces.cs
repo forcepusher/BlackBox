@@ -34,7 +34,16 @@ public interface IScreenCapture
     IReadOnlyList<ScreenRect> GetScreens();
 
     RawImage Capture(ScreenRect region, bool includeCursor);
+
+    /// <summary>
+    /// The visible top-level windows of other programs, the frontmost first: each one's title and
+    /// where it shows on screen (physical pixels, without the invisible borders Windows puts around it).
+    /// </summary>
+    IReadOnlyList<ScreenWindow> GetWindows() => [];
 }
+
+/// <summary>A program's window as it shows on screen (see <see cref="IScreenCapture.GetWindows"/>).</summary>
+public readonly record struct ScreenWindow(string Title, ScreenRect Bounds);
 
 /// <summary>Synthetic mouse and keyboard input. Coordinates are physical screen pixels.</summary>
 public interface IInputController

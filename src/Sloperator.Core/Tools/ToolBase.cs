@@ -143,6 +143,13 @@ public sealed class ToolContext
     /// <summary>Where helper files for a task go (Sloperator's Data/scratch); null to use the system's temp folder.</summary>
     public string? ScratchDirectory { get; init; }
 
+    /// <summary>
+    /// The chat's own folder, beside its saved pictures (Data/chats/&lt;id&gt;): what capture_result
+    /// takes goes there, so the chat shows it when opened again and deletes it with itself. Null
+    /// where there is no saved chat (the command line).
+    /// </summary>
+    public string? ChatDirectory { get; init; }
+
     /// <summary>The files the agent changes in this chat, for the File changes panel; null when nobody shows them.</summary>
     public Diffs.FileChanges? Changes { get; init; }
 

@@ -22,7 +22,7 @@ internal sealed class LoopDetector
 
     // Looking at the screen or waiting repeatedly is normal (e.g. watching something for hours).
     private static readonly HashSet<string> Passive = new(StringComparer.OrdinalIgnoreCase)
-        { "screenshot", "wait" };
+        { "screenshot", "wait", "capture_result" };
 
     private readonly Queue<string> _recent = new();
     private byte[]? _lastScreen;

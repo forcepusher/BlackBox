@@ -250,6 +250,9 @@ internal static partial class Native
     [LibraryImport("user32.dll", EntryPoint = "GetWindowTextLengthW")]
     public static partial int GetWindowTextLength(nint hWnd);
 
+    [LibraryImport("user32.dll", EntryPoint = "GetWindowTextW")]
+    public static unsafe partial int GetWindowText(nint hWnd, char* lpString, int nMaxCount);
+
     public const int GWL_EXSTYLE = -20;
     public const uint WS_POPUP = 0x80000000;
     public const uint WS_EX_TOPMOST = 0x00000008, WS_EX_TRANSPARENT = 0x00000020, WS_EX_TOOLWINDOW = 0x00000080,
@@ -383,6 +386,12 @@ internal static partial class Native
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
+
+    /// <summary>Where a window shows on screen, without the invisible resize borders GetWindowRect counts.</summary>
+    public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmGetWindowAttribute(nint hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmSetWindowAttribute(nint hwnd, int dwAttribute, in int pvAttribute, int cbAttribute);

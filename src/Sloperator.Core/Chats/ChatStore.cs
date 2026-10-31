@@ -55,6 +55,15 @@ public sealed class ChatEntry
     /// <summary>For a reply or a tool call: when it ended, so the chat shows how long it took.</summary>
     public DateTime? Ended { get; set; }
 
+    /// <summary>
+    /// For a run's last reply: the last picture of its work the run took with capture_result (a PNG in
+    /// the chat's folder), shown in the reply under its words, with the caption the model gave it.
+    /// </summary>
+    public string? Capture { get; set; }
+
+    /// <inheritdoc cref="Capture"/>
+    public string? Caption { get; set; }
+
     /// <summary>For a reply: when its request had all gone out to the server, and when the model's first words came.</summary>
     public DateTime? Sent { get; set; }
 

@@ -53,6 +53,18 @@ public sealed class ScreenSpace
         return (Math.Min(x, Screen.X + Screen.Width - 1), Math.Min(y, Screen.Y + Screen.Height - 1));
     }
 
+    /// <summary>
+    /// A box in the model's coordinates (its top-left corner and size) in screen pixels, cut to the
+    /// screen; empty when none of it is on the screen.
+    /// </summary>
+    public ScreenRect ToScreen(double x, double y, double width, double height)
+    {
+        int Left(double v) => Screen.X + (int)Math.Round(Math.Clamp(v, 0, ImageWidth) * Screen.Width / ImageWidth);
+        int Top(double v) => Screen.Y + (int)Math.Round(Math.Clamp(v, 0, ImageHeight) * Screen.Height / ImageHeight);
+        var (left, top) = (Left(x), Top(y));
+        return new ScreenRect(left, top, Math.Max(0, Left(x + width) - left), Math.Max(0, Top(y + height) - top));
+    }
+
     public (int X, int Y) ToModel(int screenX, int screenY) =>
         ((int)Math.Round((double)(screenX - Screen.X) * ImageWidth / Screen.Width),
          (int)Math.Round((double)(screenY - Screen.Y) * ImageHeight / Screen.Height));
