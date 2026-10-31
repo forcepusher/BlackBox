@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings → Advanced → Updates shows which version of Sloperator is running.
 - The agent shows you a picture of what it made: a window or a part of the screen, at full
   resolution, under its final reply with a caption. Click it to see it full size.
+- The agent can put pictures side by side to compare them (before and after, light and dark, a few
+  options), labelled in your language. It can show a picture file it made the same way.
 - Right-click any file (a card in the chat, a file in a message, the full-screen viewer, File changes,
   the Video generator) for **Open in Inspector**, which shows it in the File inspector panel.
 - SVG files show as pictures: in the chat, full screen, and in File inspector, where they stay sharp

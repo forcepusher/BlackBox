@@ -74,6 +74,10 @@ public static class SystemPrompt
         else if (screen is not null)
         {
             sb.AppendLine("- Start GUI tasks with a screenshot. Look before you click; never guess coordinates.");
+            // In two short runs Haiku took no before picture while this sat in the check at the end,
+            // which it reads when finishing: too late for one.
+            sb.AppendLine("- When the task changes something already on screen (a window, a document, a page), capture it with capture_result before your first change: " +
+                          "you'll pass it in compare with the result at the end.");
             sb.AppendLine("- Aim for the center of buttons, fields and icons. After each action, check the new screenshot to confirm it worked before moving on.");
             // Qwen 3.8 on the click benchmark: 97 of 114 first clicks with find_text offered, 106 when
             // told to find named targets with it first (Unity's toolbar 13/19 to 19/19); 4 s more a try.
