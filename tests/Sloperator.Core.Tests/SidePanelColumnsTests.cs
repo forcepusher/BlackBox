@@ -4,7 +4,7 @@ using Xunit;
 namespace Sloperator.Core.Tests;
 
 /// <summary>
-/// The chat window with a tool's panel open, made narrower: the panel gives way to its least before
+/// The chat window with a side panel open, made narrower: the panel gives way to its least before
 /// the chat does, and the window stops where both are at their least. The panel kept the 960 it
 /// opened at, and the chat was squeezed to a few letters across.
 /// </summary>

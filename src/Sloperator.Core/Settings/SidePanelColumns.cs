@@ -1,7 +1,7 @@
 namespace Sloperator.Core.Settings;
 
 /// <summary>
-/// How the chat window shares its width with a tool's panel on the left of the chat (Video generator,
+/// How the chat window shares its width with a side panel on the left of the chat (Video generator,
 /// File changes), in the UI's own units; a panel's widths count the splitter on its right. The panel
 /// gives way first: shrunk, the window takes its width from the panel down to the panel's least, and
 /// only then stops; the chat never gets narrower than its own least. The panel opened at 960 and kept
@@ -14,7 +14,7 @@ public static class SidePanelColumns
     public const double ChatMin = 660;
 
     /// <summary>
-    /// How wide every tool's panel opens, splitter included: one width for all of them (the user,
+    /// How wide every panel opens, splitter included: one width for all of them (the user,
     /// 2026-10-28; until then each had its own, 880, 760 and 960). Above the widest least, Video
     /// generator's 770.
     /// </summary>

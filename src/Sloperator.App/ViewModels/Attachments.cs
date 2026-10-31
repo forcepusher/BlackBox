@@ -76,14 +76,14 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
     private bool _isFolder;
 
     /// <summary>
-    /// Has a × to take it off the box: a file of the user's, never a pick of a tool's, which is
+    /// Has a × to take it off the box: a file of the user's, never a pick of a panel's, which is
     /// unpicked in its panel (a click away, Esc) and so stays in step with it (the user, 2026-10-25).
     /// </summary>
     public bool CanRemove => _remove is not null && !Picked;
 
     /// <summary>
     /// A file's name and size, or a folder's name; what a picture's thumbnail is for the rest. A
-    /// picture picked in a tool's panel (an area marked in File inspector) shows what it is there.
+    /// picture picked in a side panel (an area marked in File inspector) shows what it is there.
     /// </summary>
     public bool ShowsName => Picked || !IsPicture || Thumbnail is null;
 
@@ -150,11 +150,11 @@ public sealed partial class AttachmentItem : ObservableObject, IDisposable
 }
 
 /// <summary>
-/// The card of what a message is about in the open tool with nothing picked there ("notes.md", "whole
+/// The card of what a message is about in the open panel with nothing picked there ("notes.md", "whole
 /// document"), over the box and then in the message's bubble, in the look of a file's card and, as
 /// a pick's, with no ×: it goes when something is picked.
 /// </summary>
-public sealed class ToolCardItem(ToolCard card, string tip = "")
+public sealed class SidePanelCardItem(SidePanelCard card, string tip = "")
 {
     public string Title => card.Title;
     public string Details => card.Details ?? "";

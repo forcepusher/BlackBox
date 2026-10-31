@@ -107,7 +107,7 @@
       <Setter Property="Foreground" Value="{StaticResource BbAccent}" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <!-- On a card from an open tool (a pick, or what the message is about there): points at its panel,
+    <!-- On a card from the open panel (a pick, or what the message is about there): points at its panel,
          which docks left of the chat. 4 from the icon after it. -->
     <Style Selector="Border.attachment PathIcon.toolArrow">
       <Setter Property="Width" Value="8" />
@@ -291,7 +291,7 @@
     <!-- Header -->
     <Border Grid.Row="0" Classes="bar">
       <DockPanel>
-        <!-- Tools that open on the left of the chat and work through it; the arrow beside the
+        <!-- Panels that open on the left of the chat and work through it; the arrow beside the
              dropdown, outside it (the user, 2026-10-29), says where. Where the window's name stood
              a second time, under the title bar's. 0.5 under it, which rounds to nothing at 100% and a
              pixel at 125%, where it sat a pixel under the dropdown's word (docs/notes.md, Text in the
@@ -544,15 +544,15 @@
                 <TextBlock Classes="muted" Text="{Binding TimeText}" IsVisible="{Binding HasTime}" ToolTip.Tip="{Binding TimeTip}" HorizontalAlignment="Right" />
                 <Border Background="{StaticResource BbUserBubble}" CornerRadius="12" Padding="0,8" HorizontalAlignment="Right">
                   <StackPanel Spacing="6">
-                    <!-- Sent with a tool open, in a chat saved before tools gave cards: which video, and what was picked in it. -->
+                    <!-- Sent with a panel open, in a chat saved before panels gave cards: which video, and what was picked in it. -->
                     <TextBlock Classes="muted" Text="{Binding Via}" IsVisible="{Binding HasVia}" FontSize="12" TextWrapping="Wrap" Margin="12,0" />
                     <!-- The files that came with it: a picture as itself, anything else by its name; a click opens it.
-                         A tool's pick shows as what it is there, and with nothing picked, the card of what
-                         the message was about in the tool; either comes first, as they showed over the box. -->
+                         A panel's pick shows as what it is there, and with nothing picked, the card of what
+                         the message was about in the panel; either comes first, as they showed over the box. -->
                     <WrapPanel IsVisible="{Binding HasAttachments}" HorizontalAlignment="Right" Margin="12,4,12,0">
                     <ItemsControl ItemsSource="{Binding Wholes}">
                       <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:ToolCardItem">
+                        <DataTemplate x:DataType="vm:SidePanelCardItem">
                           <Border Classes="attachment file" Margin="6,0,0,6" ToolTip.Tip="{Binding Tip}" AutomationProperties.Name="{Binding Title}">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                               <PathIcon Classes="toolArrow" />
@@ -941,7 +941,7 @@
                  item keeps room above and to its right for the × that sits over its corner: the
                  list clips what goes past its edges, and the ×'s top was cut off. -->
             <WrapPanel Grid.Row="0" Grid.ColumnSpan="3" IsVisible="{Binding HasAttachments}" Margin="4,2,4,6">
-              <!-- A tool's picks come first in the list (see MainWindowViewModel.Pick). -->
+              <!-- A panel's picks come first in the list (see MainWindowViewModel.Pick). -->
               <ItemsControl ItemsSource="{Binding Attachments}" IsVisible="{Binding HasAttachments}">
                 <ItemsControl.ItemsPanel>
                   <ItemsPanelTemplate>
@@ -965,7 +965,7 @@
                           </StackPanel>
                         </StackPanel>
                       </Border>
-                      <!-- A tool's pick has none: it is unpicked in its panel (see AttachmentItem.CanRemove). -->
+                      <!-- A panel's pick has none: it is unpicked in its panel (see AttachmentItem.CanRemove). -->
                       <Button Classes="removeAttachment" Command="{Binding RemoveCommand}" IsVisible="{Binding CanRemove}" ToolTip.Tip="Take it off the message"
                               AutomationProperties.Name="{Binding FileName, StringFormat='Remove {0}'}">
                         <PathIcon Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />

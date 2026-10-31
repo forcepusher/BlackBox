@@ -820,15 +820,15 @@ window to the left side instead of opening a new separate window... Use the main
 making... Put filmmaking button under Toolkit dropdown menu with None and Filmmaking options. There
 will be more tools extending to the left side of the screen later."). The **Side panel** dropdown
 ("Toolkit" until 2026-10-29: the user found it said nothing of what it does, and the agent's own
-tools are something else; the code's names followed in 1.3.0: `ISidePanel`, `SidePanelOption`)
+tools are something else; the code's names followed in 1.2.0: `ISidePanel`, `SidePanelOption`, and on 2026-10-31, at the user's word that panels be panels in the code too, `SidePanelCard` (was `ToolCard`) and the comments that still called a panel a tool)
 takes the place of the second Sloperator logo and name under the title bar, an arrow pointing
-left beside it (outside the button since 2026-10-29, at the user's word), where its tools open: None or Video generator (`SidePanelOption`, `ISidePanel`, more to come); it
+left beside it (outside the button since 2026-10-29, at the user's word), where its panels open: None or Video generator (`SidePanelOption`, `ISidePanel`, more to come); it
 now reads None, File changes, File inspector, Video generator (the user, 2026-10-26), each with a grey line of what it is. The list is as wide as its longest line, 12 from its border on both sides as every dropdown row (`ComboBoxItem` Padding 12,6): rows were a fixed 300 wide, wrapping, until 2026-10-30, and left about 110 px empty right of the longest line. A muted "in
 development" beside it (the user, 2026-10-24) went on 2026-10-29, at the user's word. Its
 arrows are solid triangles, the left one and the dropdown's, as History's and every dropdown's are
 (the user: "Arrows need consistency"; Fluent's thin chevron is replaced in App.axaml by a style
 that depends on a state, as a plain one loses to what the template sets). Picked,
-the window grows to the left by the tool's width (880 for every tool, `SidePanelColumns.PanelWidth`; the user, 2026-10-28: until then each had its own, 880, 760 and 960), so the chat stays where it was on the
+the window grows to the left by the panel's width (880 for every panel, `SidePanelColumns.PanelWidth`; the user, 2026-10-28: until then each had its own, 880, 760 and 960), so the chat stays where it was on the
 screen, as far as the screen has room; None gives the room back, and a window neither moved nor
 resized since goes back where it was. It moves and resizes in one step (`MainWindow.Place`, one
 SetWindowPos on Windows), with the panel laid out at the new size before: moved by Position and
@@ -850,7 +850,7 @@ one's width to the other's: the view model sets the new tool in one change (it w
 and the window shrank to the chat and grew back), the window sets the panel's content itself (a
 binding took it after the layout), and the dropdown's list is closed first (it lingered a frame over
 the resized window). Measured after: popup closed, then one frame with all of the switch, for every
-pick of None, Video generator and File changes either way. The window's place is saved without the panel. **What a tool gives a message is a card of what was picked in it** over the box (the user, 2026-10-25, after a message sent with File changes open showed only a grey "File changes" over its words): a pick (`MainWindowViewModel.Pick`, an `AttachmentItem` with a caption). With nothing picked there is no card, and a message the user types goes as it is, with no word of the tool (`WithSidePanel`; the user, 2026-10-28: until then a card of the whole item, `ISidePanel.Whole`, stood there, and File changes selected its first file by itself, so a card of what they never picked went with every message, with no × to take it off). The tool's own messages (Make the video) still say what it shows. A pick has no × as the user's own files have (`AttachmentItem.CanRemove` is false for a pick; the user's call: a pick is unpicked in its panel, a click away or Esc, so box and panel can't disagree). Every panel puts what it picks in the box through `Pick`, so a new one gets this as is; `ToolCardTests` fails if a × in the box is shown for anything but `CanRemove`. Sent, the cards go with the message (`UserInput.Cards`, kept in the chat as `ChatEntry.Cards`) and show in its bubble as its files do, a pick by its caption; a chat saved before shows its grey line as it was. **The × at the right end of every tool's top bar** closes the tool, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`SidePanelClose`, 32 square as the Side panel dropdown, 8 right of the button beside it), so it looks and sits the same in each. Every tool's top bar is the chat's (`Border.bar`, see One look for every control), its fields 32 high as everywhere. **Made narrower, the panel gives way first** (`SidePanelColumns`,
+pick of None, Video generator and File changes either way. The window's place is saved without the panel. **What a panel gives a message is a card of what was picked in it** over the box (the user, 2026-10-25, after a message sent with File changes open showed only a grey "File changes" over its words): a pick (`MainWindowViewModel.Pick`, an `AttachmentItem` with a caption). With nothing picked there is no card, and a message the user types goes as it is, with no word of the panel (`WithSidePanel`; the user, 2026-10-28: until then a card of the whole item, `ISidePanel.Whole`, stood there, and File changes selected its first file by itself, so a card of what they never picked went with every message, with no × to take it off). The panel's own messages (Make the video) still say what it shows. A pick has no × as the user's own files have (`AttachmentItem.CanRemove` is false for a pick; the user's call: a pick is unpicked in its panel, a click away or Esc, so box and panel can't disagree). Every panel puts what it picks in the box through `Pick`, so a new one gets this as is; `SidePanelCardTests` fails if a × in the box is shown for anything but `CanRemove`. Sent, the cards go with the message (`UserInput.Cards`, kept in the chat as `ChatEntry.Cards`) and show in its bubble as its files do, a pick by its caption; a chat saved before shows its grey line as it was. **The × at the right end of every panel's top bar** closes the panel, as None in the dropdown does (the user, 2026-10-25): one control for all of them (`SidePanelClose`, 32 square as the Side panel dropdown, 8 right of the button beside it), so it looks and sits the same in each. Every panel's top bar is the chat's (`Border.bar`, see One look for every control), its fields 32 high as everywhere. **Made narrower, the panel gives way first** (`SidePanelColumns`,
 `MainWindow.FitColumns` on the columns' SizeChanged): down to its least (`SidePanelOption.MinWidth`,
 splitter included: Video generator 770, where its top bar still fits in one row with the video's name cut
 short; File changes 560), then the window stops, at the panel's least plus the chat's 660 (no more than
@@ -998,7 +998,7 @@ timeline, is a chip under the box ("The start of shot 1 · Moon start.png", "not
 piece planned), a click away or Esc takes it off, another pick takes its place, and sent, it goes with the message
 (a piece not made yet as its place, with no file). With nothing picked there is no chip, and a typed
 message goes without the video (the user, 2026-10-28; from 2026-10-25 a chip of the whole video stood
-there, `ISidePanel.Whole`, and the model was told the message was about it). A tool's cards, this one or the picks, come before the user's own files, over
+there, `ISidePanel.Whole`, and the model was told the message was about it). A panel's cards, this one or the picks, come before the user's own files, over
 the box and in the sent bubble, and each has a small muted ◀ at its left, pointing at the panel it
 comes from (the user, 2026-10-26; style `PathIcon.toolArrow`, 8 px, 4 px from the icon). Checked in
 the app on 2026-10-26 with File inspector and Video generator open and a pasted file of the user's.
@@ -3063,7 +3063,7 @@ again from History shows it again; a new chat starts empty.
 left and their diff beside them. **It opens by itself** on the agent's first file change in a chat (the user,
 2026-10-27): once per chat, so closed it stays closed. A chat whose list already has files (one opened again from
 History) had its turn; a call that changed nothing to show (a failed write) doesn't count, as `Diff()` is read on the
-agent's thread while no change was shown yet. With another tool open (File inspector, Video generator) it doesn't take
+agent's thread while no change was shown yet. With another panel open (File inspector, Video generator) it doesn't take
 its place, and the chat's turn is spent. Settings → General → Side panel, "Open File changes when the agent changes a file"
 turns it off (`panels.openFileChanges`, on by default). It reads them again 250 ms after a call that may have changed files (a file written in
 parts is read once), keeping the picked lines picked. Lines are picked with a click,

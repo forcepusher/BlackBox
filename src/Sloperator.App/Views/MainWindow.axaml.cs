@@ -96,7 +96,7 @@ public partial class MainWindow : Window
                 focused.BringIntoView();
         });
 
-        // A tool's panel gives way to the chat as the window is made narrower, and what the
+        // The side panel gives way to the chat as the window is made narrower, and what the
         // splitter is dragged to is the width it then goes back to.
         Columns.SizeChanged += (_, e) =>
         {
@@ -586,21 +586,21 @@ public partial class MainWindow : Window
             HoldVideos();
     }
 
-    // ---- the side panel: a tool's panel on the left of the chat --------------------------------------
+    // ---- the side panel, on the left of the chat ----------------------------------------------------
 
     /// <summary>How wide the side panel's column is to be, splitter included, as it opened or was dragged to; 0 with none.</summary>
     private double _docked;
 
-    /// <summary>How narrow the open tool's panel may get, splitter included (<see cref="SidePanelOption.MinWidth"/>).</summary>
+    /// <summary>How narrow the open panel may get, splitter included (<see cref="SidePanelOption.MinWidth"/>).</summary>
     private double _least;
 
     /// <summary>Where the window was and how wide before the side panel opened, and after: closed with the window as it was left, it goes back there.</summary>
     private (PixelPoint Position, double Width)? _beforeDock, _afterDock;
 
     /// <summary>
-    /// A tool picked in the Side panel dropdown opens on the left of the chat: the window grows to the
-    /// left by the tool's width, so the chat stays where it was on the screen (as far as the screen
-    /// has room; else the window takes the screen's width, the tool and the chat sharing it). None
+    /// A panel picked in the Side panel dropdown opens on the left of the chat: the window grows to the
+    /// left by the panel's width, so the chat stays where it was on the screen (as far as the screen
+    /// has room; else the window takes the screen's width, the panel and the chat sharing it). None
     /// gives the room back. A maximized window keeps its size, and the two share it. Made narrower,
     /// the panel gives way down to its least before the chat does (<see cref="SidePanelColumns"/>).
     /// </summary>
@@ -621,7 +621,7 @@ public partial class MainWindow : Window
         var columns = Columns.ColumnDefinitions;
         var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
         var scaling = screen?.Scaling ?? 1;
-        // Where the chat alone is: one tool for another goes straight from the one's width to the
+        // Where the chat alone is: one panel for another goes straight from the one's width to the
         // other's in one step. Closed and opened again, the window shrank to the chat for a frame and
         // grew back with the new panel's place empty (captured at 60 fps, 2026-10-25).
         var chat = WindowState == WindowState.Normal && _docked > 0 ? ChatAlone() : (Position, Width);
@@ -648,10 +648,10 @@ public partial class MainWindow : Window
             _beforeDock = place is null ? null : chat;
             _afterDock = null;
             // As narrow as the panel and the chat may both get, if the screen is as wide: lowered
-            // before the window is resized, which it couldn't be below the least of the tool before.
+            // before the window is resized, which it couldn't be below the least of the panel before.
             MinWidth = screen is null ? SidePanelColumns.WindowMin(least) : Math.Min(SidePanelColumns.WindowMin(least), screen.WorkingArea.Width / scaling - 16);
             MinHeight = screen is null ? tall : Math.Min(tall, screen.WorkingArea.Height / scaling - 40);
-            // The tool and its column first, laid out at the window's new size before the window
+            // The panel and its column first, laid out at the window's new size before the window
             // grows: the panel took a tenth of a second to lay out the first time, and laid out
             // after, the screen showed the window's new part black meanwhile.
             SidePanelHost.IsVisible = SidePanelSplitter.IsVisible = true;
@@ -680,7 +680,7 @@ public partial class MainWindow : Window
             MinWidth = ChatMinWidth;
             MinHeight = ChatMinHeight;
             // Neither moved nor resized since it opened: back where it was (the screen's edge may have
-            // kept it from growing to the left by all of the tool's width, and the chat moved). Else
+            // kept it from growing to the left by all of the panel's width, and the chat moved). Else
             // the chat stays where it is.
             if (WindowState == WindowState.Normal)
             {

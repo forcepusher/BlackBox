@@ -26,11 +26,11 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
     public string? Context { get; init; }
 
     /// <summary>
-    /// What of the open tool went with it, as cards like its files' in its bubble: what was picked
+    /// What of the open side panel went with it, as cards like its files' in its bubble: what was picked
     /// there, or what it is about with nothing picked ("notes.md", "whole document"). Null for a
-    /// message sent with no tool open.
+    /// message sent with no panel open.
     /// </summary>
-    public IReadOnlyList<ToolCard>? Cards { get; init; }
+    public IReadOnlyList<SidePanelCard>? Cards { get; init; }
 
     /// <summary>
     /// Which message of the user's this is, the same in the chat and in the model's conversation
@@ -161,8 +161,8 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
 }
 
 /// <summary>
-/// A card of what a message carried from a tool's panel: a pick (its file, and what it is there:
+/// A card of what a message carried from a side panel: a pick (its file, and what it is there:
 /// "Lines 12-18 · DiffTool.cs") or, with nothing picked, what the message is about there ("notes.md",
 /// "whole document", with the icon's path data; null for a file's).
 /// </summary>
-public sealed record ToolCard(string Title, string? Details = null, string? Path = null, string? Icon = null);
+public sealed record SidePanelCard(string Title, string? Details = null, string? Path = null, string? Icon = null);

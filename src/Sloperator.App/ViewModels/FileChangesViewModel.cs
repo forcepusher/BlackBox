@@ -173,7 +173,7 @@ public sealed partial class FileChangesViewModel : ObservableObject, ISidePanel
     /// <summary>Lines of a pick the model is given at most, with the count of the rest.</summary>
     private const int MaxPickedLines = 300;
 
-    /// <param name="chat">The chat the panel is a tool of: the files its agent changes, and where messages about the picked lines go.</param>
+    /// <param name="chat">The chat the panel is open in: the files its agent changes, and where messages about the picked lines go.</param>
     public FileChangesViewModel(MainWindowViewModel chat)
     {
         _chat = chat;

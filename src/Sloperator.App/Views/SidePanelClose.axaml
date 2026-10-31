@@ -1,10 +1,10 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Sloperator.App.Views.SidePanelClose">
-  <!-- The × at the right end of a side panel's top bar: closes the tool, as None in the Side panel
+  <!-- The × at the right end of a side panel's top bar: closes the panel, as None in the Side panel
        dropdown does. One control for every panel, so it looks and sits the same in each: square, as
        tall as the Side panel dropdown beside it, 8 from the button before it. -->
-  <Button Classes="ghost icon" Click="OnClose" ToolTip.Tip="Close" AutomationProperties.Name="Close the tool">
+  <Button Classes="ghost icon" Click="OnClose" ToolTip.Tip="Close" AutomationProperties.Name="Close the panel">
     <PathIcon Width="12" Height="12" Data="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
   </Button>
 </UserControl>

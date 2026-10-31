@@ -59,9 +59,9 @@ public abstract partial class ChatItemViewModel : ObservableObject
 
 /// <summary>
 /// A message the user sent: what they typed, and the files that came with it (dropped, pasted or
-/// picked), with the cards of what an open tool's panel gave it as they showed over the box.
+/// picked), with the cards of what the open side panel gave it as they showed over the box.
 /// </summary>
-public sealed class UserMessageItem(string text, IReadOnlyList<string>? files = null, IReadOnlyList<ToolCard>? cards = null) : ChatItemViewModel
+public sealed class UserMessageItem(string text, IReadOnlyList<string>? files = null, IReadOnlyList<SidePanelCard>? cards = null) : ChatItemViewModel
 {
     public string Text { get; } = text;
     public bool HasText => Text.Length > 0;
@@ -69,14 +69,14 @@ public sealed class UserMessageItem(string text, IReadOnlyList<string>? files = 
     /// <summary>Where it was written, when not in the chat's box ("Video generator · The Fox and the Moon · clip 2").</summary>
     public string? Via { get; init; }
 
-    /// <summary>Shown over its words only for a message saved before tools gave cards: those show it now.</summary>
+    /// <summary>Shown over its words only for a message saved before panels gave cards: those show it now.</summary>
     public bool HasVia => Via is not null && Cards is null;
 
     /// <summary>What the model was told with it, unseen in the chat (see <see cref="UserInput.Context"/>).</summary>
     public string? Context { get; init; }
 
-    /// <summary>What of the open tool went with it (see <see cref="UserInput.Cards"/>).</summary>
-    public IReadOnlyList<ToolCard>? Cards { get; } = cards;
+    /// <summary>What of the open panel went with it (see <see cref="UserInput.Cards"/>).</summary>
+    public IReadOnlyList<SidePanelCard>? Cards { get; } = cards;
 
     /// <summary>The File changes turn it started, for Undo message and everything below to put the files back to; null in a chat saved before there were turns.</summary>
     public int? Turn { get; init; }
@@ -88,8 +88,8 @@ public sealed class UserMessageItem(string text, IReadOnlyList<string>? files = 
     public UserInput Input => new(Text, Files) { Via = Via, Context = Context, Cards = Cards, Ids = Ids };
 
     /// <summary>
-    /// The files as their cards, the tool's first as over the box (the user, 2026-10-26): a pick by what
-    /// it is in the tool ("Lines 12-18 · DiffTool.cs"), the picks that have no file yet (a shot not
+    /// The files as their cards, the panel's first as over the box (the user, 2026-10-26): a pick by what
+    /// it is in the panel ("Lines 12-18 · DiffTool.cs"), the picks that have no file yet (a shot not
     /// made), then the user's own files.
     /// </summary>
     public IReadOnlyList<AttachmentItem> Attachments { get; } =
@@ -100,8 +100,8 @@ public sealed class UserMessageItem(string text, IReadOnlyList<string>? files = 
         .. (files ?? []).Where(f => cards?.Any(c => string.Equals(c.Path, f, StringComparison.OrdinalIgnoreCase)) != true).Select(f => new AttachmentItem(f)),
     ];
 
-    /// <summary>With nothing picked in the open tool, what the message was about there, before the files.</summary>
-    public IReadOnlyList<ToolCardItem> Wholes { get; } = (cards ?? []).Where(c => c.Path is null).Select(c => new ToolCardItem(c)).ToList();
+    /// <summary>With nothing picked in the open panel, what the message was about there, before the files.</summary>
+    public IReadOnlyList<SidePanelCardItem> Wholes { get; } = (cards ?? []).Where(c => c.Path is null).Select(c => new SidePanelCardItem(c)).ToList();
 
     public bool HasAttachments => Attachments.Count > 0 || Wholes.Count > 0;
 

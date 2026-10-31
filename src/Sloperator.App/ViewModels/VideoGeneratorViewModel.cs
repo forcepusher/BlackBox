@@ -34,7 +34,7 @@ public sealed partial class VideoGeneratorViewModel : ObservableObject, ISidePan
     /// <summary>Where videos go, a folder each: Sloperator's Data\videos, next to the exe like the rest of its data.</summary>
     private readonly string _videosRoot;
 
-    /// <param name="chat">The chat the panel is a tool of, where what is said about the video runs.</param>
+    /// <param name="chat">The chat the panel is open in, where what is said about the video runs.</param>
     /// <param name="videosRoot">Where videos go (Sloperator's Data\videos).</param>
     /// <param name="folder">The video to open; the latest changed one when null.</param>
     public VideoGeneratorViewModel(PreviewServices previews, MainWindowViewModel chat, string videosRoot, string? folder)

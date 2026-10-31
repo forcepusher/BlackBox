@@ -360,7 +360,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
     [RelayCommand(CanExecute = nameof(CanSend), AllowConcurrentExecutions = true)]
     private async Task SendAsync()
     {
-        // A piece picked in the side panel that isn't made yet has no file: the tool says what it is.
+        // A piece picked in the side panel that isn't made yet has no file: the panel says what it is.
         var files = Attachments.Where(a => !a.Picked || File.Exists(a.Path) || Directory.Exists(a.Path)).Select(a => a.Path).ToList();
         var input = WithSidePanel(new UserInput(UserInput.Tidy(Input), files), Picked);
         Input = "";
@@ -781,7 +781,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IAgentObserv
 
     /// <summary>
     /// Messages the model never read, back in the box with their files, to send again or not. Sent
-    /// again while a tool is open, they carry what it says about them again.
+    /// again while a panel is open, they carry what it says about them again.
     /// </summary>
     private void BackInTheBox(IReadOnlyList<UserInput> unread)
     {

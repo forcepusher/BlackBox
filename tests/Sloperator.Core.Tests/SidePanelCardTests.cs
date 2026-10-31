@@ -7,9 +7,9 @@ namespace Sloperator.Core.Tests;
 
 /// <summary>
 /// What a side panel gives a message shows as cards like its files', over the box and in the sent
-/// bubble, and a tool's card never has the × a file of the user's has (the user, 2026-10-25).
+/// bubble, and a panel's card never has the × a file of the user's has (the user, 2026-10-25).
 /// </summary>
-public class ToolCardTests : IDisposable
+public class SidePanelCardTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "bb-cards-" + Guid.NewGuid().ToString("N"));
 
@@ -29,21 +29,21 @@ public class ToolCardTests : IDisposable
             Title = "Cards",
             Entries =
             [
-                new ChatEntry { Kind = ChatEntryKind.User, Text = "what is this", Via = "File changes · notes.md", Cards = [new ToolCard("Lines 3-5 · notes.md", Path: @"C:\w\notes.md")] },
-                new ChatEntry { Kind = ChatEntryKind.User, Text = "make it", Via = "Video generator · Fox", Cards = [new ToolCard("Fox", "whole video", Icon: clapper)] },
+                new ChatEntry { Kind = ChatEntryKind.User, Text = "what is this", Via = "File changes · notes.md", Cards = [new SidePanelCard("Lines 3-5 · notes.md", Path: @"C:\w\notes.md")] },
+                new ChatEntry { Kind = ChatEntryKind.User, Text = "make it", Via = "Video generator · Fox", Cards = [new SidePanelCard("Fox", "whole video", Icon: clapper)] },
             ],
         });
         File.WriteAllText(Path.Combine(_dir, "old.json"), """{"id":"old","title":"Old","entries":[{"kind":"User","text":"Hi","via":"Video generator · Fox"}]}""");
 
         var entries = store.Load("cards")!.Entries;
-        Assert.Equal(new ToolCard("Lines 3-5 · notes.md", Path: @"C:\w\notes.md"), Assert.Single(entries[0].Cards!));
-        Assert.Equal(new ToolCard("Fox", "whole video", Icon: clapper), Assert.Single(entries[1].Cards!));
+        Assert.Equal(new SidePanelCard("Lines 3-5 · notes.md", Path: @"C:\w\notes.md"), Assert.Single(entries[0].Cards!));
+        Assert.Equal(new SidePanelCard("Fox", "whole video", Icon: clapper), Assert.Single(entries[1].Cards!));
         Assert.Null(Assert.Single(store.Load("old")!.Entries).Cards);
     }
 
     /// <summary>
     /// Every × on a card in the box shows only for what can be taken off (AttachmentItem.CanRemove,
-    /// false for a tool's pick), and the card of what a message is about in the tool has none: a panel
+    /// false for a panel's pick), and the card of what a message is about in the panel has none: a panel
     /// added later puts its picks in the box through the same card, and so gets no × either.
     /// </summary>
     [Fact]
@@ -59,7 +59,7 @@ public class ToolCardTests : IDisposable
 
         var attachments = File.ReadAllText(Path.Combine(root, "src", "Sloperator.App", "ViewModels", "Attachments.cs"));
         Assert.Contains("public bool CanRemove => _remove is not null && !Picked;", attachments);
-        var card = attachments[attachments.IndexOf("class ToolCardItem", StringComparison.Ordinal)..];
+        var card = attachments[attachments.IndexOf("class SidePanelCardItem", StringComparison.Ordinal)..];
         Assert.DoesNotContain("Remove", card);
     }
 }
