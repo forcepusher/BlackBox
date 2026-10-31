@@ -2689,11 +2689,7 @@ for a script it lacks (CJK, Hangul), so Arabic joins and runs right to left; a l
 "…" to its picture's width. An earlier picture that isn't there, or labels that don't match the count,
 are argument errors before anything is captured. The prompt asks for a capture before changing
 something already on screen.
-Two pictures of the same size (the same window or box) get boxes on the last around what changed: any
-pixel that differs counts (no filter for carets or clocks until real runs show they get in the way),
-gathered in 16 px cells, cells up to one apart in one box, boxes that nearly touch joined, at most 6
-(a scrolled page gave dozens). A box is 2 px of the accent between 1 px of #161616, on whole pixels,
-3 px out from the change. The model is told how many boxes there are, or that the two are identical.
+There are no boxes around what changed: the user asked for the pictures alone (31 October 2026).
 In one real run (Haiku through OpenRouter, the Q3 budget window, "add a Total row", nothing said about
 pictures, 31 October 2026) the model captured the result twice and took no capture before it started.
 

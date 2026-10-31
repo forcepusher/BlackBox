@@ -92,20 +92,13 @@ public sealed partial class CaptureResultTool : Tool
                            "when you capture the result, to show them side by side.";
                 return Task.FromResult(new ToolResult(text, ForModel(image, ctx.GetScreenSpace(screen)), ImageCaption: "What the user now sees of your work:", Files: [file]));
             }
-            // Changes are boxed only between two pictures that line up pixel for pixel: the same window or box, the same size.
-            var two = earlier.Count == 1 && earlier[0].Picture.Width == frame.Width && earlier[0].Picture.Height == frame.Height;
-            var marks = two ? ChangeBoxes.Find(earlier[0].Picture.Bgra, frame.Bgra, frame.Width, frame.Height) : null;
-            using var all = CaptureCompare.Compose([.. earlier.Select((e, i) => (e.Picture, labels[i])), (frame, labels[^1])], marks, columns);
+            using var all = CaptureCompare.Compose([.. earlier.Select((e, i) => (e.Picture, labels[i])), (frame, labels[^1])], columns);
             var compared = Path.Combine(folder, $"capture-{number}-compared.png");
             using (var png = all.Encode(SKEncodedImageFormat.Png, 100))
             using (var stream = File.Create(compared))
                 png.SaveTo(stream);
             var shown = $"{took} {what} as capture {number}, {frame.Width}x{frame.Height}, and put it after {string.Join(", ", earlier.Select(e => e.Name))}: " +
                         $"the user sees them in one picture, labelled {string.Join(", ", labels.Select(l => $"\"{l}\""))}, the last you capture under your final reply{captioned}. " +
-                        (earlier.Count > 1 ? "What changed is only boxed between two pictures. "
-                            : marks is null ? "They differ in size, so what changed isn't marked. "
-                            : marks.Count == 0 ? "The two are identical. "
-                            : $"{marks.Count} {(marks.Count == 1 ? "box marks" : "boxes mark")} what changed, on the last. ") +
                         "If the change doesn't show, fix that and capture it again.";
             return Task.FromResult(new ToolResult(shown, ForModel(all, ctx.GetScreenSpace(screen)), ImageCaption: "What the user now sees of your work, compared:", Files: [compared]));
         }

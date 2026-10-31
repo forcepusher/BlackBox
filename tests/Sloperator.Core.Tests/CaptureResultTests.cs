@@ -292,7 +292,6 @@ public class CaptureResultTests : IDisposable
         });
         Assert.Contains("after capture 1, design.png", result.Text);
         Assert.Contains("labelled \"Было\", \"Макет\", \"Стало\"", result.Text);
-        Assert.Contains("only boxed between two pictures", result.Text);
         using (var three = SKBitmap.Decode(result.Files![0]))
         {
             // Two across: the design is second, top right.
@@ -335,82 +334,6 @@ public class CaptureResultTests : IDisposable
         // A list a model wrote as a string is read as the list.
         var listed = await Capture(ctx, new JsonObject { ["compare"] = "[1, 2]" });
         Assert.Contains("after capture 1, capture 2", listed.Text);
-    }
-
-    /// <summary>A white page of BGRA rows with dark rectangles on it, as a sheet's cells.</summary>
-    private static byte[] Page(int width, int height, params SKRectI[] dark)
-    {
-        var pixels = new byte[width * height * 4];
-        Array.Fill(pixels, (byte)255);
-        foreach (var r in dark)
-            for (var y = r.Top; y < r.Bottom; y++)
-                for (var x = r.Left; x < r.Right; x++)
-                    (pixels[(y * width + x) * 4], pixels[(y * width + x) * 4 + 1], pixels[(y * width + x) * 4 + 2]) = (40, 40, 40);
-        return pixels;
-    }
-
-    [Fact]
-    public void One_changed_cell_gives_one_box_around_it()
-    {
-        // A number typed into one cell of a sheet: its digits are a few dark strokes close together.
-        var after = Page(400, 300, new SKRectI(200, 100, 204, 114), new SKRectI(208, 100, 212, 114), new SKRectI(216, 100, 220, 114), new SKRectI(224, 100, 228, 114));
-        var box = Assert.Single(ChangeBoxes.Find(Page(400, 300), after, 400, 300));
-        Assert.Equal(new SKRectI(197, 97, 231, 117), box);
-    }
-
-    [Fact]
-    public void Any_pixel_that_differs_counts_and_the_same_pictures_have_none()
-    {
-        Assert.Empty(ChangeBoxes.Find(Page(400, 300), Page(400, 300), 400, 300));
-        // One pixel, a shade off: a box too.
-        var shade = Page(400, 300);
-        shade[(50 * 400 + 60) * 4] = 254;
-        Assert.Equal(new SKRectI(57, 47, 64, 54), Assert.Single(ChangeBoxes.Find(Page(400, 300), shade, 400, 300)));
-    }
-
-    [Fact]
-    public void Changes_close_together_are_one_box_and_far_apart_are_few()
-    {
-        // A paragraph's words: one box. Two edits at opposite corners: two.
-        var words = Enumerable.Range(0, 12).Select(i => new SKRectI(40 + i % 6 * 30, 40 + i / 6 * 20, 60 + i % 6 * 30, 52 + i / 6 * 20)).ToArray();
-        Assert.Single(ChangeBoxes.Find(Page(400, 300), Page(400, 300, words), 400, 300));
-        Assert.Equal(2, ChangeBoxes.Find(Page(400, 300), Page(400, 300, new SKRectI(10, 10, 40, 30), new SKRectI(350, 260, 390, 290)), 400, 300).Count);
-        // Changes everywhere (a page scrolled): a few boxes, not dozens.
-        var everywhere = Enumerable.Range(0, 100).Select(i => new SKRectI(i % 10 * 40, i / 10 * 30, i % 10 * 40 + 6, i / 10 * 30 + 4)).ToArray();
-        Assert.InRange(ChangeBoxes.Find(Page(400, 300), Page(400, 300, everywhere), 400, 300).Count, 1, 6);
-    }
-
-    [Fact]
-    public async Task The_model_is_told_how_many_boxes_there_are_or_that_the_two_are_identical()
-    {
-        var platform = new FakePlatform { Screens = [Plain], Desktop = Filled(SKColors.White) };
-        var ctx = Ctx(platform);
-        await Capture(ctx, Box(0, 0, 300, 200));
-        var same = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["compare"] = 1 });
-        Assert.Contains("The two are identical", same.Text);
-
-        // A cell filled in: one box, accent-coloured, on the last picture only.
-        var desktop = Filled(SKColors.White);
-        for (var y = 80; y < 100; y++)
-            for (var x = 100; x < 160; x++)
-                desktop.Bgra[(y * desktop.Width + x) * 4 + 1] = 0;
-        platform.Desktop = desktop;
-        var changed = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["compare"] = 1 });
-        Assert.Contains("1 box marks what changed, on the last", changed.Text);
-        using (var both = SKBitmap.Decode(changed.Files![0]))
-        {
-            // Side by side: the last starts at 316, under a 40 px band. The box is 3 px out from the cell, 2 px of the accent.
-            var accent = new SKColor(0xFC, 0xC2, 0x1B);
-            Assert.Equal(accent, both.GetPixel(316 + 97, 40 + 90));
-            Assert.Equal(accent, both.GetPixel(316 + 96, 40 + 90));
-            Assert.Equal(new SKColor(0x16, 0x16, 0x16), both.GetPixel(316 + 95, 40 + 90));
-            Assert.DoesNotContain(Enumerable.Range(0, 300), x => Enumerable.Range(40, 200).Any(y => both.GetPixel(x, y) == accent));
-        }
-
-        // An earlier picture of another size: nothing is marked.
-        await Capture(ctx, Box(0, 0, 200, 100));
-        var other = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["compare"] = 4 });
-        Assert.Contains("differ in size, so what changed isn't marked", other.Text);
     }
 
     /// <summary>A PNG of one colour in the test's own folder, its path.</summary>
@@ -459,7 +382,6 @@ public class CaptureResultTests : IDisposable
         var files = await Capture(ctx, new JsonObject { ["file"] = edited, ["compare"] = old });
         Assert.EndsWith("capture-1-compared.png", files.Files![0]);
         Assert.Contains("after old.png", files.Text);
-        Assert.Contains("1 box marks what changed", files.Text);
         using (var both = SKBitmap.Decode(files.Files[0]))
         {
             Assert.Equal(SKColors.Red, both.GetPixel(150, 140));
@@ -471,10 +393,10 @@ public class CaptureResultTests : IDisposable
         var mixed = await Capture(ctx, new JsonObject { ["file"] = edited, ["compare"] = 2 });
         Assert.Contains("after capture 2", mixed.Text);
 
-        // An upscale beside its original: different sizes, each at its own pixels, nothing boxed, and the model told why.
+        // An upscale beside its original: each at its own pixels, the small one over the big one (1200x1096 is nearer 4:3 than 1516x840).
         var big = Png("big.png", 1200, 800, SKColors.Blue);
         var upscaled = await Capture(ctx, new JsonObject { ["file"] = big, ["compare"] = old });
-        Assert.Contains("differ in size, so what changed isn't marked", upscaled.Text);
+        Assert.Equal((1200, 1096), SizeOf(File.ReadAllBytes(upscaled.Files![0])));
     }
 
     [Fact]

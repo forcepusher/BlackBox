@@ -17,7 +17,7 @@ internal static class CaptureCompare
     /// <summary>The longest label kept, in characters; the rest is cut to "…", and again to fit its picture's width.</summary>
     private const int LongestLabel = 40;
 
-    private static readonly SKColor Background = new(0x16, 0x16, 0x16), Accent = new(0xFC, 0xC2, 0x1B);
+    private static readonly SKColor Background = new(0x16, 0x16, 0x16);
 
     /// <summary>The labels when the model gave none: Before and After for two, numbers for more.</summary>
     public static List<string> DefaultLabels(int count) => count == 2 ? ["Before", "After"] : Enumerable.Range(1, count).Select(n => n.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToList();
@@ -30,11 +30,9 @@ internal static class CaptureCompare
     }
 
     /// <summary>
-    /// The pictures in one, each under its label, in the order given; <paramref name="marks"/> are boxes
-    /// on the last one around what changed, in its own pixels (only two pictures of one size have them).
-    /// <paramref name="columns"/>, the model's, is how many go in a row; null for the grid nearest 4:3.
+    /// The pictures in one, each under its label, in the order given. <paramref name="columns"/>, the model's, is how many go in a row; null for the grid nearest 4:3.
     /// </summary>
-    public static SKImage Compose(IReadOnlyList<(RawImage Picture, string Label)> pictures, IReadOnlyList<SKRectI>? marks = null, int? columns = null)
+    public static SKImage Compose(IReadOnlyList<(RawImage Picture, string Label)> pictures, int? columns = null)
     {
         var count = pictures.Count;
         // The band and gap grow with the pictures, so a label on a 4K capture reads like one on a small one.
@@ -79,27 +77,8 @@ internal static class CaptureCompare
             {
                 handle.Free();
             }
-            if (i == count - 1)
-                Mark(x, y + band);
         }
         return surface.Snapshot();
-
-        // On the last picture, at its own pixels: 2 px of the accent, on whole pixels, between 1 px of
-        // near-black, to show on light and on dark.
-        void Mark(int x, int y)
-        {
-            if (marks is not { Count: > 0 })
-                return;
-            var line = 2 * (int)Math.Round(unit);
-            using var dark = new SKPaint { Color = Background, Style = SKPaintStyle.Stroke, StrokeWidth = line + 2 * (int)Math.Round(unit), IsAntialias = false };
-            using var accent = new SKPaint { Color = Accent, Style = SKPaintStyle.Stroke, StrokeWidth = line, IsAntialias = false };
-            foreach (var m in marks)
-            {
-                var r = new SKRect(x + m.Left, y + m.Top, x + m.Right, y + m.Bottom);
-                canvas.DrawRect(r, dark);
-                canvas.DrawRect(r, accent);
-            }
-        }
 
         static double Off43(int w, int h) => Math.Abs(Math.Log((double)w / h / (4.0 / 3)));
     }
