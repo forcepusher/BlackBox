@@ -3501,8 +3501,8 @@ coloured headings, and a 300-page test PDF drew sharp at the panel's width, whit
 panel, page 151 in place at half way.
 
 ### Code editor
-**Code editor** in the Side panel dropdown (`CodeEditorViewModel`, `CodeEditorPanel`; least 560, as
-File changes) is a bare VS Code beside the chat (the user's request, 2026-10-31): a folder's files in a
+**Code editor** in the Side panel dropdown (`CodeEditorViewModel`, `CodeEditorPanel`; least 736, for
+its bars, see Language) is a bare VS Code beside the chat (the user's request, 2026-10-31): a folder's files in a
 tree on the left, the file clicked open on the right to read and edit, Ctrl+S to save. It is drawn as
 File changes is: the same bar, a 230 list of one-line rows (`ListBox.files`, now in App.axaml for both),
 the same foldout arrow (`PathIcon.fold`) and greyed action button (`Button.act`).
@@ -3511,7 +3511,9 @@ the same foldout arrow (`PathIcon.fold`) and greyed action button (`Button.act`)
 chat (**Open folder** in its bar, or a folder dropped on the panel), kept with the chat (`SavedChat.Folder`,
 `MainWindowViewModel.EditorFolder`) so it comes back when the chat is opened again from History; until
 then, the project the agent changed files in (`FileChanges.Project`: the git repository, solution or
-package of the first file it changed, `ProjectRoot`; else that file's folder), read again as the agent
+package of the first file it changed, `ProjectRoot`; for a file in the folder of its own that what the agent
+makes gets in Documents\Sloperator, `AgentSetup.MadeDirectory`, that folder unless a project is found inside
+it: Snake for Snake\src\game.js; else that file's folder), read again as the agent
 changes files and when another chat comes; with neither, none, and the panel says to open one. A
 file open outside a new folder closes. **Open in Code editor** on a file's right-click menu (`IFilePanel`,
 `FileInspector.IsText` files) and a file dropped on the panel open it, its folders unfolded down to its
@@ -3545,7 +3547,7 @@ the tree and the highlighting as the Debug build does (a Python file, checked 20
 
 **Encoding and line breaks** (the user, 2026-10-31: "use currently used line endings and encoding", and
 settings to change them "like it is in VS code or studio, when switching it converts the whole file"):
-two menu buttons at the right of the file's bar (`MenuButton`, `ghost menu small`, greyed with no file
+two menu buttons at the right of the bar under the code (see Language below) (`MenuButton`, `ghost menu small`, greyed with no file
 open, there from the start) show the file's encoding ("UTF-8", "UTF-8 with BOM", "UTF-16 LE", "UTF-16 BE"
 or the PC's ANSI code page, "Windows-1252": `CodeFile.Encodings`, the ones read_file tells files apart by)
 and its line breaks ("CRLF", "LF", "Mixed" when its lines end in more than one; `CodeFile.LineBreakOf`, the
@@ -3553,18 +3555,49 @@ one most lines end in, read again 300 ms after typing rests). The editor keeps t
 in the line break of the line they are on (AvaloniaEdit does; `CodeEditorTests` checks an LF and a CRLF
 file), and Save writes the encoding the file was read in. Another encoding picked is written on the next
 Save, as Visual Studio's Advanced Save Options and VS Code's Save with Encoding do (`CodeFile.Encoding` vs
-`SavedEncoding`), and counts as an edit not saved till then; Reload takes it back. One that can't write a
+`SavedEncoding`), and counts as an edit not saved till then; Discard takes it back. One that can't write a
 character of the text is refused, the bar saying which and on what line ("Windows-1252 can't write "✓"
 (line 3): kept UTF-8"). Other line breaks picked rewrite every line's (`CodeFile.WithLineBreaks`), one
 edit that Ctrl+Z undoes. Checked in the app: Ship.cs (UTF-8, LF) with CRLF and UTF-8 with BOM picked
 showed "not saved", and Save wrote EF BB BF and \r\n.
+
+**Language** (the user, 2026-10-31: "manually select highlighting if the file format is weird"): a third
+menu button beside the encoding's, the three now in a bar along the foot of the code (`Border.bar.slim.foot`,
+as a code editor's status bar), as the file bar over the code had no room for them and Save, Reload and
+the path at the panel's least width; that least is 736 (was 560; 640 before the zoom buttons below), where the widest labels ("Visual Basic",
+"UTF-8 with BOM", "Mixed") still fit. Its menu has Automatic (the language the extension says, `CodeLanguages.Of`),
+the fifteen languages by friendly names (`CodeLanguages.Names`: "SQL" for AvaloniaEdit's TSQL, "Diff" for
+Patch, "Visual Basic" for VB; `CodeView.Definition` maps them back) and Plain text. A pick is kept in
+settings.json for every file of the kind (`panels.codeLanguages`, by extension, or by the name of a file
+with none: "dockerfile"), so a GDScript project's .gd files all open as Python once one is set. Checked in
+the app: levels.py picked as Plain text lost its colours and the pick was saved under ".py".
+
+**Zoom** (the user, 2026-10-31: "ctrl + wheel to zoom in/out the text"): Ctrl+wheel makes the code's text
+a size bigger or smaller a notch (a touchpad's partial turns add up to one), from 8 to 36, the line under
+the pointer kept where it is (`CodeView.OnZoomWheel`, a tunnel handler ahead of the editor's own scrolling);
+Ctrl+0 puts it back to 12. The size is kept in settings.json (`panels.codeFontSize`), bound both ways to
+the view model. A posted WM_MOUSEWHEEL's MK_CONTROL doesn't reach Avalonia (it reads Ctrl from the keyboard),
+so `CodeEditorTests` checks it with Avalonia's headless input instead: up a notch at line N, N still under
+the pointer; thirty down stops at 8; without Ctrl the code scrolls and the size stays.
+The zoom buttons (the user, 2026-10-31: "the zoom buttons below since you made a bottom bar") sit at the
+left of the bar under the code, as the File inspector's: − , the size against the usual one ("125%"; a click
+puts it back, as Ctrl+0) and +, a size a click; greyed with no file, − at 8 and + at 36, the percentage at
+100%. A size set that way keeps the line at the top of the view at the top (`CodeView.OnPropertyChanged`,
+read with the old line heights before the view is laid out again). Checked in the app: + three times took
+Game.cs from 100% to 125% and the setting to 15.
 
 **Edits not saved** are kept per window (`MainWindowViewModel.CodeDrafts`, by path) from the first key,
 so another file clicked, the panel closed or another chat leave them; the file's row has a dot and its
 bar says "not saved". The open file changed on disk (the agent's edit_file, another program): with no
 edits here, the editor shows the disk's text, only what differs replaced (`CodeEditorViewModel.Replace`)
 so the caret and the view before it stay; with edits, the bar says so, Save writes the edits over it and
-Reload takes the disk's. A file deleted on disk stays open; Save writes it again.
+Discard takes the disk's. A file deleted on disk stays open; Save writes it again, Discard closes it.
+The button beside Save reads **Discard** while there are edits not saved, an encoding picked among them (the
+user, 2026-10-31: Reload "should also switch to Discard when you made changes and didn't save them yet"),
+with File changes' Discard icon: the file as it is on disk again, edits and pick thrown away. With nothing
+edited it reads Reload, greyed, as the file shows the disk's text by itself then (`RevertName`, `CanRevert`).
+Checked in the app: CRLF picked on Ship.cs turned it to Discard, and Discard put it back to LF, the file
+untouched.
 
 **Lines selected go into the chat's box** (the user's rule, 2026-10-28: a card only for what was
 picked): 150 ms after the selection rests, as "Lines 31-38 · Game.cs" ("Line 4", "Whole file" for all of
@@ -3590,7 +3623,7 @@ first is left where it is in the upper half of the view, else brought a quarter 
 the folder isn't followed: it would take the tree from the folder the user chose. Turned on, Watch goes
 to the agent's last change and lights it again. Every button of the panel's bars is there from the start
 and greyed while it has nothing to do (the user, 2026-10-31: bar buttons never come and go mid-task):
-Wrap and Watch, and Save and Reload over the file even with none open. Checked in the app with a stand-in agent
+Wrap and Watch, and Save and Reload (Discard) over the file even with none open. Checked in the app with a stand-in agent
 (2026-10-31): with Game.cs open, its edit_file on Ship.cs opened Ship.cs with the three lines it added lit.
 **Wrap** beside it (the user's question, 2026-10-31; `panels.wrapCode`, on by default as File changes'):
 long lines wrap inside the panel under their own start (AvaloniaEdit's `WordWrap`), one number a line, so

@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Input.Platform;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Highlighting;
@@ -178,8 +180,75 @@ public sealed class CodeEditorTests : IDisposable
     }
 
     [Fact]
+    public void Ctrl_and_the_wheel_zoom_the_text_keeping_the_line_under_the_pointer()
+    {
+        HeadlessApp.Run(() =>
+        {
+            var editor = new CodeView { Document = new TextDocument(string.Join("\n", Enumerable.Range(1, 300).Select(i => $"line {i}"))), FontSize = 12 };
+            var window = new Window { Content = editor, Width = 600, Height = 400 };
+            window.Show();
+            editor.ScrollToLine(150);
+            window.UpdateLayout();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var view = editor.TextArea.TextView;
+            int LineAt(double y) => view.GetDocumentLineByVisualTop(view.VerticalOffset + y).LineNumber;
+            var under = LineAt(200);
+            Assert.True(under > 100, $"scrolled to {under}");
+
+            window.MouseWheel(new Point(200, 200), new Vector(0, 1), RawInputModifiers.Control);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(13, editor.FontSize);
+            Assert.Equal(under, LineAt(200));
+
+            window.MouseWheel(new Point(200, 200), new Vector(0, -30), RawInputModifiers.Control);
+            Assert.Equal(CodeEditorViewModel.MinFontSize, editor.FontSize);
+
+            // Without Ctrl it scrolls, the size as it was.
+            var offset = view.VerticalOffset;
+            window.MouseWheel(new Point(200, 200), new Vector(0, -1), RawInputModifiers.None);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(CodeEditorViewModel.MinFontSize, editor.FontSize);
+            Assert.True(view.VerticalOffset > offset);
+            return true;
+        });
+    }
+
+    [Fact]
+    public void The_zoom_buttons_size_keeps_the_top_line_at_the_top()
+    {
+        HeadlessApp.Run(() =>
+        {
+            var editor = new CodeView { Document = new TextDocument(string.Join("\n", Enumerable.Range(1, 300).Select(i => $"line {i}"))), FontSize = 12 };
+            var window = new Window { Content = editor, Width = 600, Height = 400 };
+            window.Show();
+            var view = editor.TextArea.TextView;
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            editor.ScrollToLine(150);
+            window.UpdateLayout();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var top = view.GetDocumentLineByVisualTop(view.VerticalOffset).LineNumber;
+            Assert.True(top > 100, $"scrolled to {top}");
+
+            editor.FontSize = 16;
+            window.UpdateLayout();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(top, view.GetDocumentLineByVisualTop(view.VerticalOffset).LineNumber);
+            return true;
+        });
+    }
+
+    [Fact]
     public void The_lines_watch_lights_go_in_runs() =>
         Assert.Equal([(4, 6), (9, 9), (12, 13)], CodeEditorViewModel.Runs([13, 4, 5, 6, 9, 12, 5]));
+
+    [Fact]
+    public void Every_language_on_the_menu_has_highlighting_and_plain_text_none()
+    {
+        foreach (var language in Core.Projects.CodeLanguages.Names)
+            Assert.True(CodeView.Definition(language) is not null, language);
+        Assert.Null(CodeView.Definition(null));
+    }
 
     [Theory]
     [InlineData("Game.cs", "C#")]
@@ -191,7 +260,7 @@ public sealed class CodeEditorTests : IDisposable
     [InlineData("notes.txt", null)]
     [InlineData("paper.tex", null)]
     public void A_file_is_highlighted_as_its_kind(string file, string? highlighting) =>
-        Assert.Equal(highlighting, CodeView.For(file)?.Name);
+        Assert.Equal(highlighting, CodeView.Definition(Core.Projects.CodeLanguages.Of(file))?.Name);
 
     [Fact]
     public void Every_colour_avalonia_edit_names_is_one_of_the_apps_or_the_codes_own()

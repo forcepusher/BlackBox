@@ -103,6 +103,28 @@ public class CodeEditorFilesTests : IDisposable
         Assert.Equal((name, mixed), (CodeFile.NameOfBreak(lineBreak), isMixed));
     }
 
+    [Theory]
+    [InlineData(@"C:\game\src\Ship.cs", "C#")]
+    [InlineData(@"C:\game\Water.shader", "C++")]
+    [InlineData(@"C:\game\player.gd", null)]
+    [InlineData(@"C:\game\Dockerfile", null)]
+    public void A_file_is_highlighted_as_its_extension_says(string path, string? language) =>
+        Assert.Equal(language, CodeLanguages.Of(path));
+
+    [Fact]
+    public void A_language_picked_for_a_kind_of_file_holds_for_every_file_of_it()
+    {
+        // Kept by extension, or by the name of a file with none, as settings.json keeps them.
+        var picked = new Dictionary<string, string> { [CodeLanguages.Key(@"C:\game\player.GD")] = "Python", ["dockerfile"] = "PowerShell", [".cs"] = CodeLanguages.PlainText, [".java"] = "Brainfuck" };
+
+        Assert.Equal("Python", CodeLanguages.For(@"D:\other\enemy.gd", picked));
+        Assert.Equal("PowerShell", CodeLanguages.For(@"C:\game\Dockerfile", picked));
+        Assert.Null(CodeLanguages.For(@"C:\game\src\Ship.cs", picked));
+        // A name no longer offered: as the extension says.
+        Assert.Equal("Java", CodeLanguages.For(@"C:\game\Main.java", picked));
+        Assert.Equal("XML", CodeLanguages.For(@"C:\game\Game.csproj", picked));
+    }
+
     [Fact]
     public void Other_line_breaks_picked_end_every_line_in_them() =>
         Assert.Equal("a\nb\nc\nd", CodeFile.WithLineBreaks("a\r\nb\nc\rd", "\n"));
@@ -178,8 +200,38 @@ public class CodeEditorFilesTests : IDisposable
         Assert.Null(changes.Project());
         Assert.Null(changes.LastChange);
 
-        // As the agent writes them: the file read before the call, the change noted after it.
-        foreach (var (path, text) in new[] { (first, "class Ship { int Lives; }\n"), (other, "b\n") })
+        await Written(changes, (first, "class Ship { int Lives; }\n"), (other, "b\n"));
+
+        Assert.Equal(Path.Combine(_root, "game"), changes.Project());
+        // Watch goes to the file of the last call, numbered so a new call tells from one followed already.
+        Assert.Equal((Path.GetFullPath(other), 2), changes.LastChange);
+    }
+
+    [Fact]
+    public async Task What_the_agent_makes_in_documents_opens_at_its_own_folder_there()
+    {
+        // Documents\Sloperator\<task>, where what the agent makes goes when the user names no place.
+        var made = Path.Combine(_root, "Documents", "Sloperator");
+        var snake = new FileChanges();
+        await Written(snake, (Path.Combine(made, "Snake", "src", "game.js"), "let score = 0;\n"));
+        Assert.Equal(Path.Combine(made, "Snake"), snake.Project(made));
+
+        // A project inside the task's folder is still the project.
+        Make(@"Documents\Sloperator\Shop\server\package.json", "{}");
+        var shop = new FileChanges();
+        await Written(shop, (Path.Combine(made, "Shop", "server", "src", "app.js"), "listen();\n"));
+        Assert.Equal(Path.Combine(made, "Shop", "server"), shop.Project(made));
+
+        // A file right in Documents\Sloperator: that folder.
+        var note = new FileChanges();
+        await Written(note, (Path.Combine(made, "hello.txt"), "hi\n"));
+        Assert.Equal(made, note.Project(made));
+    }
+
+    /// <summary>Files written as the agent writes them: the file read before the call, the change noted after it.</summary>
+    private async Task Written(FileChanges changes, params (string Path, string Text)[] files)
+    {
+        foreach (var (path, text) in files)
         {
             var args = new JsonObject { ["path"] = path, ["content"] = text };
             var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = _root, Changes = changes };
@@ -187,9 +239,5 @@ public class CodeEditorFilesTests : IDisposable
             await new WriteFileTool().ExecuteAsync(args, ctx, CancellationToken.None);
             await call!.EndAsync();
         }
-
-        Assert.Equal(Path.Combine(_root, "game"), changes.Project());
-        // Watch goes to the file of the last call, numbered so a new call tells from one followed already.
-        Assert.Equal((Path.GetFullPath(other), 2), changes.LastChange);
     }
 }

@@ -14,7 +14,69 @@ namespace Sloperator.App.Views;
 /// </summary>
 public sealed class CodeView : TextEditor
 {
-    public CodeView() => TextArea.TextView.BackgroundRenderers.Add(_light);
+    public CodeView()
+    {
+        TextArea.TextView.BackgroundRenderers.Add(_light);
+        // Ahead of the editor's own scrolling: Ctrl+wheel zooms the text instead.
+        AddHandler(PointerWheelChangedEvent, OnZoomWheel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+    }
+
+    /// <summary>What a touchpad's wheel turned short of a notch, kept for the next turn.</summary>
+    private double _wheel;
+
+    /// <summary>Set while Ctrl+wheel sets the size: it keeps the line under the pointer itself.</summary>
+    private bool _wheelZoom;
+
+    /// <summary>The size set another way (the zoom buttons, Ctrl+0): the line at the top of the view stays at the top.</summary>
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property != FontSizeProperty || _wheelZoom || Document is null || !TextArea.TextView.VisualLinesValid)
+            return;
+        var view = TextArea.TextView;
+        // Read with the old sizes, which the view has till it is laid out again.
+        if (view.GetDocumentLineByVisualTop(view.VerticalOffset) is not { } top)
+            return;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (!top.IsDeleted)
+                ScrollToVerticalOffset(view.GetVisualTopByDocumentLine(top.LineNumber));
+        }, Avalonia.Threading.DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// Ctrl+wheel (the user, 2026-10-31): the text a size bigger or smaller a notch, between
+    /// <see cref="ViewModels.CodeEditorViewModel.MinFontSize"/> and <see cref="ViewModels.CodeEditorViewModel.MaxFontSize"/>,
+    /// as VS Code's editor zooms; the line under the pointer kept where it is. Without Ctrl it scrolls as ever.
+    /// </summary>
+    private void OnZoomWheel(object? sender, Avalonia.Input.PointerWheelEventArgs e)
+    {
+        if ((e.KeyModifiers & Avalonia.Input.KeyModifiers.Control) == 0)
+            return;
+        e.Handled = true;
+        _wheel += e.Delta.Y;
+        var steps = (int)Math.Truncate(_wheel);
+        if (steps == 0)
+            return;
+        _wheel -= steps;
+        var size = Math.Clamp(FontSize + steps, ViewModels.CodeEditorViewModel.MinFontSize, ViewModels.CodeEditorViewModel.MaxFontSize);
+        if (size == FontSize)
+            return;
+        var view = TextArea.TextView;
+        var at = e.GetPosition(view).Y;
+        var line = Document is null ? null : view.GetDocumentLineByVisualTop(view.VerticalOffset + at);
+        // Where the line's top is from the pointer (at or above it), before the new size.
+        var above = line is null ? 0 : view.GetVisualTopByDocumentLine(line.LineNumber) - view.VerticalOffset - at;
+        var ratio = size / FontSize;
+        _wheelZoom = true;
+        try { FontSize = size; }
+        finally { _wheelZoom = false; }
+        if (line is null)
+            return;
+        UpdateLayout();
+        if (!line.IsDeleted)
+            ScrollToVerticalOffset(Math.Max(0, view.GetVisualTopByDocumentLine(line.LineNumber) - at - above * ratio));
+    }
 
     protected override Type StyleKeyOverride => typeof(TextEditor);
 
@@ -99,33 +161,20 @@ public sealed class CodeView : TextEditor
     protected override IVisualLineTransformer CreateColorizer(IHighlightingDefinition highlightingDefinition) => new DarkColorizer(highlightingDefinition);
 
     /// <summary>
-    /// The highlighting for a file, by its extension: AvaloniaEdit's own, and for the kinds it has none
-    /// of, the nearest it has (TypeScript as JavaScript, XAML and project files as XML, shaders as C++).
-    /// Markdown without its headings in bigger letters, which a code editor's lines don't take. Null
-    /// for the rest (and TeX, whose definition AvaloniaEdit can't load).
+    /// AvaloniaEdit's highlighting for a language of the Code editor's menu (<see cref="Core.Projects.CodeLanguages"/>):
+    /// Markdown without its headings in bigger letters, which a code editor's lines don't take. Null for
+    /// plain text, and for one AvaloniaEdit can't load.
     /// </summary>
-    public static IHighlightingDefinition? For(string path)
+    public static IHighlightingDefinition? Definition(string? language)
     {
-        var name = Path.GetExtension(path).ToLowerInvariant() switch
+        var name = language switch
         {
-            ".cs" or ".csx" => "C#",
-            ".js" or ".mjs" or ".cjs" or ".jsx" or ".ts" or ".mts" or ".cts" or ".tsx" => "JavaScript",
-            ".html" or ".htm" => "HTML",
-            ".css" or ".scss" or ".less" => "CSS",
-            ".c" or ".cc" or ".cpp" or ".cxx" or ".h" or ".hh" or ".hpp" or ".hxx" or ".inl" or ".hlsl" or ".glsl" or ".shader" or ".cginc" or ".compute" or ".usf" or ".ush" => "C++",
-            ".java" or ".kt" or ".kts" => "Java",
-            ".ps1" or ".psm1" or ".psd1" => "PowerShell",
-            ".php" => "PHP",
-            ".py" or ".pyw" => "Python",
-            ".sql" => "TSQL",
-            ".vb" => "VB",
-            ".xml" or ".xaml" or ".axaml" or ".csproj" or ".vbproj" or ".fsproj" or ".vcxproj" or ".props" or ".targets" or ".slnx" or ".resx"
-                or ".config" or ".manifest" or ".nuspec" or ".svg" or ".xsd" or ".xsl" or ".xslt" or ".plist" or ".uxml" => "XML",
-            ".md" or ".markdown" => "MarkDown",
-            ".json" or ".jsonc" or ".json5" or ".asmdef" or ".uplugin" or ".uproject" => "Json",
-            ".patch" or ".diff" => "Patch",
-            ".boo" => "Boo",
-            _ => null,
+            "Markdown" => "MarkDown",
+            "JSON" => "Json",
+            "SQL" => "TSQL",
+            "Diff" => "Patch",
+            "Visual Basic" => "VB",
+            _ => language,
         };
         try
         {

@@ -72,15 +72,31 @@ public sealed class FileChanges
 
     /// <summary>
     /// The project the agent worked in, for the Code editor panel: that of the first file it changed
-    /// (its git repository, solution or package, see <see cref="Projects.ProjectRoot"/>), else that
-    /// file's folder; null while it changed none.
+    /// (its git repository, solution or package, see <see cref="Projects.ProjectRoot"/>); for a file in
+    /// the folder of its own that what the agent makes gets in Documents\Sloperator (<see cref="Agent.AgentSetup.MadeDirectory"/>),
+    /// that folder, unless a project is found inside it ("Snake" for Snake\src\game.js); else that file's
+    /// folder. Null while it changed none.
     /// </summary>
-    public string? Project()
+    public string? Project() => Project(Agent.AgentSetup.MadeDirectory());
+
+    internal string? Project(string madeDirectory)
     {
         string? first;
         lock (_gate)
             first = _order.FirstOrDefault();
-        return first is null ? null : Projects.ProjectRoot.Find(first)?.Root ?? Path.GetDirectoryName(first);
+        if (first is null)
+            return null;
+        var root = Projects.ProjectRoot.Find(first)?.Root;
+        var made = Path.TrimEndingDirectorySeparator(madeDirectory) + Path.DirectorySeparatorChar;
+        if (first.StartsWith(made, StringComparison.OrdinalIgnoreCase))
+        {
+            var parts = first[made.Length..].Split(Path.DirectorySeparatorChar);
+            var task = parts.Length > 1 ? made + parts[0] : made.TrimEnd(Path.DirectorySeparatorChar);
+            // A project above the task's folder (Documents in a repository) isn't the task's.
+            if (root is null || !(root + Path.DirectorySeparatorChar).StartsWith(task + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return task;
+        }
+        return root ?? Path.GetDirectoryName(first);
     }
 
     /// <summary>Keeps the list in <paramref name="file"/> from now on (the chat's, once it has one), and writes it there now.</summary>

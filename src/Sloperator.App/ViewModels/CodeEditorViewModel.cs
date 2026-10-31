@@ -66,6 +66,7 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         });
         _watch = chat.Panels.WatchCode;
         _wrap = chat.Panels.WrapCode;
+        _fontSize = Math.Clamp(chat.Panels.CodeFontSize, MinFontSize, MaxFontSize);
         // A change made before the panel opened isn't followed: only the agent's next one.
         (_followedList, _followedNumber) = (chat.Changes, chat.Changes.LastChange?.Number ?? 0);
         _chat.ChangesUpdated += OnChangesUpdated;
@@ -125,6 +126,41 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
     partial void OnWrapChanged(bool value)
     {
         _chat.Panels.WrapCode = value;
+        _chat.SavePanels();
+    }
+
+    /// <summary>The size of the code's text (the user, 2026-10-31: Ctrl+wheel zooms it, as in VS Code); kept in settings.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ZoomText))]
+    [NotifyCanExecuteChangedFor(nameof(ZoomInCommand), nameof(ZoomOutCommand), nameof(ZoomResetCommand))]
+    private double _fontSize;
+
+    public const double DefaultFontSize = 12, MinFontSize = 8, MaxFontSize = 36;
+
+    /// <summary>How big the text is against its usual size, on the button between − and + (as the File inspector's zoom says it).</summary>
+    public string ZoomText => $"{FontSize / DefaultFontSize * 100:0}%";
+
+    private bool CanZoomOut() => HasFile && FontSize > MinFontSize;
+
+    private bool CanZoomIn() => HasFile && FontSize < MaxFontSize;
+
+    private bool CanZoomReset() => HasFile && FontSize != DefaultFontSize;
+
+    /// <summary>The bar under the code's − (the user, 2026-10-31: "zoom buttons below"), as Ctrl+wheel down a notch.</summary>
+    [RelayCommand(CanExecute = nameof(CanZoomOut))]
+    private void ZoomOut() => FontSize = Math.Max(MinFontSize, FontSize - 1);
+
+    /// <summary>+, as Ctrl+wheel up a notch.</summary>
+    [RelayCommand(CanExecute = nameof(CanZoomIn))]
+    private void ZoomIn() => FontSize = Math.Min(MaxFontSize, FontSize + 1);
+
+    /// <summary>The percentage between them, as Ctrl+0: back to the usual size.</summary>
+    [RelayCommand(CanExecute = nameof(CanZoomReset))]
+    private void ZoomReset() => FontSize = DefaultFontSize;
+
+    partial void OnFontSizeChanged(double value)
+    {
+        _chat.Panels.CodeFontSize = value;
         _chat.SavePanels();
     }
 
@@ -316,6 +352,7 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
     /// <summary>The text of the file open, as typed; null with none.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasFile), nameof(OpenPath), nameof(EmptyText), nameof(FileStatus))]
+    [NotifyCanExecuteChangedFor(nameof(ZoomInCommand), nameof(ZoomOutCommand), nameof(ZoomResetCommand))]
     private TextDocument? _document;
 
     private CodeFile? _file;
@@ -335,9 +372,20 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
 
     /// <summary>Edited since it was read or saved.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(FileStatus))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
+    [NotifyPropertyChangedFor(nameof(FileStatus), nameof(RevertName), nameof(RevertTip))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ReloadCommand))]
     private bool _isUnsaved;
+
+    /// <summary>
+    /// The button beside Save: Discard while there are edits not saved (the user, 2026-10-31: Reload
+    /// "should also switch to Discard when you made changes and didn't save them yet"), else Reload,
+    /// greyed, as the file shows what the disk has by itself then.
+    /// </summary>
+    public string RevertName => IsUnsaved ? "Discard" : "Reload";
+
+    public string RevertTip => IsUnsaved
+        ? "Throw away the edits not saved: the file as it is on disk"
+        : "The file shows what is on disk by itself while nothing is edited here";
 
     /// <summary>Changed on disk (by the agent, another program) while it had edits here not saved: Save keeps those, Reload takes the disk's.</summary>
     [ObservableProperty]
@@ -363,12 +411,43 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
             if (EncodingProblem is { } encoding)
                 return $"{where} · {encoding}";
             if (ChangedOnDisk)
-                return File.Exists(path) ? $"{where} · changed on disk too: Save keeps yours, Reload takes the file's" : $"{where} · deleted on disk: Save writes it again";
+                return File.Exists(path) ? $"{where} · changed on disk too: Save keeps yours, Discard takes the file's" : $"{where} · deleted on disk: Save writes it again";
             return IsUnsaved ? $"{where} · not saved" : where;
         }
     }
 
     // ---- encoding and line breaks ----------------------------------------------------------------
+
+    /// <summary>The language the file is highlighted as (one of <see cref="CodeLanguages.Names"/>); null for plain text.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LanguageName))]
+    private string? _language;
+
+    /// <summary>On its button in the file's bar: "C#", "Plain text".</summary>
+    public string LanguageName => Document is null ? "Language" : Language ?? CodeLanguages.PlainText;
+
+    /// <summary>Whether the language menu's entry is the one shown; null for Automatic, ticked while nothing was picked for the kind.</summary>
+    internal bool IsLanguage(string? name) => _file is { } file && (name is null
+        ? !_chat.Panels.CodeLanguages.ContainsKey(CodeLanguages.Key(file.Path))
+        : _chat.Panels.CodeLanguages.TryGetValue(CodeLanguages.Key(file.Path), out var picked) && picked == name);
+
+    /// <summary>
+    /// Another language picked for the file (a "Plain text" too), kept in settings for every file of its kind
+    /// (the user, 2026-10-31: "manually select highlighting if the file format is weird"); null, Automatic:
+    /// the one its extension says again.
+    /// </summary>
+    internal void PickLanguage(string? name)
+    {
+        if (_file is not { } file)
+            return;
+        var key = CodeLanguages.Key(file.Path);
+        if (name is null)
+            _chat.Panels.CodeLanguages.Remove(key);
+        else
+            _chat.Panels.CodeLanguages[key] = name;
+        _chat.SavePanels();
+        Language = CodeLanguages.For(file.Path, _chat.Panels.CodeLanguages);
+    }
 
     /// <summary>
     /// The encoding the file is written in on Save, on its button in the file's bar: its own when opened
@@ -475,7 +554,10 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         EncodingProblem = null;
         document.UndoStack.PropertyChanged += OnUndoChanged;
         document.TextChanged += OnTextChanged;
+        // Before the text: the editor highlights it as it shows it.
+        Language = CodeLanguages.For(file.Path, _chat.Panels.CodeLanguages);
         Document = document;
+        OnPropertyChanged(nameof(LanguageName));
         ReadLineBreaks();
         UpdateUnsaved();
         OnPropertyChanged(nameof(EncodingName));
@@ -498,8 +580,10 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         ChangedOnDisk = false;
         SaveProblem = null;
         EncodingProblem = null;
+        Language = null;
         OnPropertyChanged(nameof(EncodingName));
         OnPropertyChanged(nameof(LineBreakName));
+        OnPropertyChanged(nameof(LanguageName));
     }
 
     private void CloseFile()
@@ -562,16 +646,31 @@ public sealed partial class CodeEditorViewModel : ObservableObject, IFilePanel
         OnPropertyChanged(nameof(EncodingName));
     }
 
-    /// <summary>Reload: the file as it is on disk, in place of the edits not saved.</summary>
-    [RelayCommand(CanExecute = nameof(ChangedOnDisk))]
+    private bool CanRevert() => IsUnsaved || ChangedOnDisk;
+
+    /// <summary>Discard (Reload with nothing edited): the file as it is on disk, in place of the edits not saved and an encoding picked.</summary>
+    [RelayCommand(CanExecute = nameof(CanRevert))]
     private async Task ReloadAsync()
     {
         if (_file is not { } file || Document is not { } document)
             return;
         // The encoding picked goes with the edits: the file's own comes back.
         file.Encoding = file.SavedEncoding;
-        if (await file.ReadAgainAsync(CancellationToken.None) is not { } text || Document != document)
+        var text = await file.ReadAgainAsync(CancellationToken.None);
+        if (Document != document)
             return;
+        if (text is null)
+        {
+            // Deleted on disk: with the edits thrown away nothing is left of it to show.
+            if (!File.Exists(file.Path))
+            {
+                _chat.CodeDrafts.Remove(file.Path);
+                if (Tree.Find(file.Path) is { } row)
+                    row.IsUnsaved = false;
+                CloseFile();
+            }
+            return;
+        }
         Replace(document, text);
         document.UndoStack.MarkAsOriginalFile();
         ChangedOnDisk = false;
