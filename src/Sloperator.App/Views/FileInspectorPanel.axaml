@@ -17,24 +17,25 @@
                 ToolTip.Tip="Open a file" AutomationProperties.Name="Open file">
           <PathIcon Width="14" Height="14" Data="M19 20H4a2 2 0 0 1-2-2V6c0-1.11.89-2 2-2h6l2 2h7a2 2 0 0 1 2 2H4v10l2.14-8h17.07l-2.28 8.5c-.23.87-1.01 1.5-1.93 1.5z" />
         </Button>
-        <!-- Text and Area, the ways to select in the file, are always there, greyed where they don't apply
-             (their tooltips say why), so the bar doesn't change from one file to the next (the user,
-             2026-10-31). Prompt metadata isn't a selection: it is in the corner over the file (FileInspectorView).
-             Text: the file's text in place of how it looks (an SVG's source, a document's text), to select. -->
-        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding ShowText}" IsEnabled="{Binding CanShowText}" Margin="8,0,0,0"
-                      ToolTip.Tip="{Binding TextTip}" ToolTip.ShowOnDisabled="True" AutomationProperties.Name="Text">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <PathIcon Width="14" Height="14" Data="M2.5 4v3h5v12h3V7h5V4h-13zm19 5h-9v3h3v7h3v-7h3V9z" />
-            <TextBlock Text="Text" VerticalAlignment="Center" />
-          </StackPanel>
-        </ToggleButton>
-        <!-- Area: what is shown frozen, to drag over a part of it (a text, whose drags select text;
-             Windows' previewer, which takes the mouse itself). -->
-        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding AreaMode}" IsEnabled="{Binding CanFreeze}" Margin="8,0,0,0"
+        <!-- Area and Text, the ways to select in the file, at the bar's left, apart from the panel's own
+             buttons at its right (the user, 2026-10-31); always there, greyed where they don't apply (their
+             tooltips say why), so the bar doesn't change from one file to the next. Prompt metadata isn't a
+             selection: it is in the corner over the file (FileInspectorView).
+             Area: what is shown frozen, to drag over a part of it (made for a text, whose drags select text,
+             and Windows' previewer, which takes the mouse itself). -->
+        <ToggleButton DockPanel.Dock="Left" Classes="ghost" IsChecked="{Binding AreaMode}" IsEnabled="{Binding CanFreeze}" Margin="0,0,8,0"
                       ToolTip.Tip="{Binding AreaTip}" ToolTip.ShowOnDisabled="True" AutomationProperties.Name="Area">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Width="14" Height="14" Data="M3 3h4v2H5v2H3zm14 0h4v4h-2V5h-2zM3 17h2v2h2v2H3zm16 0h2v4h-4v-2h2zM9 3h6v2H9zm0 16h6v2H9zM3 9h2v6H3zm16 0h2v6h-2z" />
             <TextBlock Text="Area" VerticalAlignment="Center" />
+          </StackPanel>
+        </ToggleButton>
+        <!-- Text: the file's text in place of how it looks (an SVG's source, a document's text), to select. -->
+        <ToggleButton DockPanel.Dock="Left" Classes="ghost" IsChecked="{Binding ShowText}" IsEnabled="{Binding CanShowText}" Margin="0,0,12,0"
+                      ToolTip.Tip="{Binding TextTip}" ToolTip.ShowOnDisabled="True" AutomationProperties.Name="Text">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <PathIcon Width="14" Height="14" Data="M2.5 4v3h5v12h3V7h5V4h-13zm19 5h-9v3h3v7h3v-7h3V9z" />
+            <TextBlock Text="Text" VerticalAlignment="Center" />
           </StackPanel>
         </ToggleButton>
         <Panel>

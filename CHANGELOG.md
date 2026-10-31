@@ -27,8 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - File changes shows Wrap and Watch even before any file has changed, so its bar no longer shifts
   when the agent makes its first change.
-- File inspector's bar always shows **Text** and **Area**, greyed for a file they don't apply to (the
-  tooltip says why), so its buttons no longer come and go from one file to the next. Area works on every
+- File inspector's bar always shows **Area** and **Text**, at its left before the file's name, greyed for
+  a file they don't apply to (the tooltip says why), so its buttons no longer come and go from one file to the next. Area works on every
   file, pictures, videos, sounds and PDFs too. Text, in place of Code (an SVG's source), shows a file's
   text to select: an SVG's or a Markdown file's source, a CSV as written, the text of a Word,
   PowerPoint, Excel or PDF file or a web page.

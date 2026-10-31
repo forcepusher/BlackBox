@@ -3410,7 +3410,8 @@ the .docx in Word's previewer showed only the whole-document card.
 frame-by-frame player). A left drag over a PDF's page, a picture or a video's frame marks a box
 (`DocumentArea`, Core: its sides as parts of what it is on, and the page); a click marks nothing and
 unpicks. On a text, whose drags select text, and on Windows' previewer, which takes the mouse in its
-own window, **Area** in the panel's bar (a toggle) freezes the view; it is there for every file
+own window, **Area** in the panel's bar (a toggle at its left with Text, the two ways to select, apart
+from the panel's own buttons at its right, the user, 2026-10-31) freezes the view; it is there for every file
 (greyed with none open: until 2026-10-31 it was shown for those only, then greyed for the rest, then
 the user had it on for everything), so a picture, a video's frame (paused, as an animation, a sound
 or a model playing is), a waveform or a PDF's pages freeze too, the zoom buttons kept out of the
