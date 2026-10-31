@@ -63,7 +63,7 @@ public sealed partial class MainWindowViewModel
                 AddNotice($"The MCP server list could not be saved: {ex.Message}", isError: true, ex);
             }
         }
-        // They are Sloperator's settings, not this window's: "Approval" set to ask here holds the
+        // They are Sloperator's settings, not this window's: "Tool call approval" set to ask here holds the
         // other windows' agents too.
         _windows.SettingsApplied(this, updated, mcpSaved);
         if (dialog.Opened.Notify.WhenDone && !updated.Notify.WhenDone)

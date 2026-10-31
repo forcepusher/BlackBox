@@ -30,8 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chat. Pictures an SVG links on the web aren't fetched. Sloperator.exe is about 1.5 MB bigger.
 
 ### Changed
-- Settings → Safety: the dropdown for when Sloperator asks before acting is labelled **Approval**
-  (it read "Ask me first", next to choices like "Never ask").
+- Settings → Safety: the dropdown for when Sloperator asks before acting is labelled
+  **Tool call approval** (it read "Ask me first", next to choices like "Never ask").
 - Video generator looks like the other side panels: how the piece shown was made sits in a column
   beside the viewer that is always there, so the picture no longer jumps with every pick; play, the
   playhead's time, the zoom (− / % / +) and the status line are in a bar under the timeline; the play
