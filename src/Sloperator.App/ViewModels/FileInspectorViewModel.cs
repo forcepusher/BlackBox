@@ -521,6 +521,12 @@ public sealed partial class FileInspectorViewModel : ObservableObject, IFilePane
 
     public string ZoomText => Zoom <= 1.001 ? "Fit" : $"{Zoom * 100:0}%";
 
+    /// <summary>
+    /// The zoom's widest text: the button between − and + is as wide at every zoom and for every file
+    /// (pictures go to 3200%); only a long sound zoomed in past 1000 times widens it.
+    /// </summary>
+    public static IReadOnlyList<string> ZoomSlot { get; } = ["Fit", "10000%"];
+
     partial void OnZoomChanged(double value)
     {
         if (Pages is { } pages)

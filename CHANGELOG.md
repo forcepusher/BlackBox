@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   version and the zoom buttons stay in place and are greyed, with a tip saying why, when they can't be used.
 - Video generator's **Make the video** is a grey button like the others in its bar, no longer lit
   yellow all the time.
+- The zoom buttons under the File inspector, Code editor and Video generator stay in place as you
+  zoom, and the Code editor's language, encoding and line-break buttons keep their size when a file
+  opens. Greyed, those three look like the other greyed buttons, and the Code editor's greyed buttons
+  say why in their tips. The Code editor panel's narrowest width is a little wider so they all fit.
 - Settings opens on what Sloperator should always know, at the top of General; Updates comes first
   in Advanced.
 - File changes shows Wrap and Watch even before any file has changed, so its bar no longer shifts

@@ -29,6 +29,16 @@ public interface ISidePanel : IDisposable
     bool Drop(IReadOnlyList<string> paths);
 }
 
+/// <summary>A side panel that follows the agent's edits, with Wrap and Watch in its top bar (File changes, Code editor; see WatchToggles).</summary>
+public interface IWatchPanel : ISidePanel
+{
+    /// <summary>Long lines wrap inside the panel; kept in settings.</summary>
+    bool Wrap { get; set; }
+
+    /// <summary>The panel goes to what the agent changes as it changes it; kept in settings.</summary>
+    bool Watch { get; set; }
+}
+
 /// <summary>A side panel that shows one file, which a file's right-click menu opens in it (File inspector, Code editor).</summary>
 public interface IFilePanel : ISidePanel
 {
@@ -74,7 +84,7 @@ public sealed partial class MainWindowViewModel
         new(FileInspectorName, "Look inside any file", 420, 0,
             vm => new FileInspectorViewModel(vm._previews, vm, vm._paths.PastedDir),
             OpenIn: "Inspector", Opens: path => !LocalFolder(path)),
-        new("Code editor", "Browse and edit a folder's files", 736, 0,
+        new("Code editor", "Browse and edit a folder's files", 800, 0,
             vm => new CodeEditorViewModel(vm),
             OpenIn: "Code editor", Opens: Core.Documents.FileInspector.IsText),
         new("Video generator", "Plan and make a video shot by shot", 770, 633,

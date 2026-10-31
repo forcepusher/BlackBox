@@ -230,8 +230,10 @@
                     ToolTip.Tip="{Binding ZoomOutTip}" AutomationProperties.Name="Zoom out">
               <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
             </Button>
-            <Button Classes="ghost small act" MinWidth="48" HorizontalContentAlignment="Center" Command="{Binding ZoomResetCommand}" Content="{Binding ZoomText}"
-                    ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding ZoomResetTip}" AutomationProperties.Name="Zoom to 100%" />
+            <Button Classes="ghost small act" HorizontalContentAlignment="Center" Command="{Binding ZoomResetCommand}"
+                    ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding ZoomResetTip}" AutomationProperties.Name="Zoom to 100%">
+              <views:SlotText Text="{Binding ZoomText}" Slot="{x:Static vm:VideoGeneratorViewModel.ZoomSlot}" TextAlignment="Center" TextElement.FontFeatures="+tnum" />
+            </Button>
             <Button Classes="ghost icon small act" Command="{Binding ZoomInCommand}" ToolTip.ShowOnDisabled="True"
                     ToolTip.Tip="{Binding ZoomInTip}" AutomationProperties.Name="Zoom in">
               <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />

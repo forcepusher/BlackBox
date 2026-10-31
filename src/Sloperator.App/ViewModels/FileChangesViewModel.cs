@@ -160,7 +160,7 @@ public sealed partial class DiffRow(DiffFileItem file, DiffLine? line) : Observa
 /// sent from there carries them for the model: the user asks about them, has them explained,
 /// reviewed or changed (the user's request, 2026-10-24).
 /// </summary>
-public sealed partial class FileChangesViewModel : ObservableObject, ISidePanel
+public sealed partial class FileChangesViewModel : ObservableObject, IWatchPanel
 {
     private readonly MainWindowViewModel _chat;
     private readonly DispatcherTimer _refreshTimer;
