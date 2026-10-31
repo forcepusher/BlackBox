@@ -1869,8 +1869,9 @@ What they share, and how they keep out of each other's way:
   what another window saved while it was open: its copy took that back in every window's memory): "Ask me first" turned on in one window
   left the other's agent acting without asking. A new window starts with what was saved last.
 - **Chats.** A chat is open in one window at a time: two saving their own runs into one file lost
-  one of them. One another window has open says so in History ("Open in another window", no trash
-  button), and picking it brings that window forward. History rereads the folder whenever it opens,
+  one of them. One another window has open says so in History ("Open in another window", its trash
+  button greyed, "Close it in its window to delete it"; hidden until 2026-10-31, when the user had
+  every row keep the same buttons), and picking it brings that window forward. History rereads the folder whenever it opens,
   for the chats other windows started. One saver writes every window's chats, so a window opening a
   chat another just left waits for its last version.
 - **The screen.** Every window, Video generator, the viewer and a dialog is the process's own, so all of

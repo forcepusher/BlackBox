@@ -18,10 +18,13 @@ public sealed partial class PastChat(ChatHeader header, Action<PastChat> open, A
     [ObservableProperty]
     private bool _isCurrent;
 
-    /// <summary>Open in another Sloperator window: picking it brings that window forward, and it can't be deleted from here.</summary>
+    /// <summary>Open in another Sloperator window: picking it brings that window forward, and its trash button is greyed.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(When))]
+    [NotifyPropertyChangedFor(nameof(When), nameof(DeleteTip))]
     private bool _isElsewhere;
+
+    /// <summary>The trash button is on every row, greyed for a chat another window has (the user, 2026-10-31: rows shouldn't differ).</summary>
+    public string DeleteTip => IsElsewhere ? "Close it in its window to delete it" : "Delete this chat";
 
     /// <summary>"14:05" today, "Yesterday", "Oct 3" this year, else "Oct 3, 2025"; or that another window has it.</summary>
     public string When
