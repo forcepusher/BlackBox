@@ -3312,18 +3312,28 @@ any file's right-click menu (see [Previews](#previews)), opens it on that file
 the window lays the panel out before it grows); picked from the dropdown it waits for an Inspect, a
 file dropped on it, or one picked with the folder button. With no file, its top bar says how it is
 used, "Select text, cells or an area to ask about it." (muted, cut short with "…" as File changes'
-line is; the user, 2026-10-30: the bar was empty but for the buttons). Its top bar has the file's name, what it is, the folder (Open
-file: a picker in the shown file's folder, listing "Files it shows" first, then each kind from
+line is; the user, 2026-10-30: the bar was empty but for the buttons). Its top bar has the file's name, what it is, **Open file** (the folder icon and its name, as the Code editor's Open folder since 2026-10-31;
+a picker in the shown file's folder, listing "Files it shows" first, then each kind from
 `FileInspector.PickerTypes`, then All files, since anything else opens in hex; the user's request,
 2026-10-26, not Open in the default program, which the cards no longer have) and the × that closes it; Show in folder was there too until the user had it taken off (2026-10-25), as the file's card in the chat has it. For a picture, animation, video, sound or 3D model that says
 how it was made (`MediaRecipe.Read`, run beside the file's own load so a large file's wait doesn't
-hold the picture), the panel has **Prompt metadata**: a toggle in the corner over the file, left of the zoom buttons, that
-shows its prompts and settings under the file, in a section at most half the panel's height (set on
-resize in `FileInspectorPanel`) that scrolls past that; it stays on from one file to the next, and is
-there only for a file that says how it was made (`ShowsPromptButton`). Until 2026-10-31 it was
-"Prompt" in the panel's bar; the user had it renamed, then moved out of the bar, as it isn't a way to
-select as Text and Area are, the bar's buttons staying the same for every file. It is in the panel only, not in `FileInspectorView`, so the full-screen viewer's peek at a
-document doesn't carry it. A message sent
+hold the picture), the panel has **Prompt metadata**: a toggle at the right of the bar under the file, that
+shows its prompts and settings between the file and that bar, in a section at most half the view's height (set on
+resize in `FileInspectorView`) that scrolls past that; it stays on from one file to the next. It is there for every file,
+greyed for one that doesn't say how it was made (`PromptTip` says why). Until 2026-10-31 it was
+"Prompt" in the panel's top bar; the user had it renamed, then moved out of that bar, as it isn't a way to
+select as Text and Area are; it sat in the corner over the file beside the zoom buttons, shown only for a file
+with prompts, until the user had both put in a bar along the foot as the Code editor's (same day). It is in the full-screen viewer too
+(greyed for most documents there), so the bar is the same wherever the file is shown (the user, 2026-10-31: "Keep the bottom bar always visible").
+
+**The bar under the file** (`Border.bar.slim.foot`, Padding 8,4, in `FileInspectorView` so the
+full-screen viewer's document has it too): **−**, the zoom ("Fit" or a percentage, back to fit)
+and **+** at its left, Prompt metadata at its right, as the Code editor's zoom buttons and status sit under its code.
+Every control is there for every file, greyed (`Button.act`, `ToolTip.ShowOnDisabled`) where it does
+nothing: the zoom for a file that doesn't zoom ("This file doesn't zoom", "Open a file first"), − and Fit at
+fit, + at the most (`CanZoomIn`/`CanZoomOut`, told by `OnPropertyChanged` as CanZoom follows many
+properties). The user's rule (2026-10-31): bar controls never appear, vanish or move mid-task. Being under
+the file, not over it, they are out of Area's still without hiding them for the frame it is read in. A message sent
 while it shows a file carries "File inspector · name" over the bubble and tells the model which file
 is open, so "what does this say" is about it. Which way a file is shown (`FileInspector.KindOf`,
 by its extension, the formats Sloperator already reads and writes; the file itself is `FileInspectorView`,
@@ -3455,8 +3465,7 @@ own window, **Area** in the panel's bar (a toggle at its left with Text, the two
 from the panel's own buttons at its right, the user, 2026-10-31) freezes the view; it is there for every file
 (greyed with none open: until 2026-10-31 it was shown for those only, then greyed for the rest, then
 the user had it on for everything), so a picture, a video's frame (paused, as an animation, a sound
-or a model playing is), a waveform or a PDF's pages freeze too, the zoom buttons kept out of the
-still: it is read
+or a model playing is), a waveform or a PDF's pages freeze too: it is read
 off the screen (`WindowPixels`, Platform.Windows: the region of Sloperator's window, its other windows
 over it left out of the capture, as the agent's screenshots do) and shown as a still in a `ZoomBox`
 to drag over; the live previewer's window is hidden meanwhile, as nothing can draw over a native
