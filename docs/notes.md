@@ -2621,7 +2621,7 @@ prints the traceback and exits with 0.
 | `screenshot` | Captures a screen scaled down to fit the max screenshot size, on the 32px vision grid; `screen=N` looks at another monitor |
 | `mouse_click` | Clicks at x/y (see below); `modifiers` holds keys through the click, as in Ctrl+click to add to a selection or Shift+click to select a range |
 | `zoom` | A sharp, enlarged picture of the region around x/y, with rulers in screenshot coordinates, to aim at small things (see below) |
-| `capture_result` | A picture of what the agent made for the user: a window (`window`, part of its title), a box (`x`, `y`, `width`, `height`) or the whole screen, with a `caption` (see below) |
+| `capture_result` | A picture of what the agent made for the user: a window (`window`, part of its title), a box (`x`, `y`, `width`, `height`) or the whole screen, with a `caption`; `before` (an earlier capture's number or a picture's path) puts the two side by side as Before and After (see below) |
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Typing as key presses (see below) and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
@@ -2662,6 +2662,13 @@ zoom's quality, no larger than a screenshot of that screen. The app names the ch
 for this. When the run ends, its last capture also shows in its last reply, under the words, with
 the caption (`ChatEntry.Capture`/`Caption`, so a reopened chat has it). A "done" claim whose only
 calls are looks ends the turn, but not when one of them is `capture_result`.
+
+**Before and after**: each capture says its number (capture-N.png). With `before` the new one is still kept as
+capture-N.png, and the user (and the model) get `capture-N-compared.png`: the two under "Before" and
+"After" labels on the chat's dark grey, at the smaller one's scale (never enlarged), side by side or
+one over the other, whichever comes out nearer 4:3 (the chat shows a picture at most 480 wide, and two
+wide windows side by side were a strip). The prompt asks for a capture before changing something already
+on screen. A `before` that isn't there is an argument error before anything is captured.
 
 Models often fumble tool-call syntax, so Sloperator repairs calls on the fly: Qwen XML, Gemma 4 and
 JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…) and misnamed

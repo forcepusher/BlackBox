@@ -80,7 +80,7 @@ public class CaptureResultTests : IDisposable
         // The frontmost window that has the words in its title, cut to the screen.
         var result = await Capture(ctx, new JsonObject { ["window"] = "untitled" });
         Assert.Equal(new ScreenRect(0, 600, 450, 296), platform.Captures[^1]);
-        Assert.Contains("the window \"Untitled - Paint\", 450x296", result.Text);
+        Assert.Contains("the window \"Untitled - Paint\" as capture 1, 450x296", result.Text);
 
         // A title that is the whole of one goes before one that only has it in it.
         platform.Windows.Insert(0, new("Paint 3D", new ScreenRect(10, 10, 100, 100)));
@@ -183,8 +183,102 @@ public class CaptureResultTests : IDisposable
 
         var screens = new[] { new ScreenSpace(Plain, (1600, 896)) };
         Assert.Contains("capture it with capture_result, cropped to what you made", SystemPrompt.Build("Test OS", screens, "C:\\", ""));
+        Assert.Contains("capture it before you start too, and pass that capture as before", SystemPrompt.Build("Test OS", screens, "C:\\", ""));
         Assert.Contains("capture it with capture_result", SystemPrompt.Build("Test OS", screens, "C:\\", "", control: false));
         Assert.DoesNotContain("capture_result", SystemPrompt.Build("Test OS", null, "C:\\", ""));
+    }
+
+    /// <summary>A desktop of one colour, for a capture to tell before from after by.</summary>
+    private static RawImage Filled(SKColor color)
+    {
+        var pixels = new byte[Plain.Width * Plain.Height * 4];
+        for (var i = 0; i < pixels.Length; i += 4)
+            (pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]) = (color.Blue, color.Green, color.Red, 255);
+        return new RawImage(Plain.Width, Plain.Height, pixels);
+    }
+
+    [Fact]
+    public async Task An_earlier_capture_as_before_puts_the_two_side_by_side_under_labels()
+    {
+        var platform = new FakePlatform { Screens = [Plain], Desktop = Filled(SKColors.Red) };
+        var ctx = Ctx(platform);
+        var first = await Capture(ctx, Box(100, 100, 300, 200));
+        Assert.Contains("as capture 1, 300x200", first.Text);
+        Assert.Contains("pass before=1", first.Text);
+
+        platform.Desktop = Filled(SKColors.Blue);
+        var result = await Capture(ctx, new JsonObject { ["x"] = 100, ["y"] = 100, ["width"] = 300, ["height"] = 200, ["before"] = "1", ["caption"] = "Red to blue" });
+
+        // The after alone is kept too, as capture 2; the user gets the two together.
+        Assert.True(File.Exists(Path.Combine(_chat, "capture-2.png")));
+        var both = Assert.Single(result.Files!);
+        Assert.Equal(Path.Combine(_chat, "capture-2-compared.png"), both);
+        Assert.Contains("after capture 1", result.Text);
+        Assert.Contains("Before and After", result.Text);
+        using (var png = SKBitmap.Decode(both))
+        {
+            // Two 300x200 pictures: side by side (616x240) is nearer 4:3 than one over the other (300x496).
+            Assert.Equal((616, 240), (png.Width, png.Height));
+            Assert.Equal(SKColors.Red, png.GetPixel(150, 140));
+            Assert.Equal(SKColors.Blue, png.GetPixel(316 + 150, 140));
+            // Labels in the band over each.
+            Assert.True(Enumerable.Range(0, 300).Any(x => Enumerable.Range(0, 40).Any(y => png.GetPixel(x, y).Red > 200 && png.GetPixel(x, y).Blue > 200)));
+            Assert.True(Enumerable.Range(316, 300).Any(x => Enumerable.Range(0, 40).Any(y => png.GetPixel(x, y).Red > 200 && png.GetPixel(x, y).Blue > 200)));
+        }
+        // The model sees the comparison too.
+        Assert.Equal((616, 240), SizeOf(result.Image!));
+        Assert.Equal("Capture the result at (100, 100), 300x200, beside capture 1",
+            new CaptureResultTool().Describe(new JsonObject { ["x"] = 100, ["y"] = 100, ["width"] = 300, ["height"] = 200, ["before"] = "capture 1" }));
+    }
+
+    [Fact]
+    public async Task Wide_pictures_go_one_over_the_other_and_sizes_are_matched()
+    {
+        var platform = new FakePlatform { Screens = [Plain], Desktop = Filled(SKColors.Red) };
+        var ctx = Ctx(platform);
+        await Capture(ctx, Box(0, 0, 800, 200));
+        var stacked = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 800, ["height"] = 200, ["before"] = "capture-1.png" });
+        // Side by side would be 1616x240; one over the other, 800x496, is nearer 4:3.
+        Assert.Equal((800, 496), SizeOf(File.ReadAllBytes(stacked.Files![0])));
+
+        // A larger before is brought down to the after's scale, never the after enlarged: 400x300 next to 200x150 is 200x150.
+        await Capture(ctx, Box(0, 0, 400, 300));
+        var matched = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 200, ["height"] = 150, ["before"] = 3 });
+        Assert.Equal((416, 190), SizeOf(File.ReadAllBytes(matched.Files![0])));
+    }
+
+    [Fact]
+    public async Task A_picture_file_can_be_the_before()
+    {
+        var platform = new FakePlatform { Screens = [Plain], Desktop = Filled(SKColors.Blue) };
+        var ctx = Ctx(platform);
+        Directory.CreateDirectory(_chat);
+        var design = Path.Combine(_chat, "design.png");
+        using (var bitmap = new SKBitmap(300, 200))
+        {
+            bitmap.Erase(SKColors.Red);
+            using var png = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+            File.WriteAllBytes(design, png.ToArray());
+        }
+        var result = await Capture(ctx, new JsonObject { ["x"] = 0, ["y"] = 0, ["width"] = 300, ["height"] = 200, ["before"] = design });
+        Assert.Contains("after design.png", result.Text);
+        using var both = SKBitmap.Decode(result.Files![0]);
+        Assert.Equal(SKColors.Red, both.GetPixel(150, 140));
+    }
+
+    [Fact]
+    public async Task A_before_that_isnt_there_is_explained_before_anything_is_captured()
+    {
+        var platform = new FakePlatform { Screens = [Plain] };
+        var ctx = Ctx(platform);
+        Assert.Contains("Nothing has been captured yet", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["before"] = "1" }))).Message);
+        Assert.Empty(platform.Captures);
+
+        await Capture(ctx, []);
+        await Capture(ctx, []);
+        Assert.Contains("Its captures: 1, 2.", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["before"] = "#7" }))).Message);
+        Assert.Contains("There is no picture at", (await Assert.ThrowsAsync<ToolArgumentException>(() => Capture(ctx, new JsonObject { ["before"] = @"C:\nowhere\old.png" }))).Message);
+        Assert.Equal(2, platform.Captures.Count);
     }
 
     [Fact]
