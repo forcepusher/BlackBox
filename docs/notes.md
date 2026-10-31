@@ -883,14 +883,14 @@ opening on a narrow screen left the chat only 330. Video generator also needs th
 (`SidePanelOption.MinHeight`; the chat alone 513; both with the title bar, see Title bar), else its viewer is squeezed to nothing over the
 timeline; a shorter window grows to it as the panel opens. The video's name was in a StackPanel across,
 which gives a TextBlock all the room it wants: it was never cut short and pushed the fields over the
-buttons. The panel has a viewer with how the piece shown was made under it, and the
-timeline under that; its top bar has the video's name (its menu, see below), the frame size and frame
+buttons. The panel has a viewer with how the piece shown was made beside it, the
+timeline under them and a bar under that (see "Looks as the other panels" below); its top bar has the video's name (its menu, see below), the frame size and frame
 rate, and **Make the video** (the user, 2026-10-24: "Get rid of the settings button
 altogether, put frame size and framerate fields at the top"; the cog's title went with the folder's
 name, its soundtrack and shots' sound sliders with the levels they set). A **New video** button beside
 Make the video went on 2026-10-25: the videos' menu has New video. Make the video is a ghost
 button as the bar's others since 2026-10-31: yellow (`primary`), the only one lit in the bar, it
-looked lit all the time (the user). A new video is called "Untitled video"
+looked lit all the time (the user). Since the same day it is greyed while there is nothing to make the video from (no clips, or a clip that doesn't say what happens in it), its tip saying which; a click once put that on the status line. A new video is called "Untitled video"
 ("Untitled video 2" when that folder is taken), not "New video", which read as the menu's item.
 
 **All of the video is worked on in the timeline** (the user's call, 2026-10-24: "work on the film
@@ -937,8 +937,31 @@ versions), and Versions. The video's
 name at the top opens the videos' menu: each video to open, New video, Rename (renaming the open video
 lets go of what the viewer plays first: Windows doesn't move a folder a file in it is open from),
 Delete (the video changed last opens) and Show in Explorer. Nothing is renamed or deleted while the
-chat is at work on the video. A line over the timeline says what right-click and dropping do, until
+chat is at work on the video. The line in the bar under the timeline says what right-click and dropping do, until
 the status line has something to say: nothing showed the menu was there (the user, 2026-10-24).
+
+**Looks as the other panels** (2026-10-31, a review asked for by the user through the coordinator, after
+the File inspector's and Code editor's bars: grey buttons, a bar's buttons always there, nothing coming,
+going or moving mid-task, greyed with a tip when they don't apply). What changed:
+- How the piece shown was made is a column right of the viewer, `VideoGeneratorViewModel.DetailsWidth`
+  (280) wide, always there, scrolling past its height, with a grey line while nothing is picked. Under the
+  viewer, shown only with something picked and as tall as its text (at most 190), it moved the picture
+  with every pick (item 6 of the audit of UI changing mid-task proposed a fixed height there instead; a
+  column takes nothing off the viewer's height, which is what limits a landscape video: at the window's
+  least height the viewer is 240 px high at 125%, where it was 165 with a piece picked).
+- **Use this version** is always at the column's top, a small ghost button, greyed but for a version
+  shown, its tip saying how to get one (it was yellow and shown only with a version).
+- The timeline's head strip (40 high, its own padding, a yellow round play, the playhead's time in
+  yellow Consolas, − and + as text) is a bar under the timeline as the File inspector's and the Code
+  editor's (`Border.bar.slim.foot`, Padding 8,4): play (a small ghost icon), the time (muted, 12,
+  tabular figures), − / % / + (the percentage against the usual 64 px a second, which it goes back to;
+  each greyed at its end with a tip: 12 and 240), the status line and the video's length.
+- Make the video and + Sound line greyed where they can't act (+ Sound line did nothing at 12 lines).
+- A clip's and sound's edge handles are grey (`BbControlBorderHover`), yellow under the pointer and on
+  the one picked: a 20% yellow on every edge looked lit all the time, as Make the video did.
+- The viewer's players: play a ghost icon (32, its icon 14) as the File inspector's, the time in
+  tabular figures (its width changed with the digits and moved the slider); a sound's yellow round play
+  is grey too. The chat's sound card still has its round yellow play (not part of this review).
 
 **A clip's frames** sit as slots at its block's ends (`FrameSlot`, 2026-10-26: the user found them
 only on the clip's right-click menu, which went then, as two controls for one thing). Made, a slot
@@ -1244,7 +1267,7 @@ version made beside a piece left it without its prompt), and so does a shot of s
 stopped before one replaced its clip (the versions made so far stay). A speaking shot's version keeps
 its line with it (`s1.v1.wav` and `s1.line.v1.flac`): put back without it, the newer line
 played over the older lips, and the shot read as up to date. A version is picked from its piece's
-right-click menu (Versions), and **Use this version** under the viewer puts it back; a sound's goes
+right-click menu (Versions), and **Use this version** beside the viewer puts it back; a sound's goes
 back where the sound is now on its sound line. The joined video then holds the old clip: a joined
 video older than a clip or sound file in it (`Storyboard.JoinedIsStale`, by file times) reads "all
 made, not joined since" in the panel and "not joined since the latest changes" on the whole video's

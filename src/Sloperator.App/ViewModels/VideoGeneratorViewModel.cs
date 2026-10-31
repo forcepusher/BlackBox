@@ -185,12 +185,17 @@ public sealed partial class VideoGeneratorViewModel : ObservableObject, ISidePan
     /// <summary>A card on the References row, and the room between two.</summary>
     public const double CardWidth = 96, CardGap = 6;
 
+    /// <summary>How wide the column of how the piece shown was made is, right of the viewer: the viewer is short of height, not width.</summary>
+    public const double DetailsWidth = 280;
+
     /// <summary>How tall a sound line is.</summary>
     public const double SoundLineHeight = 48;
 
     /// <summary>How many pixels a second takes on the timeline: the zoom.</summary>
     [ObservableProperty]
-    private double _pps = 64;
+    [NotifyPropertyChangedFor(nameof(ZoomText), nameof(ZoomInTip), nameof(ZoomOutTip), nameof(ZoomResetTip))]
+    [NotifyCanExecuteChangedFor(nameof(ZoomInCommand), nameof(ZoomOutCommand), nameof(ZoomResetCommand))]
+    private double _pps = DefaultPps;
 
     partial void OnPpsChanged(double value) => Relayout();
 
@@ -254,13 +259,40 @@ public sealed partial class VideoGeneratorViewModel : ObservableObject, ISidePan
         OnPropertyChanged(nameof(PlayheadX));
         OnPropertyChanged(nameof(LengthText));
         OnPropertyChanged(nameof(SoundLinesHeight));
+        // What the bars' buttons can do follows the clips and sound lines: greyed, never hidden.
+        MakeVideoCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(MakeVideoTip));
+        OnPropertyChanged(nameof(CanAddSoundLine));
+        OnPropertyChanged(nameof(AddSoundLineTip));
     }
 
-    [RelayCommand]
-    private void ZoomIn() => Pps = Math.Min(240, Pps * 1.25);
+    /// <summary>The usual zoom (100% on the button between − and +), and how far it goes either way.</summary>
+    public const double DefaultPps = 64, MinPps = 12, MaxPps = 240;
 
-    [RelayCommand]
-    private void ZoomOut() => Pps = Math.Max(12, Pps / 1.25);
+    /// <summary>How close the timeline is against its usual zoom, as the Code editor's zoom says it.</summary>
+    public string ZoomText => $"{Pps / DefaultPps * 100:0}%";
+
+    private bool CanZoomIn() => Pps < MaxPps;
+
+    private bool CanZoomOut() => Pps > MinPps;
+
+    private bool CanZoomReset() => Pps != DefaultPps;
+
+    public string ZoomInTip => CanZoomIn() ? "See it closer (Ctrl + wheel)" : "As close as it goes";
+
+    public string ZoomOutTip => CanZoomOut() ? "See more of the video (Ctrl + wheel)" : "As far out as it goes";
+
+    public string ZoomResetTip => CanZoomReset() ? "Back to 100%" : "At 100% already";
+
+    [RelayCommand(CanExecute = nameof(CanZoomIn))]
+    private void ZoomIn() => Pps = Math.Min(MaxPps, Pps * 1.25);
+
+    [RelayCommand(CanExecute = nameof(CanZoomOut))]
+    private void ZoomOut() => Pps = Math.Max(MinPps, Pps / 1.25);
+
+    /// <summary>The percentage between − and +: back to the usual zoom.</summary>
+    [RelayCommand(CanExecute = nameof(CanZoomReset))]
+    private void ZoomReset() => Pps = DefaultPps;
 
     /// <summary>The time under a point of the timeline, in seconds.</summary>
     public double SecondsAt(double x) => Math.Max(0, (x - Lead) / Math.Max(1, Pps));

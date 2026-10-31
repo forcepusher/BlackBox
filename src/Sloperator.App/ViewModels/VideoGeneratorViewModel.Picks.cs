@@ -202,12 +202,16 @@ public sealed partial class VideoGeneratorViewModel
         foreach (var card in References)
             card.IsSelected = card.Frame is { } f ? ReferenceEquals(f, piece) : value is not null && SamePath(card.Path, value.Path);
         OnPropertyChanged(nameof(IsVersionShown));
+        OnPropertyChanged(nameof(UseVersionTip));
         RefreshViewer();
         RefreshDetails();
     }
 
     /// <summary>A version is shown: it can be put back in the video.</summary>
     public bool IsVersionShown => Viewing?.Version is not null;
+
+    /// <summary>Use this version's tip: what it does, else how to get a version (it is always there, greyed without one).</summary>
+    public string UseVersionTip => IsVersionShown ? "Use this version (the current one is kept)" : "Pick an older version: right-click a piece, Versions";
 
     /// <summary>The viewer's content: a picture, a clip, a sound or the video with its player, or a card for what has none.</summary>
     [ObservableProperty]

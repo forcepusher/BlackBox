@@ -29,8 +29,10 @@
     <Style Selector="Border.clip">
       <Setter Property="Background" Value="#2A3A4A" />
     </Style>
+    <!-- A clip's or sound's edge to drag: grey, yellow only under the pointer or on the one picked (a yellow
+         tint on every edge looked lit all the time, as Make the video did). -->
     <Style Selector="Border.handle">
-      <Setter Property="Background" Value="#33FCC21B" />
+      <Setter Property="Background" Value="{StaticResource BbControlBorderHover}" />
     </Style>
     <Style Selector="Border.handle:pointerover">
       <Setter Property="Background" Value="{StaticResource BbAccent}" />
@@ -118,12 +120,15 @@
          A right-click on it: the file's menu (see FileMenu). -->
     <DataTemplate DataType="vm:VideoPreview">
       <DockPanel>
+        <!-- Its player as the File inspector's: play, the slider, where it is in even-width figures (the
+             slider jiggled as the time's width changed). -->
         <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-          <Button DockPanel.Dock="Left" Classes="ghost icon small" Command="{Binding PlayCommand}" VerticalAlignment="Center" AutomationProperties.Name="Play or pause">
-            <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" />
+          <Button DockPanel.Dock="Left" Classes="ghost icon" Command="{Binding PlayCommand}" VerticalAlignment="Center"
+                  ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause">
+            <PathIcon Data="{Binding PlayIcon}" Width="14" Height="14" />
           </Button>
-          <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
-          <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" Margin="8,-8,0,-8" VerticalAlignment="Center" />
+          <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" FontSize="12" FontFeatures="+tnum" VerticalAlignment="Center" Margin="12,0,4,0" />
+          <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" Margin="8,0,0,0" VerticalAlignment="Center" />
         </DockPanel>
         <Button Classes="bare" Click="OnMediaClick" ToolTip.Tip="Full screen" AutomationProperties.Name="Video full screen" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                 views:FileMenu.Image="{Binding Frame}" views:FileMenu.File="{Binding Path}">
@@ -146,12 +151,12 @@
 
     <DataTemplate DataType="vm:AudioPreview">
       <DockPanel VerticalAlignment="Center" MaxWidth="640" Background="Transparent" views:FileMenu.File="{Binding Path}">
-        <Button DockPanel.Dock="Left" Classes="accent" Width="40" Height="40" CornerRadius="20" Padding="0" Background="{StaticResource BbAccent}"
-                HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                Command="{Binding PlayCommand}" VerticalAlignment="Center" AutomationProperties.Name="Play or pause sound">
-          <PathIcon Data="{Binding PlayIcon}" Width="16" Height="16" Foreground="{StaticResource BbOnAccent}" />
+        <!-- Play as the File inspector's sound player's: grey (it was a yellow circle, lit all the time). -->
+        <Button DockPanel.Dock="Left" Classes="ghost icon" Command="{Binding PlayCommand}" VerticalAlignment="Center"
+                ToolTip.Tip="Play or pause" AutomationProperties.Name="Play or pause sound">
+          <PathIcon Data="{Binding PlayIcon}" Width="14" Height="14" />
         </Button>
-        <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="8,0,0,0" />
+        <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding TimeText}" FontSize="12" FontFeatures="+tnum" VerticalAlignment="Center" Margin="12,0,0,0" />
         <Panel Height="64" Margin="12,0,0,0">
           <Image Source="{Binding Waveform}" Stretch="Fill" />
           <Slider Minimum="0" Maximum="{Binding Length}" Value="{Binding Position}" VerticalAlignment="Center" Opacity="0.85" />
@@ -181,8 +186,9 @@
       <DockPanel MinHeight="32">
         <views:SidePanelClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
         <!-- A ghost button as every other in the bar: yellow (primary), it looked lit all the time. -->
-        <Button DockPanel.Dock="Right" Classes="ghost" Content="Make the video" Command="{Binding MakeVideoCommand}"
-                ToolTip.Tip="Makes what's missing or changed, checks it and joins the video" />
+        <!-- Greyed while there is nothing to make it from, its tip saying why. -->
+        <Button DockPanel.Dock="Right" Classes="ghost act" Content="Make the video" Command="{Binding MakeVideoCommand}"
+                ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding MakeVideoTip}" />
         <!-- Short of room (the window made narrower), the video's name is cut short rather than the
              fields going over the buttons: its column is the one that gives way. -->
         <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left" Margin="0,0,12,0">
@@ -207,25 +213,41 @@
       </DockPanel>
     </Border>
 
+    <!-- A bar along the foot, as the File inspector's and the Code editor's (2026-10-31): play and where the
+         playhead is, the zoom (out, back to 100%, in), what the panel did (else how the timeline is used: nothing
+         showed the right-click menu was there), and how long the video is. Its buttons are always there, greyed
+         where they don't apply. -->
+    <Border DockPanel.Dock="Bottom" Classes="bar slim foot" Padding="8,4">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button Classes="ghost icon small" Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the sound lines with each clip's frames from the playhead"
+                  AutomationProperties.Name="Play the storyboard">
+            <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" />
+          </Button>
+          <TextBlock Classes="muted" Text="{Binding PlayTime}" FontSize="12" FontFeatures="+tnum" VerticalAlignment="Center" Margin="12,0" AutomationProperties.Name="Playhead" />
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <Button Classes="ghost icon small act" Command="{Binding ZoomOutCommand}" ToolTip.ShowOnDisabled="True"
+                    ToolTip.Tip="{Binding ZoomOutTip}" AutomationProperties.Name="Zoom out">
+              <PathIcon Width="12" Height="12" Data="M19 13H5v-2h14v2z" />
+            </Button>
+            <Button Classes="ghost small act" MinWidth="48" HorizontalContentAlignment="Center" Command="{Binding ZoomResetCommand}" Content="{Binding ZoomText}"
+                    ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding ZoomResetTip}" AutomationProperties.Name="Zoom to 100%" />
+            <Button Classes="ghost icon small act" Command="{Binding ZoomInCommand}" ToolTip.ShowOnDisabled="True"
+                    ToolTip.Tip="{Binding ZoomInTip}" AutomationProperties.Name="Zoom in">
+              <PathIcon Width="12" Height="12" Data="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+            </Button>
+          </StackPanel>
+        </StackPanel>
+        <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding LengthText}" FontSize="12" VerticalAlignment="Center" Margin="0,0,4,0" />
+        <TextBlock Classes="muted" Text="{Binding StatusOrHint}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="12,0"
+                   ToolTip.Tip="{Binding StatusOrHint}" />
+      </DockPanel>
+    </Border>
+
     <!-- The timeline, where the video is worked on: References, the clips and the sound lines, under one scroll.
          Right-click a row to create there; drop files on it to copy them in. -->
     <Border DockPanel.Dock="Bottom" Background="{StaticResource BbBar}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">
       <DockPanel>
-        <Grid DockPanel.Dock="Top" Height="40" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="12,0">
-          <Button Classes="accent icon" CornerRadius="16" Background="{StaticResource BbAccent}" VerticalAlignment="Center"
-                  Command="{Binding PlayStripCommand}" ToolTip.Tip="Play the sound lines with each clip's frames from the playhead" AutomationProperties.Name="Play the storyboard">
-            <PathIcon Data="{Binding PlayIcon}" Width="12" Height="12" Foreground="{StaticResource BbOnAccent}" />
-          </Button>
-          <TextBlock Grid.Column="1" Text="{Binding PlayTime}" FontFamily="Consolas, monospace" Foreground="{StaticResource BbAccent}" VerticalAlignment="Center" Margin="12,0" />
-          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-            <Button Classes="ghost icon small" Content="−" Command="{Binding ZoomOutCommand}" ToolTip.Tip="See more of the video (Ctrl + wheel)" AutomationProperties.Name="Zoom out" />
-            <Button Classes="ghost icon small" Content="+" Command="{Binding ZoomInCommand}" ToolTip.Tip="See it closer (Ctrl + wheel)" AutomationProperties.Name="Zoom in" />
-          </StackPanel>
-          <!-- What the panel did or what went wrong; else how the timeline is used (nothing showed the right-click menu was there). -->
-          <TextBlock Grid.Column="3" Classes="muted" Text="{Binding StatusOrHint}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="12,0"
-                     ToolTip.Tip="{Binding StatusOrHint}" />
-          <TextBlock Grid.Column="4" Classes="muted" Text="{Binding LengthText}" VerticalAlignment="Center" />
-        </Grid>
         <!-- 120 for the names: + Sound line with a button's 12 at its sides. -->
         <Grid ColumnDefinitions="120,*" Margin="0,0,0,4">
           <!-- The rows' names stay put; what is right of them scrolls as one. -->
@@ -252,8 +274,8 @@
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
               </ItemsControl>
-              <Button Classes="ghost small" Content="+ Sound line" Margin="8,4,0,0" Click="OnAddSoundLine"
-                      ToolTip.Tip="Another sound line" AutomationProperties.Name="New sound line" />
+              <Button Classes="ghost small act" Content="+ Sound line" Margin="8,4,0,0" Click="OnAddSoundLine" IsEnabled="{Binding CanAddSoundLine}"
+                      ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding AddSoundLineTip}" AutomationProperties.Name="New sound line" />
             </StackPanel>
           </Border>
 
@@ -444,15 +466,20 @@
       </DockPanel>
     </Border>
 
-    <!-- The viewer: what is picked on the timeline (it goes into the chat's box), or the whole video; how it was made under it. -->
+    <!-- The viewer: what is picked on the timeline (it goes into the chat's box), or the whole video; how it was
+         made beside it. That column is always there at one width (2026-10-31): under the viewer, shown only
+         with something picked and as tall as its text, it moved the picture with every pick. -->
     <DockPanel>
-      <Border DockPanel.Dock="Bottom" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0" MaxHeight="190"
-              IsVisible="{Binding Details, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-          <StackPanel Spacing="8" Margin="16,8">
-            <Button Classes="primary" Content="Use this version" Command="{Binding UseVersionCommand}" IsVisible="{Binding IsVersionShown}" HorizontalAlignment="Left"
-                    ToolTip.Tip="Use this version (the current one is kept)" />
-            <views:SelectableText Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" FontSize="12" />
+      <Border DockPanel.Dock="Right" Width="{x:Static vm:VideoGeneratorViewModel.DetailsWidth}" BorderBrush="{StaticResource BbBorder}" BorderThickness="1,0,0,0">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="How it was made">
+          <StackPanel Spacing="8" Margin="16,12">
+            <!-- Always there, greyed but for a version shown, its tip saying how to get one. -->
+            <Button Classes="ghost small act" Content="Use this version" Command="{Binding UseVersionCommand}" IsEnabled="{Binding IsVersionShown}" HorizontalAlignment="Left"
+                    ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding UseVersionTip}" />
+            <TextBlock Classes="muted" Text="Click a clip, frame or sound to see how it was made." TextWrapping="Wrap" FontSize="12"
+                       IsVisible="{Binding Details, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+            <views:SelectableText Classes="muted" Text="{Binding Details}" TextWrapping="Wrap" FontSize="12"
+                                 IsVisible="{Binding Details, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             <TextBlock Classes="muted" Text="{Binding MadeWith}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding MadeWith, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             <views:SelectableText Text="{Binding Look}" TextWrapping="Wrap" FontSize="12" IsVisible="{Binding HasLook}"
                                  Classes="muted" Classes.error="{Binding LookFoundFault}" />
