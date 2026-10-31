@@ -33,7 +33,7 @@ public partial class TitleBar : UserControl
     }
 
     /// <summary>
-    /// What sits beside the buttons, left of minimize: the chat window's server status. It takes the
+    /// What sits right after the title: the chat window's server status. It takes the
     /// pointer as the buttons do (not the caption), so its tooltips show.
     /// </summary>
     public Control? Status

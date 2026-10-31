@@ -280,18 +280,18 @@
 
   <!-- The title bar over all of it (TitleBar), the side panel's column too. -->
   <DockPanel x:Name="Root">
-  <!-- The server's state in the title bar, against minimize, so the dot and the word stay put as the
-       context's use comes and grows (the user, 2026-10-31): that use, the status word, the dot. Each
-       part whole or not at all (WholeRow, from the right): in a narrow window the context's use goes
-       first, then the word, and the dot stays, the word in the row's tooltip. -->
+  <!-- The server's state in the title bar, right after the title (the user, 2026-10-31): the dot, the
+       status word, the context's use, which comes last so nothing moves as it comes and grows. Each
+       part whole or not at all (WholeRow): in a narrow window the context's use goes first, then the
+       word, and the dot stays, the word in the row's tooltip. -->
   <views:TitleBar DockPanel.Dock="Top">
     <views:TitleBar.Status>
-      <views:WholeRow FromRight="True" Margin="0,0,8,0" Background="Transparent" ToolTip.Tip="{Binding ServerStatusText}">
-        <TextBlock Classes="muted" Text="{Binding ContextUsage, StringFormat='{}{0} ·'}" IsVisible="{Binding HasContextUsage}"
-                   ToolTip.Tip="{Binding ContextUsageTip}" VerticalAlignment="Center" Margin="0,0,4,0" />
-        <TextBlock Classes="muted" Text="{Binding ServerStatusText}" VerticalAlignment="Center" />
+      <views:WholeRow Margin="4,0,8,0" Background="Transparent" ToolTip.Tip="{Binding ServerStatusText}">
         <Ellipse Classes="status" Classes.checking="{Binding IsChecking}" Classes.connected="{Binding IsConnected}" Classes.failed="{Binding IsFailed}"
-                 Width="8" Height="8" VerticalAlignment="Center" Margin="8,0,0,0" />
+                 Width="8" Height="8" VerticalAlignment="Center" />
+        <TextBlock Classes="muted" Text="{Binding ServerStatusText}" VerticalAlignment="Center" Margin="8,0,0,0" />
+        <TextBlock Classes="muted" Text="{Binding ContextUsage, StringFormat='· {0}'}" IsVisible="{Binding HasContextUsage}"
+                   ToolTip.Tip="{Binding ContextUsageTip}" VerticalAlignment="Center" Margin="4,0,0,0" />
       </views:WholeRow>
     </views:TitleBar.Status>
   </views:TitleBar>

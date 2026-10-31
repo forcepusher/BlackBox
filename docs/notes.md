@@ -1805,13 +1805,15 @@ signs #808080 while the window isn't active. Windows 10 drew its own grey bar wh
 The bar had the blob 16x16 at 12 from the left and the title 8 after it until 2026-10-31, when
 the user asked for it to go: the title took its place at 12, and the exe, taskbar and Alt+Tab keep
 the icon.
-A chat window's bar has the server's state left of minimize (`TitleBar.Status`), since 2026-10-31
-(the user: it was in the top bar under it, between the Side panel dropdown and History): the
-context's use, the status word and the dot, "15k of 256k used · Connected ●", in the muted 12 (faint
-while the window isn't active). The dot is last, 8 from the word and 8 from minimize, so the dot and
-the word stay put as the context's use comes after the first reply and grows; a `WholeRow` with
-`FromRight` gives way from the left, the context's use first, then the word, the dot staying (the
-word in the row's tooltip). The row is as tall as the strip and each part centred in it, as the
+A chat window's bar has the server's state right after the title (`TitleBar.Status`), since
+2026-10-31 (the user: it was in the top bar under it, between the Side panel dropdown and History;
+put first beside minimize, the user wanted it on the left): the dot, the status word and the
+context's use, "● Connected · 15k of 256k used", in the muted 12 (faint while the window isn't
+active), 12 after the title, the word 8 after the dot. The context's use is last, so nothing moves
+as it comes after the first reply and grows; the title and the row move once, as the chat is named.
+The status is measured before the title (the two in a DockPanel of their own, against the left), so
+a long title is cut short with "…" before any of it; with no room left the `WholeRow` gives way, the
+context's use first, then the word, the dot staying (the word in the row's tooltip). The row is as tall as the strip and each part centred in it, as the
 title is: the words share the title's baseline and the 8 x 8 dot (9 x 9 before, 11.25 px at 125%) is
 exactly in the middle at 100% and 125% (12 rows over and under it; 15 at 125%). Measured on the
 laptop's 100% (unaware) and 125% builds. The row is the client to Windows (not the caption), as the

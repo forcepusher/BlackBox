@@ -57,49 +57,4 @@ public sealed class WholeRowTests
             return 0;
         });
     }
-
-    /// <summary>
-    /// The title bar's status, from the right (2026-10-31): the last <paramref name="parts"/> parts fit
-    /// against the right edge, the dot always; the rest are past the left edge.
-    /// </summary>
-    [Theory]
-    [InlineData(3, 0, 3)]
-    [InlineData(2, 0, 2)]
-    [InlineData(3, -1, 2)]
-    [InlineData(2, -1, 1)]
-    [InlineData(1, 0, 1)]
-    [InlineData(0, 0, 1)]
-    public void From_the_right_the_last_part_stays(int parts, double extra, int shown)
-    {
-        HeadlessApp.Run(() =>
-        {
-            Control[] all =
-            [
-                new TextBlock { Text = "35k of 100k used ·", Margin = new Thickness(0, 0, 4, 0) },
-                new TextBlock { Text = "Connected" },
-                new Ellipse { Width = 8, Height = 8, Margin = new Thickness(8, 0, 0, 0) },
-            ];
-            var row = new WholeRow { FromRight = true };
-            row.Children.AddRange(all);
-            foreach (var part in all)
-                part.Measure(Size.Infinity);
-            var room = all.TakeLast(parts).Sum(p => p.DesiredSize.Width) + extra;
-
-            row.Measure(new Size(room, 40));
-            row.Arrange(new Rect(0, 0, row.DesiredSize.Width, 40));
-
-            double right = row.Bounds.Width;
-            for (var i = all.Length - 1; i >= 0; i--)
-            {
-                var bounds = all[i].Bounds;
-                Assert.Equal(all[i].DesiredSize.Width - all[i].Margin.Left - all[i].Margin.Right, bounds.Width, 3);
-                if (all.Length - i <= shown)
-                    Assert.Equal(right - all[i].DesiredSize.Width + all[i].Margin.Left, bounds.X, 3);
-                else
-                    Assert.True(bounds.Right <= 0, $"part {i} at {bounds} shows in a row {row.Bounds.Width} wide");
-                right -= all[i].DesiredSize.Width;
-            }
-            return 0;
-        });
-    }
 }

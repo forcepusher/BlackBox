@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - The server's status (the coloured dot, Connected and how much context is used) moved from the top
-  bar into the window's title bar, beside minimize.
+  bar into the window's title bar, right after the title.
 - Settings → Safety: the dropdown for when Sloperator asks before acting is labelled
   **Tool call approval** (it read "Ask me first", next to choices like "Never ask").
 - Video generator looks like the other side panels: how the piece shown was made sits in a column
