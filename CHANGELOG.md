@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - File changes shows Wrap and Watch even before any file has changed, so its bar no longer shifts
   when the agent makes its first change.
+- File changes always shows Stage, Unstage and Discard over the diff, greyed while they have nothing
+  to act on (no change yet, or files outside git, whose tooltip says so), instead of hiding them.
 - Sloperator runs on Avalonia 12 and SkiaSharp 4 (both the latest): buttons and rows sized by their
   text are up to a pixel tighter, an empty field's hint keeps its grey under the pointer and while
   typed in, and pictures the window shrinks come out a shade smoother. Sloperator.exe is about 1 MB

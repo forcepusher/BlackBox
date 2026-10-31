@@ -3235,7 +3235,10 @@ changed (not in Committed, which can't tell). The diff's headers say the section
 **Stage, Unstage and Discard** (the user, 2026-10-26: buttons in the rows were "all the way over there
 to the right side clipped" behind long paths; then "I should be able to stage/unstage a selected set of
 lines", "and discard selected lines as well. Redesign the UI"). One action bar over the diff has
-**Stage** and **Unstage** (only where a file is in git) and **Discard**, and beside them what they act
+**Stage**, **Unstage** and **Discard**, always there (until 2026-10-31 the bar showed only once a file
+changed, and Stage and Unstage only where the files are in git; the user asked that the bar not change
+mid-task: outside git the two stay greyed, "Only for files in git", and with no file all three say
+"No changes yet", the empty panel's words under the bar), and beside them what they act
 on: the picked lines ("Line 31 · notes.txt · staged", "12 lines in 3 files"), else the selected file
 ("notes.txt · unstaged"), not one in a folded section. A click on a hunk's divider picks its lines and
 on a file's name all of the file's (Ctrl adds them; the header or @@ row itself is never picked), so
