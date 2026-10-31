@@ -1805,16 +1805,19 @@ signs #808080 while the window isn't active. Windows 10 drew its own grey bar wh
 The bar had the blob 16x16 at 12 from the left and the title 8 after it until 2026-10-31, when
 the user asked for it to go: the title took its place at 12, and the exe, taskbar and Alt+Tab keep
 the icon.
-A chat window's bar starts with the server's state (`TitleBar.Status`), the title after it, since
-2026-10-31 (the user: it was in the top bar under it, between the Side panel dropdown and History;
-put first beside minimize, then right after the title, the user wanted it on the left and the
-title last): the dot 12 from the left, the status word 8 after it and the context's use,
-"● Connected · 15k of 256k used", in the muted 12 (faint while the window isn't active), and the
-title 12 after them (its own margin). The dot and the word never move; the title moves as the
-context's use comes after the first reply and as its number grows. The status is docked before the
-title and measured first, so a long title is cut short with "…" before any of it; with no room left
-the `WholeRow` gives way, the context's use first, then the word, the dot staying (the word in the
-row's tooltip). Windows without a status (Settings) have the title at 12 as before. The row is as tall as the strip and each part centred in it, as the
+A chat window's bar reads "Sloperator ● Connected · 15k of 256k used   <chat>" since 2026-10-31
+(the user: the status was in the top bar under it, between the Side panel dropdown and History; put
+first beside minimize, then after the window's title, then first with the title last, then "Separate
+Sloperator word from the chat title. Put Sloperator word first"): the bar's own title
+(`TitleBar.Text`, "Sloperator"; the window's title, "<chat> - Sloperator", stays the taskbar's),
+the server's state 12 after it (`TitleBar.Status`: the dot, the status word 8 after it and the
+context's use, in the muted 12, faint while the window isn't active), and the chat's title 12 after
+that (`TitleBar.Subtitle`, the title's look; nothing before the first message). The dot and the word
+never move; the chat's title moves as the context's use comes after the first reply and as its
+number grows. The status is docked before the chat's title and measured first, so a long chat title
+is cut short with "…" before any of it; with no room left the `WholeRow` gives way, the context's
+use first, then the word, the dot staying (the word in the row's tooltip). Settings has neither and
+its title at 12 as before. The row is as tall as the strip and each part centred in it, as the
 title is: the words share the title's baseline and the 8 x 8 dot (9 x 9 before, 11.25 px at 125%) is
 exactly in the middle at 100% and 125% (12 rows over and under it; 15 at 125%). Measured on the
 laptop's 100% (unaware) and 125% builds. The row is the client to Windows (not the caption), as the

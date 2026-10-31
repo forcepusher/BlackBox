@@ -280,13 +280,13 @@
 
   <!-- The title bar over all of it (TitleBar), the side panel's column too. -->
   <DockPanel x:Name="Root">
-  <!-- The server's state in the title bar, 12 from the left, the chat's title after it (the user,
-       2026-10-31): the dot, the status word, the context's use. Each part whole or not at all
-       (WholeRow): in a narrow window the context's use goes first, then the word, and the dot stays,
-       the word in the row's tooltip. -->
-  <views:TitleBar DockPanel.Dock="Top">
+  <!-- The title bar reads "Sloperator", the server's state, the chat's title (the user, 2026-10-31);
+       the window's title, "<chat> - Sloperator", is the taskbar's. The state: the dot, the status
+       word, the context's use, each part whole or not at all (WholeRow): in a narrow window the
+       context's use goes first, then the word, and the dot stays, the word in the row's tooltip. -->
+  <views:TitleBar DockPanel.Dock="Top" Text="Sloperator" Subtitle="{Binding ChatTitle}">
     <views:TitleBar.Status>
-      <views:WholeRow Margin="12,0,0,0" Background="Transparent" ToolTip.Tip="{Binding ServerStatusText}">
+      <views:WholeRow Margin="4,0,0,0" Background="Transparent" ToolTip.Tip="{Binding ServerStatusText}">
         <Ellipse Classes="status" Classes.checking="{Binding IsChecking}" Classes.connected="{Binding IsConnected}" Classes.failed="{Binding IsFailed}"
                  Width="8" Height="8" VerticalAlignment="Center" />
         <TextBlock Classes="muted" Text="{Binding ServerStatusText}" VerticalAlignment="Center" Margin="8,0,0,0" />

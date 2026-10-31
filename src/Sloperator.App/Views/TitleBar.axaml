@@ -22,10 +22,12 @@
       <Button x:Name="MinimizeButton" DockPanel.Dock="Right" Classes="caption" Click="OnMinimize" AutomationProperties.Name="Minimize" ToolTip.Tip="Minimize">
         <views:CaptionGlyph Kind="Minimize" />
       </Button>
-      <!-- What the window puts before the title (Status): the chat window's server status. Measured
-           first, so a long title is cut short before it. -->
+      <!-- The title, then what the window puts after it (Status, Subtitle): the chat window's server
+           status and its chat's title. The status is measured before the subtitle, so a long chat
+           title is cut short before it. -->
+      <TextBlock x:Name="TitleText" DockPanel.Dock="Left" Classes="title" IsHitTestVisible="False" />
       <ContentPresenter x:Name="StatusHost" DockPanel.Dock="Left" />
-      <TextBlock x:Name="TitleText" Classes="title" IsHitTestVisible="False" />
+      <TextBlock x:Name="SubtitleText" Classes="title" IsHitTestVisible="False" />
     </DockPanel>
     <!-- Windows 10's frame line along the top, over the strip's top row (see TitleBar.FrameLine). -->
     <Border Classes="titleTopLine" IsHitTestVisible="False" />
