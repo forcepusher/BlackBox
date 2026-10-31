@@ -880,7 +880,9 @@ timeline under that; its top bar has the video's name (its menu, see below), the
 rate, and **Make the video** (the user, 2026-10-24: "Get rid of the settings button
 altogether, put frame size and framerate fields at the top"; the cog's title went with the folder's
 name, its soundtrack and shots' sound sliders with the levels they set). A **New video** button beside
-Make the video went on 2026-10-25: the videos' menu has New video. A new video is called "Untitled video"
+Make the video went on 2026-10-25: the videos' menu has New video. Make the video is a ghost
+button as the bar's others since 2026-10-31: yellow (`primary`), the only one lit in the bar, it
+looked lit all the time (the user). A new video is called "Untitled video"
 ("Untitled video 2" when that folder is taken), not "New video", which read as the menu's item.
 
 **All of the video is worked on in the timeline** (the user's call, 2026-10-24: "work on the film

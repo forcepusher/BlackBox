@@ -180,7 +180,8 @@
     <Border DockPanel.Dock="Top" Classes="bar">
       <DockPanel MinHeight="32">
         <views:SidePanelClose DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0" />
-        <Button DockPanel.Dock="Right" Classes="primary" Content="Make the video" Command="{Binding MakeVideoCommand}"
+        <!-- A ghost button as every other in the bar: yellow (primary), it looked lit all the time. -->
+        <Button DockPanel.Dock="Right" Classes="ghost" Content="Make the video" Command="{Binding MakeVideoCommand}"
                 ToolTip.Tip="Makes what's missing or changed, checks it and joins the video" />
         <!-- Short of room (the window made narrower), the video's name is cut short rather than the
              fields going over the buttons: its column is the one that gives way. -->
