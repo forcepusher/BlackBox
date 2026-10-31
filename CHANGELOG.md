@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chat. Pictures an SVG links on the web aren't fetched. Sloperator.exe is about 1.5 MB bigger.
 
 ### Changed
+- Settings opens on what Sloperator should always know, at the top of General; Updates comes first
+  in Advanced.
 - File changes shows Wrap and Watch even before any file has changed, so its bar no longer shifts
   when the agent makes its first change.
 - File changes always shows Stage, Unstage and Discard over the diff, greyed while they have nothing
