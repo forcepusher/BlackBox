@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bigger.
 - The start screen's first card is plainer: Pause/Break stops Sloperator "at any time, in any
   window", and you correct it by sending prompts during a task.
+- The × that closes a side panel is read out as "Close the panel" by screen readers (it said "Close
+  the tool").
 
 ## [1.2.0] - 2026-10-31
 ### Added

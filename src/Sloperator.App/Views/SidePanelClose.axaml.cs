@@ -8,7 +8,7 @@ public partial class SidePanelClose : UserControl
 {
     public SidePanelClose() => InitializeComponent();
 
-    /// <summary>The tool closes in the chat window it is in.</summary>
+    /// <summary>The panel closes in the chat window it is in.</summary>
     private void OnClose(object? sender, RoutedEventArgs e)
     {
         if (TopLevel.GetTopLevel(this)?.DataContext is MainWindowViewModel chat)

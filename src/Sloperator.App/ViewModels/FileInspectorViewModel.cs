@@ -44,7 +44,7 @@ public sealed partial class FileInspectorViewModel : ObservableObject, ISidePane
     /// <summary>Where a picture of a marked area is saved for the model: the folder of pasted pictures, which go with their chat.</summary>
     private readonly string? _areasDir;
 
-    /// <param name="chat">The chat the panel is a tool of, where what is selected in it goes; null with none.</param>
+    /// <param name="chat">The chat the panel is open in, where what is selected in it goes; null with none.</param>
     /// <param name="areasDir">Where pictures of marked areas are saved; with a chat.</param>
     public FileInspectorViewModel(PreviewServices previews, MainWindowViewModel? chat = null, string? areasDir = null)
     {
