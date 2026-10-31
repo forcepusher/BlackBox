@@ -47,7 +47,7 @@ public static class MeshRenderer
         if (ss == 1)
             return full;
         using (full)
-            return full.Resize(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque), SKFilterQuality.High);
+            return full.Resize(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque), Sampling.High(w, width));
     }
 
     private static void Draw(Mesh mesh, IReadOnlyList<Vector3> positions, (Vector3 Min, Vector3 Max) bounds, int w, int h, double yawDegrees, double pitchDegrees, double zoom,

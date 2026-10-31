@@ -12,8 +12,10 @@
     <PackageReference Include="ModelContextProtocol.Core" Version="2.2.0" />
     <!-- PDF text for read_file; fully managed, no dependencies (Apache-2.0). -->
     <PackageReference Include="PdfPig" Version="0.1.16" />
-    <!-- Same SkiaSharp line as Avalonia 11 so the app ships a single native Skia. -->
-    <PackageReference Include="SkiaSharp" Version="2.88.9" />
+    <!-- Newer than the 3.x Avalonia 12 asks for, which runs on it: the app ships this one native Skia.
+         Avalonia brings Skia's Linux library at its own version; this keeps it at SkiaSharp's (tests on Linux). -->
+    <PackageReference Include="SkiaSharp" Version="4.154.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.154.0" />
     <!-- The ssh tool's SSH client; fully managed, so no ssh.exe or PuTTY is needed. -->
     <PackageReference Include="SSH.NET" Version="2026.0.0" />
   </ItemGroup>

@@ -262,7 +262,7 @@ public sealed partial class Mesh : IDisposable
                 if (bitmap is not null && Math.Max(bitmap.Width, bitmap.Height) > 1024)
                 {
                     var scale = 1024.0 / Math.Max(bitmap.Width, bitmap.Height);
-                    var smaller = bitmap.Resize(new SKImageInfo((int)(bitmap.Width * scale), (int)(bitmap.Height * scale)), SKFilterQuality.Medium);
+                    var smaller = bitmap.Resize(new SKImageInfo((int)(bitmap.Width * scale), (int)(bitmap.Height * scale)), Sampling.Medium);
                     bitmap.Dispose();
                     bitmap = smaller;
                 }

@@ -990,8 +990,8 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
             canvas.Clear(SKColors.Black);
             var scale = Math.Max(width / (double)inside.Width, height / (double)inside.Height);
             var (w, h) = ((float)(inside.Width * scale), (float)(inside.Height * scale));
-            using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true };
-            canvas.DrawBitmap(bitmap, inside, new SKRect((width - w) / 2, (height - h) / 2, (width + w) / 2, (height + h) / 2), paint);
+            using var paint = new SKPaint { IsAntialias = true };
+            canvas.DrawBitmap(bitmap, inside, new SKRect((width - w) / 2, (height - h) / 2, (width + w) / 2, (height + h) / 2), Sampling.High(1, scale), paint);
         }
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         var temp = target + ".tmp";
@@ -1018,8 +1018,8 @@ public sealed partial class VideoMaker(ComfyHub hub, IMediaDecoder? media)
         using var picture = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(picture))
         {
-            using var paint = new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true };
-            canvas.DrawBitmap(bitmap, inside, new SKRect(0, 0, width, height), paint);
+            using var paint = new SKPaint { IsAntialias = true };
+            canvas.DrawBitmap(bitmap, inside, new SKRect(0, 0, width, height), Sampling.High(1, scale), paint);
         }
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         var temp = target + ".tmp";

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Sloperator.Core.Media;
 using Sloperator.Core.Platform;
 using SkiaSharp;
 
@@ -76,10 +77,9 @@ public sealed class ZoomTool : Tool
             var canvas = surface.Canvas;
             canvas.Clear(SKColors.White);
             using (var image = SKImage.FromBitmap(src))
-            using (var sharp = new SKPaint { FilterQuality = scale > 1 ? SKFilterQuality.None : SKFilterQuality.High })
-                canvas.DrawImage(image, new SKRect(Ruler, Ruler, Ruler + w, Ruler + h), sharp);
+                canvas.DrawImage(image, new SKRect(Ruler, Ruler, Ruler + w, Ruler + h), scale > 1 ? Sampling.Nearest : Sampling.High(frame.Width, w));
 
-            using var ink = new SKPaint { Color = SKColors.Black, IsAntialias = true, StrokeWidth = 1, TextSize = 12 };
+            using var ink = new SKPaint { Color = SKColors.Black, IsAntialias = true, StrokeWidth = 1 };
             using var font = new SKFont(SKTypeface.Default, 12);
             var (x0, y0) = space.ToModel(region.X, region.Y);
             var (x1, y1) = space.ToModel(region.X + region.Width, region.Y + region.Height);
@@ -92,7 +92,7 @@ public sealed class ZoomTool : Tool
                 var px = Px(x);
                 canvas.DrawLine(px, Ruler - 8, px, Ruler, ink);
                 var label = x.ToString(CultureInfo.InvariantCulture);
-                canvas.DrawText(label, Math.Clamp(px - ink.MeasureText(label) / 2, 0, w + Ruler - ink.MeasureText(label)), Ruler - 11, font, ink);
+                canvas.DrawText(label, Math.Clamp(px - font.MeasureText(label) / 2, 0, w + Ruler - font.MeasureText(label)), Ruler - 11, SKTextAlign.Left, font, ink);
             }
             var yStep = Step(y1 - y0, h);
             for (var y = Math.Ceiling(y0 / yStep) * yStep; y <= y1; y += yStep)
@@ -102,7 +102,7 @@ public sealed class ZoomTool : Tool
                 canvas.Save();
                 canvas.RotateDegrees(-90, Ruler - 10, py);
                 var label = y.ToString(CultureInfo.InvariantCulture);
-                canvas.DrawText(label, Ruler - 10 - ink.MeasureText(label) / 2, py, font, ink);
+                canvas.DrawText(label, Ruler - 10 - font.MeasureText(label) / 2, py, SKTextAlign.Left, font, ink);
                 canvas.Restore();
             }
             using var snapshot = surface.Snapshot();

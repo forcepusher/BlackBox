@@ -420,11 +420,11 @@
             </Button.Flyout>
           </Button>
           <!-- No least width: one wider than the narrowest chat's column was laid out over the "Server" label. -->
-          <TextBox Text="{Binding ServerAddress}" Watermark="http://localhost:1234/v1" />
+          <TextBox Text="{Binding ServerAddress}" PlaceholderText="http://localhost:1234/v1" />
         </DockPanel>
         <TextBlock Grid.Row="0" Grid.Column="2" Classes="label" Text="API key" Margin="16,0,8,0" />
         <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding ApiKey}" PasswordChar="•" RevealPassword="{Binding ShowApiKey}" MinWidth="120"
-                 Watermark="Optional"
+                 PlaceholderText="Optional"
                  ToolTip.Tip="Saved in plain text in the Data folder." />
         <ToggleButton Grid.Row="0" Grid.Column="4" Classes="ghost icon" IsChecked="{Binding ShowApiKey}" Margin="8,0,0,0"
                       VerticalAlignment="Stretch" ToolTip.Tip="Show or hide the API key" AutomationProperties.Name="Show API key">
@@ -985,7 +985,7 @@
             <!-- During a run Send stays: a message then goes to the agent before its next step. -->
             <TextBox x:Name="InputBox" Grid.Row="1" Grid.Column="1" Classes="composer" Text="{Binding Input}" AcceptsReturn="True" TextWrapping="Wrap"
                      MaxHeight="200" VerticalContentAlignment="Center"
-                     Watermark="{Binding InputHint}" />
+                     PlaceholderText="{Binding InputHint}" />
             <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom" Margin="8,0,0,0">
               <!-- The logo blob, as tall as Send and 8 from it; it dances while a prompt runs.
                    Not with the intro, which has the logo already. -->

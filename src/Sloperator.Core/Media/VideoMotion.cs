@@ -32,7 +32,7 @@ public static class VideoMotion
         while (frames.Count < limit && reader.Next() is { } next)
         {
             using var bitmap = MediaPreview.ToBitmap(next.Frame);
-            using var small = bitmap.Resize(new SkiaSharp.SKImageInfo(Width, Height), SkiaSharp.SKFilterQuality.Low);
+            using var small = bitmap.Resize(new SkiaSharp.SKImageInfo(Width, Height), Sampling.Low);
             if (small is null)
                 continue;
             var gray = new float[Width * Height];

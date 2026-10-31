@@ -46,7 +46,7 @@ public partial class App : Application
     {
         if (window.FocusManager?.GetFocusedElement() is TextBox box
             && !(e.Source is Visual source && (source == box || box.IsVisualAncestorOf(source))))
-            window.FocusManager.ClearFocus();
+            window.FocusManager.Focus(null);
     }
 
     public override void OnFrameworkInitializationCompleted()

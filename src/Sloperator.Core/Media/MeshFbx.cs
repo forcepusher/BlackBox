@@ -532,7 +532,7 @@ public sealed partial class Mesh
             if (bitmap is not null && Math.Max(bitmap.Width, bitmap.Height) > 1024)
             {
                 var scale = 1024.0 / Math.Max(bitmap.Width, bitmap.Height);
-                var smaller = bitmap.Resize(new SKImageInfo(Math.Max(1, (int)(bitmap.Width * scale)), Math.Max(1, (int)(bitmap.Height * scale))), SKFilterQuality.Medium);
+                var smaller = bitmap.Resize(new SKImageInfo(Math.Max(1, (int)(bitmap.Width * scale)), Math.Max(1, (int)(bitmap.Height * scale))), Sampling.Medium);
                 bitmap.Dispose();
                 bitmap = smaller;
             }

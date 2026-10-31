@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using Sloperator.Core.Media;
 using Sloperator.Core.Platform;
 using SkiaSharp;
 using static Sloperator.Platform.Windows.ComAbi;
@@ -200,7 +201,7 @@ internal sealed unsafe class WindowsTextReader : ITextReader
         {
             using var source = new SKBitmap();
             source.InstallPixels(new SKImageInfo(image.Width, image.Height, SKColorType.Bgra8888, SKAlphaType.Premul), handle.AddrOfPinnedObject(), image.Stride);
-            using var resized = source.Resize(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul), SKFilterQuality.High);
+            using var resized = source.Resize(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul), Sampling.High(1, scale));
             var bgra = new byte[width * height * 4];
             for (var y = 0; y < height; y++)
                 Marshal.Copy(resized.GetPixels() + y * resized.RowBytes, bgra, y * width * 4, width * 4);

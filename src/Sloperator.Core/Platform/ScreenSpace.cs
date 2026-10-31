@@ -68,7 +68,7 @@ public sealed class ScreenSpace
             src.InstallPixels(info, handle.AddrOfPinnedObject(), frame.Stride);
             using var scaled = ImageWidth == frame.Width && ImageHeight == frame.Height
                 ? src.Copy()
-                : src.Resize(new SKImageInfo(ImageWidth, ImageHeight, SKColorType.Bgra8888, SKAlphaType.Premul), SKFilterQuality.High);
+                : src.Resize(new SKImageInfo(ImageWidth, ImageHeight, SKColorType.Bgra8888, SKAlphaType.Premul), Media.Sampling.High(frame.Width, ImageWidth));
             using var image = SKImage.FromBitmap(scaled);
             using var data = image.Encode(SKEncodedImageFormat.Jpeg, quality);
             return data.ToArray();

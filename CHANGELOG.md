@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Settings → Advanced → Updates shows which version of Sloperator is running.
 
+### Changed
+- Sloperator runs on Avalonia 12 and SkiaSharp 4 (both the latest): buttons and rows sized by their
+  text are up to a pixel tighter, an empty field's hint keeps its grey under the pointer and while
+  typed in, and pictures the window shrinks come out a shade smoother. Sloperator.exe is about 1 MB
+  bigger.
+
 ## [1.2.0] - 2026-10-31
 ### Added
 - The agent can find text on the screen with Windows' own text recognition, so it finds a label, a

@@ -1697,8 +1697,10 @@ takes its look from its kind:
   pointer, the yellow around a field being typed in.
 - **Text**: the main #F0F0F0 (`BbText`, and Fluent's `BaseHigh` in its palette, so every control's
   text), secondary #BBBBBB (a notice's words, Output's and Thoughts' headers), muted #A2A2A2
-  (`BbMuted`: labels, times, the message box's hint, thoughts), faint #808080 (`BbFaint`: line
-  numbers, what is disabled, an empty field's hint), code #E8E8E8 (`BbCode`).
+  (`BbMuted`: labels, times, thoughts), the message box's hint #606060 (`BbHint`), faint #808080
+  (`BbFaint`: line numbers, what is disabled, an empty field's hint), code #E8E8E8 (`BbCode`). A
+  hint is drawn in its colour: Avalonia 12 draws every one at `TextControlPlaceholderOpacity`
+  (Fluent's 0.5, a combo box's too), which App.axaml sets to 1 (`PlaceholderTests`).
 - **Diff**: an added line's row the green #50C878 at 11%, its number, marker and counts #7FD9A2 (a new
   file's name too); a removed line's the red #F05A5A at 13%, #F28B82 (its number no longer greyed
   out: the red says it is the old file's). The server dot is #4CC38A when connected; a hunk's divider
@@ -1960,6 +1962,18 @@ a path with the C runtime's fopen, and that handle is inherited by every program
 open. A command the agent started while a picture was being read then kept it open until it ended,
 so the picture couldn't be deleted or replaced; the read_file picture test failed now and then the
 same way (2 of 4 full runs, 24 October 2026), when another test started a process at that moment.
+
+Skia (SkiaSharp 4, newer than the 3.x Avalonia 12 asks for; Avalonia runs on it) takes how to read a
+picture's pixels at another size as `SKSamplingOptions`, given with each draw or resize: SkiaSharp 4
+dropped the paint's filter quality. `Sampling` (Media) gives SkiaSharp 2's pixels, measured against
+it on a screenshot shrunk to 37 to 90% and enlarged 2.3 times (2026-10-31): Medium blends the four
+nearest pixels of the nearest mipmap at any size; High does that going down, enlarges with Mitchell's
+cubic and at the picture's own size copies it (the cubic there softened a PDF page). A resize comes
+out within 3 grey levels of SkiaSharp 2's, a draw within 22 (0.3 on average). Blending the two
+nearest mipmaps (Avalonia 12's own Medium, and its High going down) came out 1.1 off on average at
+half size, up to 69; SkiaSharp 3's own stand-in for High, the cubic both ways, 2.9 at 37% (aliased
+text). Avalonia's `Image` draws with its own: a thumbnail shrunk at `MediumQuality` is a shade
+smoother than it was on Avalonia 11 (the PDF peek's letters lost their jagged edges).
 
 Until a chat is used, it shows first that Pause/Break stops it and that corrections and hints can be
 typed to it while it works, that it uses the mouse and keyboard but pauses while you type and what it
@@ -4019,7 +4033,7 @@ versions (EV certificates no longer skip it, Microsoft, 2026).
   sound (Media Foundation), PDF pages, text recognition, notifications, file previews and signature
   checks (COM and WinRT called through their vtables, `ComAbi`). Only referenced when building on Windows.
 - `src/Sloperator.Cli`: headless runner for trying tasks and models.
-- `src/Sloperator.App`: Avalonia 11 UI with CommunityToolkit.Mvvm.
+- `src/Sloperator.App`: Avalonia 12 UI with CommunityToolkit.Mvvm.
 - `tests/Sloperator.Core.Tests`: xUnit tests (unit tests plus opt-in server integration tests).
 - `tests/Sloperator.App.Tests`: the app's windows laid out headless (the chat, lists, players, Settings).
 - `tests/Sloperator.McpTestServer`: a small MCP server the tests run in-process and as a child process.

@@ -61,7 +61,7 @@
 
             <TextBlock Classes="h2" Text="Things Sloperator should always know" />
             <TextBox Text="{Binding Agent.CustomInstructions}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100"
-                     Watermark="For example: my documents are in D:\Docs. Use Firefox for browsing. Answer in German." />
+                     PlaceholderText="For example: my documents are in D:\Docs. Use Firefox for browsing. Answer in German." />
 
             <StackPanel Spacing="4" IsVisible="{Binding ShowsTextRecognition}">
               <TextBlock Classes="h2" Text="Text recognition" />
@@ -96,7 +96,7 @@
             <TextBlock Classes="h2" Text="MCP servers" />
             <TextBlock Classes="muted" TextWrapping="Wrap" Text="Tools from other programs, like Blender. Sloperator adds them as needed."
                        ToolTip.Tip="{Binding Paths.McpConfigFile, StringFormat='Kept in {0}'}" />
-            <TextBox x:Name="McpBox" Text="{Binding McpConfigText}" Watermark="{Binding McpExample}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
+            <TextBox x:Name="McpBox" Text="{Binding McpConfigText}" PlaceholderText="{Binding McpExample}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="NoWrap"
                      FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12" MinHeight="200" Margin="0,8,0,0"
                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
                      ToolTip.Tip="Same format as Claude Desktop, LM Studio and Cursor" />

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Sloperator.Core.Documents;
+using Sloperator.Core.Media;
 using SkiaSharp;
 using static Sloperator.Platform.Windows.ComAbi;
 
@@ -159,7 +160,7 @@ internal sealed unsafe class WindowsPdf : IPdfDocument
         using (var canvas = new SKCanvas(bitmap))
         {
             canvas.Clear(SKColors.White);
-            canvas.DrawBitmap(decoded, new SKRect(0, 0, width, height));
+            canvas.DrawBitmap(decoded, new SKRect(0, 0, width, height), Sampling.Nearest);
         }
         var bgra = new byte[width * height * 4];
         for (var row = 0; row < height; row++)

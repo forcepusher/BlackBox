@@ -159,7 +159,7 @@ public static class CopyMenu
         if (shown is null)
             return null;
         using var png = new MemoryStream();
-        shown.Save(png);
+        shown.Save(png, PngBitmapEncoderOptions.Default);
         png.Position = 0;
         return new Bitmap(png);
     }

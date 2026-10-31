@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Sloperator.Core.Agent;
 using Sloperator.Core.Llm;
+using Sloperator.Core.Media;
 using Sloperator.Core.Platform;
 using Sloperator.Core.Settings;
 using Sloperator.Core.Tools;
@@ -121,7 +122,7 @@ public class ClickAccuracyTests
     private static Draw Screenshot(string file, Target[] targets) => (_, c, _, _, _, _) =>
     {
         using var image = SKBitmap.Decode(Path.Combine(AppContext.BaseDirectory, "ClickScenes", file));
-        c.DrawBitmap(image, 0, 0);
+        c.DrawBitmap(image, 0, 0, Sampling.Nearest);
         return targets.ToList();
     };
 
@@ -276,7 +277,7 @@ public class ClickAccuracyTests
                         Scatter(rng, c, s.Width, s.Height, theme, labels.Skip(60), 12, 20, 20);
                 }
                 using var degraded = i == scene.On ? Apply(scene.Degrade, screen) : screen.Copy();
-                canvas.DrawBitmap(degraded, s.X - left, s.Y - top);
+                canvas.DrawBitmap(degraded, s.X - left, s.Y - top, Sampling.Nearest);
             }
         }
         var pixels = new byte[width * height * 4];
@@ -291,12 +292,12 @@ public class ClickAccuracyTests
             case Degrade.Blurry:
             {
                 // Half resolution and back, then a slight blur: a low-res remote desktop or a scaled app.
-                using var half = screen.Resize(new SKImageInfo(screen.Width / 2, screen.Height / 2), SKFilterQuality.Low);
-                using var back = half.Resize(screen.Info, SKFilterQuality.Low);
+                using var half = screen.Resize(new SKImageInfo(screen.Width / 2, screen.Height / 2), Sampling.Low);
+                using var back = half.Resize(screen.Info, Sampling.Low);
                 var result = new SKBitmap(screen.Info);
                 using var c = new SKCanvas(result);
                 using var blur = new SKPaint { ImageFilter = SKImageFilter.CreateBlur(1.2f, 1.2f) };
-                c.DrawBitmap(back, 0, 0, blur);
+                c.DrawBitmap(back, 0, 0, Sampling.Nearest, blur);
                 return result;
             }
             case Degrade.Jpeg:
@@ -311,17 +312,32 @@ public class ClickAccuracyTests
         }
     }
 
-    private static SKPaint Font(float size, SKColor color) =>
-        new() { Typeface = SKTypeface.FromFamilyName("Segoe UI"), TextSize = size, IsAntialias = true, Color = color };
+    private static Ink Font(float size, SKColor color) => new(new SKFont(SKTypeface.FromFamilyName("Segoe UI"), size), new SKPaint { IsAntialias = true, Color = color });
 
-    private static void DrawButton(SKCanvas c, ScreenRect b, string label, Theme theme, SKPaint font)
+    /// <summary>Text in one font and colour.</summary>
+    private sealed record Ink(SKFont Font, SKPaint Paint) : IDisposable
+    {
+        public float Size => Font.Size;
+
+        public float MeasureText(string text) => Font.MeasureText(text);
+
+        public void Draw(SKCanvas c, string text, float x, float y) => c.DrawText(text, x, y, SKTextAlign.Left, Font, Paint);
+
+        public void Dispose()
+        {
+            Font.Dispose();
+            Paint.Dispose();
+        }
+    }
+
+    private static void DrawButton(SKCanvas c, ScreenRect b, string label, Theme theme, Ink font)
     {
         var r = new SKRect(b.X, b.Y, b.X + b.Width, b.Y + b.Height);
         using var face = new SKPaint { Color = theme.Face, IsAntialias = true };
         using var border = new SKPaint { Color = theme.Border, IsStroke = true, StrokeWidth = 1, IsAntialias = true };
         c.DrawRoundRect(r, 3, 3, face);
         c.DrawRoundRect(r, 3, 3, border);
-        c.DrawText(label, b.X + (b.Width - font.MeasureText(label)) / 2, b.Y + (b.Height + font.TextSize * 0.7f) / 2, font);
+        font.Draw(c, label, b.X + (b.Width - font.MeasureText(label)) / 2, b.Y + (b.Height + font.Size * 0.7f) / 2);
     }
 
     /// <summary>Buttons at random places that don't overlap.</summary>
@@ -363,7 +379,7 @@ public class ClickAccuracyTests
                 do code = $"{(char)('A' + rng.Next(26))}{(char)('A' + rng.Next(26))}-{rng.Next(100, 1000)}";
                 while (!used.Add(code));
                 c.DrawRect(x, y, cellW, cellH, line);
-                c.DrawText(code, x + 6, y + 15, font);
+                font.Draw(c, code, x + 6, y + 15);
                 cells.Add(new Target(code, new ScreenRect(x, y, cellW, cellH)));
             }
         return cells;
@@ -455,7 +471,7 @@ public class ClickAccuracyTests
                 var paint = isLink ? link : text;
                 var w = paint.MeasureText(word);
                 if (x + w > Math.Min(width - 80, 1800)) break;
-                c.DrawText(word, x, y, paint);
+                paint.Draw(c, word, x, y);
                 if (isLink)
                 {
                     c.DrawLine(x, y + 2, x + w, y + 2, underline);
@@ -506,9 +522,9 @@ public class ClickAccuracyTests
         using var head = Font(13, new SKColor(90, 96, 108));
         using var stripe = new SKPaint { Color = new SKColor(246, 247, 250) };
         using var icon = new SKPaint { Color = new SKColor(33, 115, 70) };
-        c.DrawText("Name", x0 + 36, y0 - 14, head);
-        c.DrawText("Size", 900, y0 - 14, head);
-        c.DrawText("Modified", 1100, y0 - 14, head);
+        head.Draw(c, "Name", x0 + 36, y0 - 14);
+        head.Draw(c, "Size", 900, y0 - 14);
+        head.Draw(c, "Modified", 1100, y0 - 14);
         var targets = new List<Target>();
         var y = y0;
         foreach (var name in FileNames.OrderBy(_ => rng.Next()))
@@ -516,9 +532,9 @@ public class ClickAccuracyTests
             if (targets.Count / 3 % 2 == 1)
                 c.DrawRect(x0, y, right - x0, rowH, stripe);
             c.DrawRect(x0 + 8, y + 11, 18, 18, icon);
-            c.DrawText(name, x0 + 36, y + 26, font);
-            c.DrawText($"{rng.Next(12, 900)} KB", 900, y + 26, font);
-            c.DrawText($"2026-{rng.Next(1, 11):00}-{rng.Next(1, 29):00} {rng.Next(8, 19)}:{rng.Next(0, 60):00}", 1100, y + 26, font);
+            font.Draw(c, name, x0 + 36, y + 26);
+            font.Draw(c, $"{rng.Next(12, 900)} KB", 900, y + 26);
+            font.Draw(c, $"2026-{rng.Next(1, 11):00}-{rng.Next(1, 29):00} {rng.Next(8, 19)}:{rng.Next(0, 60):00}", 1100, y + 26);
             var x = 1720;
             foreach (var button in new[] { "Open", "Rename", "Delete" })
             {
@@ -557,8 +573,8 @@ public class ClickAccuracyTests
             c.DrawRect(cx, cy, cardW, cardH, card);
             c.DrawRect(cx, cy, cardW, cardH, edge);
             c.DrawRect(cx + 20, cy + 16, cardW - 40, 120, photo);
-            c.DrawText(names[i], cx + 20, cy + 166, font);
-            c.DrawText($"${rng.Next(12, 60)}.99", cx + 20, cy + 196, price);
+            font.Draw(c, names[i], cx + 20, cy + 166);
+            price.Draw(c, $"${rng.Next(12, 60)}.99", cx + 20, cy + 196);
             var r = new ScreenRect(cx + 20, cy + 222, 130, 34);
             DrawButton(c, r, "Add to cart", theme, font);
             targets.Add(new Target("Add to cart", r, Ask: $"Click \"Add to cart\" for the {names[i]}."));
@@ -590,10 +606,10 @@ public class ClickAccuracyTests
             c.DrawRect(x, y0, w, h, body);
             c.DrawRect(x, y0, w, 36, bar);
             c.DrawRect(x, y0, w, h, edge);
-            c.DrawText(titles[i], x + 14, y0 + 24, title);
+            title.Draw(c, titles[i], x + 14, y0 + 24);
             for (var f = 0; f < fields.Length; f++)
             {
-                c.DrawText(fields[f], x + 24, y0 + 90 + f * 80, font);
+                font.Draw(c, fields[f], x + 24, y0 + 90 + f * 80);
                 c.DrawRect(x + 140, y0 + 70 + f * 80, w - 170, 30, box);
             }
             foreach (var (label, bx) in new[] { ("OK", x + w - 230), ("Cancel", x + w - 120) })
@@ -628,7 +644,7 @@ public class ClickAccuracyTests
         var y = y0;
         foreach (var name in Settings.OrderBy(_ => rng.Next()))
         {
-            c.DrawText(name, x0, y + 23, font);
+            font.Draw(c, name, x0, y + 23);
             var isOn = rng.Next(2) == 0;
             var r = new ScreenRect(sx, y + 8, 40, 20);
             c.DrawRoundRect(new SKRect(r.X, r.Y, r.X + r.Width, r.Y + r.Height), 10, 10, isOn ? on : off);

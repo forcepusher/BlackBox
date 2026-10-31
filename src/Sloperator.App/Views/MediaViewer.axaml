@@ -6,7 +6,7 @@
         x:DataType="vm:MediaViewerViewModel"
         Title="{Binding Name}"
         Icon="/Assets/sloperator.ico"
-        SystemDecorations="None"
+        WindowDecorations="None"
         ShowInTaskbar="False"
         WindowStartupLocation="Manual"
         Background="#000000">
