@@ -383,7 +383,7 @@ and the side buttons go through the chat's other pictures and videos, Esc, × or
 picture goes back. The agent's clicks step it aside as they do the chat's window, and its keys go to
 the window under both (before, from the chat they could go to the Video generator window there was then).
 
-**Prompt** in the File inspector panel's bar (see [File inspector](#file-inspector)), for a picture,
+**Prompt metadata** in the File inspector panel, over the file's corner ("Prompt" in the panel's bar until 2026-10-31, when the user found the name unclear and the button no selection; see [File inspector](#file-inspector)), for a picture,
 animation, video, sound or 3D model made with ComfyUI, shows the prompts it was made with and
 the settings that matter for making it again (model, LoRAs with their strength, shift, sampler,
 scheduler, steps, CFG, seed, denoise, size, a song's tempo and key, the pictures it started from),
@@ -3281,10 +3281,12 @@ file: a picker in the shown file's folder, listing "Files it shows" first, then 
 `FileInspector.PickerTypes`, then All files, since anything else opens in hex; the user's request,
 2026-10-26, not Open in the default program, which the cards no longer have) and the × that closes it; Show in folder was there too until the user had it taken off (2026-10-25), as the file's card in the chat has it. For a picture, animation, video, sound or 3D model that says
 how it was made (`MediaRecipe.Read`, run beside the file's own load so a large file's wait doesn't
-hold the picture), the bar has **Prompt** too: a toggle that shows its prompts and settings under the
-file, in a section at most half the panel's height (set on resize in `FileInspectorPanel`) that
-scrolls past that; it stays on from one file to the next, and is hidden for a file that says
-nothing. It is in the panel only, not in `FileInspectorView`, so the full-screen viewer's peek at a
+hold the picture), the panel has **Prompt metadata**: a toggle in the corner over the file, left of the zoom buttons, that
+shows its prompts and settings under the file, in a section at most half the panel's height (set on
+resize in `FileInspectorPanel`) that scrolls past that; it stays on from one file to the next, and is
+there only for a file that says how it was made (`ShowsPromptButton`). Until 2026-10-31 it was
+"Prompt" in the panel's bar; the user had it renamed, then moved out of the bar, as it isn't a way to
+select as Text and Area are, the bar's buttons staying the same for every file. It is in the panel only, not in `FileInspectorView`, so the full-screen viewer's peek at a
 document doesn't carry it. A message sent
 while it shows a file carries "File inspector · name" over the bubble and tells the model which file
 is open, so "what does this say" is about it. Which way a file is shown (`FileInspector.KindOf`,
@@ -3298,9 +3300,14 @@ under the panel's bar here and in the full-screen viewer for a card's peek, see 
 - SVG (.svg, a picture everywhere: `ComfyOutput.KindOf` says "image"): drawn by Svg.Skia (`SvgFile`,
   Core; see [SVG](#svg)) as shapes straight onto the `ZoomBox`'s canvas at the size they show
   (`ZoomBox.Drawing`, a custom draw operation), so it is sharp at any zoom, fitted as a picture is in
-  its own units. `Picture` holds it drawn at its own size too, for Copy image. **Code** in the bar (shown
-  for an SVG only, right of Area so Area turning up doesn't move it) shows its source as a text file is
-  shown, lines to select and ask about; it is off for each new file. An area marked on it is cut from it
+  its own units. `Picture` holds it drawn at its own size too, for Copy image. **Text** in the bar shows its source as a text
+  file is shown, lines to select and ask about; it is off for each new file. Until 2026-10-31 this was
+  **Code**, shown for an SVG only; the user then asked for a text selection in its place for every file
+  that has text behind how it looks: Text shows a Markdown file or a CSV as written (`Shown.File`, its
+  lines the file's), a Word, PowerPoint, Excel or PDF file or a web page as its text (`DocumentAsText`,
+  as read_file gives it, `Shown.TextOnly`; Windows' previewer and the PDF pages hidden meanwhile), and
+  is greyed for a text file or code ("Shown as text already") and for a picture, video, sound or 3D
+  model ("This file has no text"). An area marked on it is cut from it
   drawn 2048 pixels along its longer side at least, the model told the place in its units. One Svg.Skia
   can't draw shows as its text.
 - Video: a plain player of the panel's own (`InspectorVideoViewModel`; until 2026-10-25 the chat's
@@ -3402,7 +3409,12 @@ the .docx in Word's previewer showed only the whole-document card.
 frame-by-frame player). A left drag over a PDF's page, a picture or a video's frame marks a box
 (`DocumentArea`, Core: its sides as parts of what it is on, and the page); a click marks nothing and
 unpicks. On a text, whose drags select text, and on Windows' previewer, which takes the mouse in its
-own window, **Area** in the panel's bar (a toggle, shown for those only) freezes the view: it is read
+own window, **Area** in the panel's bar (a toggle at its left with Text, the two ways to select, apart
+from the panel's own buttons at its right, the user, 2026-10-31) freezes the view; it is there for every file
+(greyed with none open: until 2026-10-31 it was shown for those only, then greyed for the rest, then
+the user had it on for everything), so a picture, a video's frame (paused, as an animation, a sound
+or a model playing is), a waveform or a PDF's pages freeze too, the zoom buttons kept out of the
+still: it is read
 off the screen (`WindowPixels`, Platform.Windows: the region of Sloperator's window, its other windows
 over it left out of the capture, as the agent's screenshots do) and shown as a still in a `ZoomBox`
 to drag over; the live previewer's window is hidden meanwhile, as nothing can draw over a native

@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when the agent makes its first change.
 - File changes always shows Stage, Unstage and Discard over the diff, greyed while they have nothing
   to act on (no change yet, or files outside git, whose tooltip says so), instead of hiding them.
+- File inspector's bar always shows **Area** and **Text**, at its left before the file's name, greyed for
+  a file they don't apply to (the tooltip says why), so its buttons no longer come and go from one file
+  to the next. Area works on every file, pictures, videos, sounds and PDFs too. Text, in place of Code (an SVG's source), shows a file's
+  text to select: an SVG's or a Markdown file's source, a CSV as written, the text of a Word,
+  PowerPoint, Excel or PDF file or a web page.
+- File inspector's Prompt is now **Prompt metadata**, beside the zoom buttons over the file, and shows
+  only for a file that carries prompts.
 - Sloperator runs on Avalonia 12 and SkiaSharp 4 (both the latest): buttons and rows sized by their
   text are up to a pixel tighter, an empty field's hint keeps its grey under the pointer and while
   typed in, and pictures the window shrinks come out a shade smoother. Sloperator.exe is about 1 MB
