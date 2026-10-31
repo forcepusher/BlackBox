@@ -1658,7 +1658,7 @@ Servers' lists unlike the dropdowns'):
   panel's line up; the chat's server rows (`Border.bar.fields`) a shade lighter. In them buttons are
   8 apart and 12 from text. The splitters are one `GridSplitter` style (the title bar's colour).
 - **Settings' tabs** (the user, 2026-10-30; it had General and Advanced tabs before 17 October too):
-  General (Side panel, Notifications, Safety, the instructions, Text recognition) and Advanced
+  General (Notifications, Safety, the instructions, Text recognition) and Advanced
   (Screenshot size, MCP servers, Updates). One shared `TabControl` style: headers 20 SemiBold, the
   first one's word 16 in from the window's edge, where each tab's text starts; the Fluent yellow line
   under the picked one. Save with a broken MCP list turns to Advanced. Fluent sets the strip's margin
@@ -3100,12 +3100,9 @@ again from History shows it again; a new chat starts empty.
 
 **The panel** (Side panel, File changes; "Diff", then "Code diff", then "Code changes", until the user renamed it on
 2026-10-24 and 2026-10-25) opens on the left of the chat as Video generator does, with the changed files listed on the
-left and their diff beside them. **It opens by itself** on the agent's first file change in a chat (the user,
-2026-10-27): once per chat, so closed it stays closed. A chat whose list already has files (one opened again from
-History) had its turn; a call that changed nothing to show (a failed write) doesn't count, as `Diff()` is read on the
-agent's thread while no change was shown yet. With another panel open (File inspector, Video generator) it doesn't take
-its place, and the chat's turn is spent. Settings → General → Side panel, "Open File changes when the agent changes a file"
-turns it off (`panels.openFileChanges`, on by default). It reads them again 250 ms after a call that may have changed files (a file written in
+left and their diff beside them. It opens only when picked in the Side panel dropdown: from 2026-10-27 it opened by
+itself on the agent's first file change in a chat (with a setting to turn that off), until the user found it
+"flat out bad" (2026-10-31): it widened the window, to the whole screen, in the middle of a task. It reads them again 250 ms after a call that may have changed files (a file written in
 parts is read once), keeping the picked lines picked. Lines are picked with a click,
 Shift+click and Ctrl+click (a hunk's divider picks its lines, a file's name all of it; the rows themselves are never picked) and go into the chat's box as their
 file, captioned "Lines 48-49 · MainWindowViewModel.SidePanel.cs" (the lines first: a long name is
@@ -3204,9 +3201,8 @@ removed lines counted by file and text, as an edit moves every number below it) 
 were too short for the user, 2026-10-27; not the pick's look).
 Watching, the first fresh row is left (its file isn't selected: only a click selects one, the user,
 2026-10-28) where it is in the upper half of the diff, else brought a quarter of the way down. The first read and
-another chat's list light nothing, except when the panel opened on its own at the agent's first change
-(`OpeningOnFirstChange`): that read is the change, so all its added and removed lines light up
-(`Fresh` with no diff before). A read that finds nothing new (the agent's next call often comes
+another chat's list light nothing (until 2026-10-31 a panel opened on its own at the agent's first change
+lit all of its first read). A read that finds nothing new (the agent's next call often comes
 250 ms after, and the first change's own `ChangesUpdated` reads again) keeps the last change's rows
 and their light, the fade going on; before, its new rows replaced the lit ones unlit, so a light
 could go out at once. Only a click on the toggle turns Watch on or off (the user, 2026-10-28): a

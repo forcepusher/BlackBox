@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The × that closes a side panel is read out as "Close the panel" by screen readers (it said "Close
   the tool").
 
+### Removed
+- File changes no longer opens by itself when the agent first changes a file, which widened the
+  window in the middle of a task; pick it in the Side panel dropdown to see the changes. Its setting
+  under Settings → General is gone too.
+
 ## [1.2.0] - 2026-10-31
 ### Added
 - The agent can find text on the screen with Windows' own text recognition, so it finds a label, a
