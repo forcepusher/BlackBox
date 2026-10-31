@@ -884,7 +884,7 @@ opening on a narrow screen left the chat only 330. Video generator also needs th
 timeline; a shorter window grows to it as the panel opens. The video's name was in a StackPanel across,
 which gives a TextBlock all the room it wants: it was never cut short and pushed the fields over the
 buttons. The panel has a viewer with how the piece shown was made beside it, the
-a bar under them and the timeline under that (see "Looks as the other panels" below); its top bar has the video's name (its menu, see below), the frame size and frame
+timeline under them and a bar under that (see "Looks as the other panels" below); its top bar has the video's name (its menu, see below), the frame size and frame
 rate, and **Make the video** (the user, 2026-10-24: "Get rid of the settings button
 altogether, put frame size and framerate fields at the top"; the cog's title went with the folder's
 name, its soundtrack and shots' sound sliders with the levels they set). A **New video** button beside
@@ -937,7 +937,7 @@ versions), and Versions. The video's
 name at the top opens the videos' menu: each video to open, New video, Rename (renaming the open video
 lets go of what the viewer plays first: Windows doesn't move a folder a file in it is open from),
 Delete (the video changed last opens) and Show in Explorer. Nothing is renamed or deleted while the
-chat is at work on the video. The line in the bar over the timeline says what right-click and dropping do, until
+chat is at work on the video. The line in the bar under the timeline says what right-click and dropping do, until
 the status line has something to say: nothing showed the menu was there (the user, 2026-10-24).
 
 **Looks as the other panels** (2026-10-31, a review asked for by the user through the coordinator, after
@@ -952,11 +952,13 @@ going or moving mid-task, greyed with a tip when they don't apply). What changed
 - **Use this version** is always at the column's top, a small ghost button, greyed but for a version
   shown, its tip saying how to get one (it was yellow and shown only with a version).
 - The timeline's head strip (40 high, its own padding, a yellow round play, the playhead's time in
-  yellow Consolas, − and + as text) is a bar drawn as the File inspector's and the Code
-  editor's (`Border.bar.slim.foot`, Padding 8,4), over the timeline (merged under it, it went on top the
-  same day at the user's word: "the play button should be on top", where a video editor has it): play (a small ghost icon), the time (muted, 12,
-  tabular figures), − / % / + (the percentage against the usual 64 px a second, which it goes back to;
-  each greyed at its end with a tip: 12 and 240), the status line and the video's length.
+  yellow Consolas, − and + as text) went. Play (a small ghost icon) and the time (muted, 12, tabular
+  figures) sit on the ruler's row, left of 0:00 in the names column (the user, 2026-10-31: "the play
+  button should be on top", "at the same level timeline seconds are"; a bar under the timeline had them
+  first). A bar under the timeline as the File inspector's and the Code editor's
+  (`Border.bar.slim.foot`, Padding 8,4) has − / % / + (the percentage against the usual 64 px a second,
+  which it goes back to; each greyed at its end with a tip: 12 and 240), the status line and the
+  video's length.
 - Make the video and + Sound line greyed where they can't act (+ Sound line did nothing at 12 lines).
 - A clip's and sound's edge handles are grey (`BbControlBorderHover`), yellow under the pointer and on
   the one picked: a 20% yellow on every edge looked lit all the time, as Make the video did.
