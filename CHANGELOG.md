@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Settings → Advanced → Updates shows which version of Sloperator is running.
 
+### Changed
+- Sloperator runs on Avalonia 12 and SkiaSharp 4. An empty field's hint keeps its grey when you
+  point at the field or click into it, instead of dimming.
+
 ## [1.2.0] - 2026-10-31
 ### Added
 - The agent can find text on the screen with Windows' own text recognition, so it finds a label, a
