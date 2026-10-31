@@ -3451,7 +3451,8 @@ seen in the chat. An MCP server's SVG image is drawn for the model too (it was l
 SkiaSharp 4.148 and run on 4.154. It brings HarfBuzzSharp 14.2.0 where Avalonia 12.1.4 asks for 8.3.1.3:
 Avalonia's text at six sizes in Latin, Cyrillic, Arabic, Hebrew and CJK came out pixel-identical on
 both (headless, 2026-10-31), and the App tests passed. A trimmed (TrimMode=full) single-file build
-draws the same and warns of nothing; the exe grows about 1.7 MB, its HarfBuzz library 0.25 MB of it.
+draws the same and warns of nothing; the exe grows about 1.5 MB (27.8 MB against develop's 26.3,
+published on the laptop, 2026-10-31), its HarfBuzz library 0.25 MB of it.
 The drawing is recorded again into an `SKPicture` of its own (`SvgPicture`), so it outlives the
 parser; nothing disposes it on the UI's side, as the render thread may be drawing it. An SVG with no
 size takes its shapes' bounds from 0,0; one with no shapes at all (Svg.Skia makes it 1x1) is no picture.

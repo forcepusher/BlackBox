@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SVG files show as pictures: in the chat, full screen, and in File inspector, where they stay sharp
   however far you zoom and **Code** shows their source to select lines of. The agent sees what an SVG
   draws when it reads one, and writes design mockups as SVG files, so you see a mockup right in the
-  chat. Pictures an SVG links on the web aren't fetched. Sloperator.exe is about 2 MB bigger.
+  chat. Pictures an SVG links on the web aren't fetched. Sloperator.exe is about 1.5 MB bigger.
 
 ### Changed
 - Sloperator runs on Avalonia 12 and SkiaSharp 4 (both the latest): buttons and rows sized by their
