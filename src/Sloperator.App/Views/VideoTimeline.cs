@@ -11,15 +11,13 @@ internal static class VideoColors
 {
     public static readonly IBrush Muted = new SolidColorBrush(Color.Parse("#A2A2A2"));
     public static readonly IBrush Text = new SolidColorBrush(Color.Parse("#F0F0F0"));
-    /// <summary>The timeline's own blue: the waveforms, and the video's end.</summary>
-    public static readonly IBrush Sound = new SolidColorBrush(Color.Parse("#6B8299"));
-    public static readonly IPen WavePen = new Pen(Sound, 1);
+    public static readonly IPen WavePen = new Pen(new SolidColorBrush(Color.Parse("#6B8299")), 1);
     public static readonly IPen Tick = new Pen(new SolidColorBrush(Color.Parse("#4D4D4D")), 1);
     public static readonly IPen Border = new Pen(new SolidColorBrush(Color.Parse("#2A2A2A")), 1);
     public static readonly IPen Picked = new Pen(new SolidColorBrush(Color.Parse("#FCC21B")), 2);
-    // The video's end: the waveforms' blue, the timeline's own colour (the user, 2026-10-31: "something that
-    // matches our overall palette"); it was the playhead's yellow, then red, "a bit scary", then grey.
-    public static readonly IBrush EndBrush = Sound;
+    // The video's end: light grey (BbMuted), not the playhead's yellow, which it was, nor red, which the
+    // user found "a bit scary" (2026-10-31).
+    public static readonly IBrush EndBrush = new SolidColorBrush(Color.Parse("#A2A2A2"));
     public static readonly IPen End = new Pen(EndBrush, 1);
     public static readonly IBrush OnEnd = new SolidColorBrush(Color.Parse("#1A1A1A"));
     public static readonly IPen Hover = new Pen(Muted, 1, new DashStyle([3, 2], 0));

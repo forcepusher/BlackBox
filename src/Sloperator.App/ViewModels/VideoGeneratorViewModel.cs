@@ -215,7 +215,7 @@ public sealed partial class VideoGeneratorViewModel : ObservableObject, ISidePan
     [NotifyPropertyChangedFor(nameof(EndX), nameof(HasLength))]
     private double _length;
 
-    /// <summary>Where the video ends on the timeline: a line in the waveforms' blue down every row, its length on the ruler.</summary>
+    /// <summary>Where the video ends on the timeline: a light grey line down every row, its length on the ruler.</summary>
     public double EndX => Lead + Length * Pps;
 
     public bool HasLength => Length > 0;

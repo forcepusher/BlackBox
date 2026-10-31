@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- Video generator's timeline shows the time under the pointer on its ruler, and a blue line where the
+- Video generator's timeline shows the time under the pointer on its ruler, and a grey line where the
   video ends, with its length.
 - **Code editor** in the Side panel dropdown: a folder's files in a tree and the file you click open
   beside it, with line numbers and highlighting, to read and edit (Ctrl+S saves). It shows the folder
