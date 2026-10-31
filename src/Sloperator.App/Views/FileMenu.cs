@@ -180,11 +180,20 @@ public static class FileMenu
         {
             if (data is not null)
                 return new Bitmap(new MemoryStream(data));
+            if (path is not null && SvgFile.Handles(path))
+                return PictureFile.Decode(path) is { } drawn ? Copied(drawn) : null;
             if (path is not null && File.Exists(path))
                 return new Bitmap(path);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException) { }
         return null;
+    }
+
+    /// <summary>An SVG drawn at its own size, as a bitmap of its own.</summary>
+    private static Bitmap Copied(SkiaSharp.SKBitmap drawn)
+    {
+        using (drawn)
+            return ViewModels.FilePreview.ToBitmap(drawn);
     }
 
     /// <summary>A copy of a picture on screen, which its view may let go of (a video's frame changes as it plays).</summary>

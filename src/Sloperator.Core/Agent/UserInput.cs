@@ -85,7 +85,7 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
                 list.Append("a folder");
             else if (!File.Exists(file))
                 list.Append("no longer there");
-            else if (seesImages && shownCount < MaxShown && Picture.Handles(file) && Picture.Load(file) is { } shown)
+            else if (seesImages && shownCount < MaxShown && Picture.Shows(file) && Picture.Load(file) is { } shown)
             {
                 shownCount++;
                 list.Append($"a {shown.Width}x{shown.Height} picture, shown below")
@@ -138,7 +138,7 @@ public sealed record UserInput(string Text, IReadOnlyList<string> Files)
                 for (var at = entry.LastIndexOf(" (", StringComparison.Ordinal); at > 0; at = entry.LastIndexOf(" (", at - 1, StringComparison.Ordinal))
                     if (File.Exists(entry[..at]))
                     {
-                        if (Picture.Handles(entry[..at]))
+                        if (Picture.Shows(entry[..at]))
                             pictures.Add(entry[..at]);
                         break;
                     }

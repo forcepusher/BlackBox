@@ -24,7 +24,7 @@
       </ScrollViewer>
 
       <!-- A picture: zoomed with the wheel, panned with a right drag, an area marked with a left one. -->
-      <views:ZoomBox x:Name="PictureBox" Source="{Binding Picture}" IsVisible="{Binding Picture, Converter={x:Static ObjectConverters.IsNotNull}}" Margin="16"
+      <views:ZoomBox x:Name="PictureBox" Source="{Binding Picture}" Drawing="{Binding Drawing}" IsVisible="{Binding ShowsPicture}" Margin="16"
                      views:FileMenu.Image="{Binding Picture}" views:FileMenu.File="{Binding Path}"
                      Zoom="{Binding Zoom}" Mark="{Binding Mark, Mode=TwoWay}" CanMark="{Binding CanPick}" AutomationProperties.Name="Picture" />
 
