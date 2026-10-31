@@ -17,14 +17,14 @@
                 ToolTip.Tip="Open a file" AutomationProperties.Name="Open file">
           <PathIcon Width="14" Height="14" Data="M19 20H4a2 2 0 0 1-2-2V6c0-1.11.89-2 2-2h6l2 2h7a2 2 0 0 1 2 2H4v10l2.14-8h17.07l-2.28 8.5c-.23.87-1.01 1.5-1.93 1.5z" />
         </Button>
-        <!-- Code, Area and Prompt are always there, greyed where they don't apply (their tooltips say why), so
-             the bar doesn't change from one file to the next (the user, 2026-10-31).
-             Code: an SVG's source in place of what it draws. -->
-        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding ShowCode}" IsEnabled="{Binding IsDrawing}" Margin="8,0,0,0"
-                      ToolTip.Tip="{Binding CodeTip}" ToolTip.ShowOnDisabled="True" AutomationProperties.Name="Code">
+        <!-- Text, Area and Prompt metadata are always there, greyed where they don't apply (their tooltips say
+             why), so the bar doesn't change from one file to the next (the user, 2026-10-31).
+             Text: the file's text in place of how it looks (an SVG's source, a document's text), to select. -->
+        <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding ShowText}" IsEnabled="{Binding CanShowText}" Margin="8,0,0,0"
+                      ToolTip.Tip="{Binding TextTip}" ToolTip.ShowOnDisabled="True" AutomationProperties.Name="Text">
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <PathIcon Width="14" Height="14" Data="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z" />
-            <TextBlock Text="Code" VerticalAlignment="Center" />
+            <PathIcon Width="14" Height="14" Data="M2.5 4v3h5v12h3V7h5V4h-13zm19 5h-9v3h3v7h3v-7h3V9z" />
+            <TextBlock Text="Text" VerticalAlignment="Center" />
           </StackPanel>
         </ToggleButton>
         <!-- Area: what is shown frozen, to drag over a part of it (a text, whose drags select text;
@@ -36,13 +36,13 @@
             <TextBlock Text="Area" VerticalAlignment="Center" />
           </StackPanel>
         </ToggleButton>
-        <!-- Prompt: for a picture, animation, video, sound or 3D model that says how it was made, its
+        <!-- Prompt metadata: for a picture, animation, video, sound or 3D model that says how it was made, its
              prompts and settings under it. -->
         <ToggleButton DockPanel.Dock="Right" Classes="ghost" IsChecked="{Binding ShowRecipe}" IsEnabled="{Binding HasRecipe}" Margin="8,0,0,0"
-                      ToolTip.Tip="{Binding PromptTip}" ToolTip.ShowOnDisabled="True" AutomationProperties.Name="Prompt">
+                      ToolTip.Tip="{Binding PromptTip}" ToolTip.ShowOnDisabled="True" AutomationProperties.Name="Prompt metadata">
           <StackPanel Orientation="Horizontal" Spacing="8">
             <PathIcon Width="14" Height="14" Data="M3 18h12v-2H3v2zM3 6v2h18V6H3zm0 7h18v-2H3v2z" />
-            <TextBlock Text="Prompt" VerticalAlignment="Center" />
+            <TextBlock Text="Prompt metadata" VerticalAlignment="Center" />
           </StackPanel>
         </ToggleButton>
         <Panel>
@@ -59,7 +59,7 @@
       </DockPanel>
     </Border>
 
-    <!-- What the file was made with, with Prompt on: under the file, at most half the panel's height
+    <!-- What the file was made with, with Prompt metadata on: under the file, at most half the panel's height
          (set in code), scrolling past that. Room around the text as its margin: a ScrollViewer's
          padding isn't taken from the width, and the text ran past the edge. -->
     <Border x:Name="RecipeBox" DockPanel.Dock="Bottom" Background="{StaticResource BbSurface}" BorderBrush="{StaticResource BbBorder}" BorderThickness="0,1,0,0">
