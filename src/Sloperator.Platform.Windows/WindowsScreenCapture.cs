@@ -39,6 +39,35 @@ internal sealed class WindowsScreenCapture : IScreenCapture
         return monitors.OrderByDescending(m => m.Primary).ThenBy(m => m.Rect.X).ThenBy(m => m.Rect.Y).Select(m => m.Rect).ToList();
     }
 
+    /// <summary>
+    /// Normal windows with a title (no tool windows, owned popups, minimized or cloaked ones, as
+    /// Alt+Tab lists them), in z-order, and none of Sloperator's: its captures leave those out.
+    /// </summary>
+    public unsafe IReadOnlyList<ScreenWindow> GetWindows()
+    {
+        EnsurePhysicalPixels();
+        var windows = new List<ScreenWindow>();
+        var process = (uint)Environment.ProcessId;
+        var title = new char[512];
+        EnumWindows((w, _) =>
+        {
+            if (!IsWindowVisible(w) || IsIconic(w) || GetWindow(w, GW_OWNER) != 0) return true;
+            if ((GetWindowLongPtr(w, GWL_EXSTYLE) & (nint)WS_EX_TOOLWINDOW) != 0) return true;
+            if (DwmGetWindowAttribute(w, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) return true;
+            if (GetWindowThreadProcessId(w, out var owner) != 0 && owner == process) return true;
+            int length;
+            fixed (char* p = title)
+                length = GetWindowText(w, p, title.Length);
+            if (length <= 0) return true;
+            // The frame as it shows: GetWindowRect counts Windows 10's invisible resize borders, some 7 px on three sides.
+            if (DwmGetWindowAttribute(w, DWMWA_EXTENDED_FRAME_BOUNDS, out RECT r, Marshal.SizeOf<RECT>()) != 0 && !GetWindowRect(w, out r)) return true;
+            if (r.Right > r.Left && r.Bottom > r.Top)
+                windows.Add(new ScreenWindow(new string(title, 0, length), new ScreenRect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top)));
+            return true;
+        }, 0);
+        return windows;
+    }
+
     public RawImage Capture(ScreenRect region, bool includeCursor)
     {
         EnsurePhysicalPixels();

@@ -316,6 +316,7 @@ public sealed partial class MainWindowViewModel
             // stopped with. A message of the user's that came too late for it is the next run's.
             if (Items.LastOrDefault(i => i is not UserMessageItem && i.At >= started) is { } end)
                 end.RunTook = at - started;
+            ShowCaptureInReply(Items, started, _previews);
 
             // Not for a stop: the user stopped it. Nor for a task that goes on with what they sent
             // too late for this run, nor for a context compacted, which the user waits for.
@@ -324,6 +325,25 @@ public sealed partial class MainWindowViewModel
             else if (reason == AgentStopReason.Completed && !compacting && !HasQueued)
                 NotifyUser(Items.OfType<AssistantMessageItem>().LastOrDefault(m => m.At >= started && m.HasText) is { } reply ? FirstLine(reply.ShownText) : "Done.");
         });
+    }
+
+    /// <summary>
+    /// The last picture of its work the run took with capture_result, in the run's last reply under
+    /// its words, with the model's caption: the card it came on is one of many, up the chat.
+    /// </summary>
+    public static void ShowCaptureInReply(IReadOnlyList<ChatItemViewModel> items, DateTime started, PreviewServices previews)
+    {
+        if (items.OfType<AssistantMessageItem>().LastOrDefault(m => m.At >= started && m.HasText) is not { } reply
+            || items.OfType<ToolCallItem>().LastOrDefault(t => t.Name == "capture_result" && t.At >= started && t.State == ToolItemState.Done) is not { SavedFiles: [var picture] } capture)
+            return;
+        reply.ShowCapture(picture, CaptionOf(capture.Arguments), previews);
+    }
+
+    /// <summary>The caption a capture_result call was given; null for none.</summary>
+    private static string? CaptionOf(string arguments)
+    {
+        try { return System.Text.Json.Nodes.JsonNode.Parse(arguments)?["caption"]?.GetValue<string>(); }
+        catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or FormatException) { return null; }
     }
 
     /// <summary>

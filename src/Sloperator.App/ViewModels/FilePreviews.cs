@@ -134,14 +134,22 @@ public sealed partial class ImagePreview(string path) : FilePreview(path)
     [ObservableProperty]
     private Bitmap? _image;
 
+    /// <summary>How wide it is shown where it isn't to be enlarged (a reply's picture of the work): its own width, up to the chat's.</summary>
+    [ObservableProperty]
+    private double _shownWidth = Width;
+
     protected override void Load() => Background(() =>
     {
-        using var stream = File.OpenRead(Path);
-        var bitmap = Bitmap.DecodeToWidth(stream, Width, BitmapInterpolationMode.HighQuality);
         var size = Size(Path);
-        using var probe = PictureFile.Codec(Path);
-        var details = probe is null ? size : $"{probe.Info.Width}x{probe.Info.Height}, {size}";
-        Show(() => (Image, Details) = (bitmap, details), bitmap.Dispose);
+        (int Width, int Height)? own;
+        using (var probe = PictureFile.Codec(Path))
+            own = probe is null ? null : (probe.Info.Width, probe.Info.Height);
+        var details = own is { } o ? $"{o.Width}x{o.Height}, {size}" : size;
+        // A narrower one at its own width, not enlarged: the chat's layout stretches it where it is to be.
+        var shown = Math.Min(Width, own?.Width ?? Width);
+        using var stream = File.OpenRead(Path);
+        var bitmap = Bitmap.DecodeToWidth(stream, shown, BitmapInterpolationMode.HighQuality);
+        Show(() => (Image, Details, ShownWidth) = (bitmap, details, shown), bitmap.Dispose);
     });
 
     protected override void Release()

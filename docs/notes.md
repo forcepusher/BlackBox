@@ -2630,6 +2630,7 @@ prints the traceback and exits with 0.
 | `screenshot` | Captures a screen scaled down to fit the max screenshot size, on the 32px vision grid; `screen=N` looks at another monitor |
 | `mouse_click` | Clicks at x/y (see below); `modifiers` holds keys through the click, as in Ctrl+click to add to a selection or Shift+click to select a range |
 | `zoom` | A sharp, enlarged picture of the region around x/y, with rulers in screenshot coordinates, to aim at small things (see below) |
+| `capture_result` | A picture of what the agent made for the user: a window (`window`, part of its title), a box (`x`, `y`, `width`, `height`) or the whole screen, with a `caption` (see below) |
 | `mouse_move`, `mouse_drag`, `scroll` | Mouse control in screenshot coordinates; a drag can hold `modifiers` too |
 | `type_text`, `press_keys` | Typing as key presses (see below) and key chords (`ctrl+c`, `win+r`, …); `hold_seconds` keeps keys down for a while, to walk in a game or make a long press |
 | `wait` | Waits up to 10 minutes, then screenshots; with `until_change` it stops as soon as the screen changes (a reply in a chat, a window or page that finished loading) |
@@ -2649,7 +2650,7 @@ prints the traceback and exits with 0.
 
 Settings → General → Safety has **Enable screenshots** and **Enable keyboard and mouse control**, both on by
 default (`agent.enableScreenshots`, `agent.enableControl`). Screenshots off takes away `screenshot`,
-`zoom` and `wait`, and with them the mouse and keyboard tools, whatever the second box says: the
+`zoom`, `capture_result` and `wait`, and with them the mouse and keyboard tools, whatever the second box says: the
 user's rule is no clicking blind, so that box is greyed out then. Control off keeps the three that
 look and takes away `mouse_*`, `scroll`, `type_text` and `press_keys`; the prompt's rules for
 clicking give way to one line saying the agent can look but not act, and to do the work through
@@ -2657,6 +2658,19 @@ files, the shell and MCP servers. A model that takes no images has neither, as b
 screen's "Use any app" card says which of these is why. The screenshot after each action
 (`ScreenshotAfterActions`) only comes with the action tools, so it needs no box of its own; it stays
 an internal switch for tests. The settings apply from the next message.
+
+`capture_result` exists because in test chats no model ever showed its finished work in its final
+reply: there was no tool for it, and the screen an action left is folded on its card. The prompt's
+"check the result" rule asks for it, cropped to the work, the whole screen only when that is the point
+(the same line for every model). The capture is fresh, without the pointer, at the screen's own
+resolution; a window is cut to its DWM frame (no invisible borders) and the screen it is mostly on,
+a box maps like a click's x/y. The user gets a PNG in the chat's folder (`Data/chats/<id>/capture-N.png`,
+apart from the numbered pictures the conversation names, so undo doesn't drop it and deleting the
+chat does), shown open on the card as a file preview; the model gets the same crop as a JPEG at the
+zoom's quality, no larger than a screenshot of that screen. The app names the chat when a run starts
+for this. When the run ends, its last capture also shows in its last reply, under the words, with
+the caption (`ChatEntry.Capture`/`Caption`, so a reopened chat has it). A "done" claim whose only
+calls are looks ends the turn, but not when one of them is `capture_result`.
 
 Models often fumble tool-call syntax, so Sloperator repairs calls on the fly: Qwen XML, Gemma 4 and
 JSON calls printed as text, broken JSON, aliased tool names (`click`, `bash`…) and misnamed
