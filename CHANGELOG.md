@@ -76,6 +76,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   up to a tenth of a second late, in the File inspector and the chat's players.
 
 ### Removed
+- The blob logo is gone from the window's title bar; the title starts where it was. The taskbar
+  and Alt+Tab keep the icon.
 - File changes no longer opens by itself when the agent first changes a file, which widened the
   window in the middle of a task; pick it in the Side panel dropdown to see the changes. Its setting
   under Settings → General is gone too.

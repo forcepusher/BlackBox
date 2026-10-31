@@ -1547,13 +1547,13 @@ for the time since the dance began on a 10 ms timer, so it keeps the file's pace
 by sampling the blob on screen every 8 ms for 3 s.
 The window shows one blob at most (the user, 2026-10-27): while the intro is up (`ShowIntro`, an empty
 chat or one of notices only) its logo is the blob and this one is hidden; it appears with the first
-prompt and goes again with New chat. The title bar's icon is the window's, not counted. The GIF is "apartyblob" from github.com/Raymo111/emoji, Apache
+prompt and goes again with New chat. The GIF is "apartyblob" from github.com/Raymo111/emoji, Apache
 License 2.0, the set the logo was traced from (docs/logo/LICENSE-blobs.txt). Its frames are decoded once
 with SkiaSharp's `SKCodec`, as chat previews of animations are (no GIF package), and its timer runs only
 while it dances and is in a window.
 
 ## App icon
-`Assets/sloperator.ico` (the exe, the taskbar, Alt+Tab; the title bar draws `sloperator.png`, see Title bar) is drawn by
+`Assets/sloperator.ico` (the exe, the taskbar, Alt+Tab; the title bar has no icon, see Title bar) is drawn by
 `scripts/make-icon.ps1` from `docs/logo/blob.svg`, each size on its own, 4x oversampled and shrunk
 by averaging each 4x4 block, so an edge pixel holds just how much of it the shape covers (a
 bicubic shrink, until 2026-10-30, left a pale ring inside every edge and a soft grey one outside).
@@ -1796,12 +1796,15 @@ takes its look from its kind:
 ## Title bar
 The chat windows and Settings draw their own title bar (`Views/TitleBar`, docked on top; its look is
 App.axaml's "The title bar" styles): a strip 32 high in the frame's #101010 with a #232323 line under
-it, the blob 16x16 at 12 from the left, the title 8 after it in Inter 12 #BBBBBB (cut with "…"), and
+it, the title 12 from the left in Inter 12 #BBBBBB (cut with "…"), and
 minimize, maximize (restore when maximized) and close 46 x 32 on the right, a sign of 1-pixel lines
 in a 16 box (`CaptionGlyph`, drawn on whole screen pixels: a path's 1 px stroke is 1.25 px at 125%
 and blurs). Under the pointer #2C2C2C, pressed #333333, close #C42B1C with a white sign; text and
 signs #808080 while the window isn't active. Windows 10 drew its own grey bar whatever DWM was asked
 (the caption colours are Windows 11's). The full-screen viewer has no title bar, as before.
+The bar had the blob 16x16 at 12 from the left and the title 8 after it until 2026-10-31, when
+the user asked for it to go: the title took its place at 12, and the exe, taskbar and Alt+Tab keep
+the icon.
 The buttons' tooltips (Minimize, Maximize or Restore Down, Close) are at the pointer, as every
 tooltip in the app and Windows' own caption tooltips: Avalonia's `Pointer` placement, the tip's
 corner 20 under the pointer, flipped to its left when it would run off the screen (Restore Down and
