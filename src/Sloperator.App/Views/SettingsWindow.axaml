@@ -53,7 +53,7 @@
 
             <TextBlock Classes="h2" Text="Safety" />
             <Grid Classes="form" ColumnDefinitions="160,*">
-              <TextBlock Classes="label" Text="Ask me first" />
+              <TextBlock Classes="label" Text="Tool call approval" />
               <ComboBox Grid.Column="1" ItemsSource="{Binding ApprovalModes}" SelectedIndex="{Binding ApprovalIndex}" HorizontalAlignment="Stretch" />
             </Grid>
             <CheckBox x:Name="ScreenshotsBox" IsChecked="{Binding Agent.EnableScreenshots}" Content="Enable screenshots" />
