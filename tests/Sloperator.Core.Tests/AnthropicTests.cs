@@ -481,7 +481,8 @@ public class AnthropicTests
         };
         var client = new OpenAiChatClient(new HttpClient(api), Address, "sk-ant-test");
         var ctx = new ToolContext { Platform = new FakePlatform(), Settings = new AgentSettings(), WorkingDirectory = Path.GetTempPath() };
-        var session = new AgentSession(client, Opus, ToolRegistry.CreateDefault(true), ctx, "You are Sloperator, test prompt.", contextTokens: 20_000);
+        // Resets past 12k: the 15k the first reply reports, not the tool list alone (some 10k, and growing with each tool).
+        var session = new AgentSession(client, Opus, ToolRegistry.CreateDefault(true), ctx, "You are Sloperator, test prompt.", contextTokens: 24_000);
         var observer = new RecordingObserver();
         await session.RunAsync("Look at the screen.", observer, CancellationToken.None);
 

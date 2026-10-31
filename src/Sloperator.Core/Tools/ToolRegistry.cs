@@ -14,7 +14,7 @@ public sealed class ToolRegistry
 
     /// <param name="extra">Tools from outside Sloperator (MCP servers), offered after its own.</param>
     /// <param name="includeIndex">Whether index_folder is offered: off only to measure what the index changes (sloperator-cli --no-index).</param>
-    /// <param name="includeScreenTools">Whether the agent can look at the screen: screenshot, zoom and wait.</param>
+    /// <param name="includeScreenTools">Whether the agent can look at the screen: screenshot, zoom, capture_result and wait.</param>
     /// <param name="includeControl">Whether it can also use the mouse and keyboard; never without <paramref name="includeScreenTools"/>.</param>
     /// <param name="includeFindText">Whether it can read the screen's text (find_text, Settings' Use text recognition); never without <paramref name="includeScreenTools"/>.</param>
     public static ToolRegistry CreateDefault(bool includeScreenTools, IEnumerable<Tool>? extra = null, bool includeWebTools = true, bool includeIndex = true,
@@ -27,6 +27,7 @@ public sealed class ToolRegistry
         {
             yield return new ScreenshotTool();
             yield return new ZoomTool();
+            yield return new CaptureResultTool();
         }
         if (includeFindText)
             yield return new FindTextTool();

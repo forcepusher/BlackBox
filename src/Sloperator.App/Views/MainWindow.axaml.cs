@@ -558,6 +558,13 @@ public partial class MainWindow : Window
         var index = entries.FindIndex(e => ReferenceEquals(e.Source, source));
         if (index < 0 && source is AttachmentItem { Path: var path } attachment && MainWindowViewModel.Viewable(path))
             (entries, index) = ([new MediaEntry(attachment, path, null, attachment.FileName)], 0);
+        // A reply's picture of the work (capture_result) is the one on the call's card, where the chat's pictures go through it.
+        if (index < 0 && source is ImagePreview capture)
+        {
+            index = entries.FindIndex(e => string.Equals(e.Path, capture.Path, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+                (entries, index) = ([new MediaEntry(capture, capture.Path, null, capture.FileName)], 0);
+        }
         if (index < 0 || (Screens.ScreenFromWindow(this) ?? Screens.Primary) is not { } screen)
             return false;
         _viewer?.Close();

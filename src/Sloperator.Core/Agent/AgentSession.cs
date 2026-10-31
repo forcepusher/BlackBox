@@ -437,9 +437,10 @@ public sealed partial class AgentSession(
                     observer.OnNotice("The server stopped the reply at its length limit (in LM Studio: Limit Response Length); asking the model to go on.");
                 // "The task is complete" followed by yet another screenshot: small models can keep
                 // re-verifying forever. A completion claim with only look-only calls ends the turn.
-                // Not a reset it asked for ("Handoff written, all done." with reset_context).
+                // Not a reset it asked for ("Handoff written, all done." with reset_context), nor the
+                // picture of its work it takes for the user then, which is what it is for.
                 if (reply.HasToolCalls && LooksFinished(reply.Content) &&
-                    reply.ToolCalls!.All(c => ToolCallRepair.ResolveTool(c.Name, tools) is { Risk: ToolRisk.ReadOnly } t && t is not ResetContextTool))
+                    reply.ToolCalls!.All(c => ToolCallRepair.ResolveTool(c.Name, tools) is { Risk: ToolRisk.ReadOnly } t && t is not (ResetContextTool or CaptureResultTool)))
                     reply.ToolCalls = null;
                 History.Add(reply);
                 observer.OnAssistantMessage(reply);

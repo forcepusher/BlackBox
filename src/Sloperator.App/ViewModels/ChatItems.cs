@@ -228,6 +228,37 @@ public sealed partial class AssistantMessageItem : ChatItemViewModel
     /// <summary>The "…" under a reply in progress; while the Thoughts header already says "Thinking…" it would only be a stray line.</summary>
     public bool ShowTypingDots => IsStreaming && (HasText || !HasReasoning);
 
+    /// <summary>
+    /// In a run's last reply, under its words: the last picture of its work the run took with
+    /// capture_result, as the user is to see what was made. Null in any other reply.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCapture))]
+    private ImagePreview? _capture;
+
+    /// <summary>The line the model gave the picture, under it; empty for none.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCaption))]
+    private string _caption = "";
+
+    public bool HasCapture => Capture is not null;
+    public bool HasCaption => HasCapture && Caption.Length > 0;
+
+    /// <summary>Shows the picture at <paramref name="path"/> under the reply's words, with its caption.</summary>
+    public void ShowCapture(string path, string? caption, PreviewServices services)
+    {
+        Capture?.Dispose();
+        Capture = FilePreview.For(path, services) as ImagePreview;
+        Caption = caption?.Trim() ?? "";
+        OnPropertyChanged(nameof(HasCaption));
+    }
+
+    public override void DisposePreviews()
+    {
+        base.DisposePreviews();
+        Capture?.Dispose();
+    }
+
     // ---- how long the step took ----------------------------------------------------------
     // At is when the step asked the model; the rest is set from the agent's thread as it goes.
 

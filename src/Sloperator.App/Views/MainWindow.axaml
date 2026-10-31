@@ -618,6 +618,20 @@
                   <views:SelectableText Classes="muted" views:MarkdownText.Plain="{Binding ShownReasoning}" TextWrapping="Wrap" Margin="-16,-12" Padding="16,12" />
                 </Expander>
                 <views:MarkdownView Source="{Binding ShownText}" IsVisible="{Binding HasText}" />
+                <!-- The picture of its work the run ended with (capture_result), under the words, the model's caption under it. -->
+                <StackPanel Spacing="4" IsVisible="{Binding HasCapture}" Margin="0,2,0,0">
+                  <ContentControl Content="{Binding Capture}">
+                    <ContentControl.ContentTemplate>
+                      <DataTemplate x:DataType="vm:ImagePreview">
+                        <Button Classes="bare" Click="OnPictureClick" HorizontalAlignment="Left" ToolTip.Tip="See it full screen"
+                                views:CopyMenu.Image="{Binding Image}" views:CopyMenu.File="{Binding Path}" AutomationProperties.Name="{Binding FileName}">
+                          <Image Source="{Binding Image}" MaxWidth="{Binding ShownWidth}" MaxHeight="480" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+                        </Button>
+                      </DataTemplate>
+                    </ContentControl.ContentTemplate>
+                  </ContentControl>
+                  <TextBlock Classes="muted" Text="{Binding Caption}" IsVisible="{Binding HasCaption}" TextWrapping="Wrap" />
+                </StackPanel>
                 <TextBlock Classes="muted" Text="{Binding TypingText}" IsVisible="{Binding ShowTypingDots}" />
                 <ItemsControl ItemsSource="{Binding Previews}" IsVisible="{Binding HasPreviews}" Margin="0,4,0,0">
                   <ItemsControl.ItemsPanel>

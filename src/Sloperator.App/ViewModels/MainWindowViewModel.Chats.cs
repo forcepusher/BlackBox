@@ -354,7 +354,8 @@ public sealed partial class MainWindowViewModel
         MarkCurrentChat();
     }
 
-    private static ChatEntry ToEntry(ChatItemViewModel item)
+    /// <summary>A line of the chat as its file keeps it.</summary>
+    public static ChatEntry ToEntry(ChatItemViewModel item)
     {
         var entry = item switch
         {
@@ -362,6 +363,7 @@ public sealed partial class MainWindowViewModel
             AssistantMessageItem a => new ChatEntry
             {
                 Kind = ChatEntryKind.Assistant, Text = a.Text, Reasoning = a.Reasoning, Ended = a.Ended, Sent = a.SentAt, FirstWords = a.FirstWords,
+                Capture = a.Capture?.Path, Caption = a.Capture is null || a.Caption.Length == 0 ? null : a.Caption,
             },
             ToolCallItem t => new ChatEntry
             {
@@ -380,10 +382,7 @@ public sealed partial class MainWindowViewModel
         ChatItemViewModel item = e.Kind switch
         {
             ChatEntryKind.User => new UserMessageItem(e.Text ?? "", e.Files, e.Cards) { Via = e.Via, Context = e.Context, Turn = e.Turn, Ids = e.Ids ?? [] },
-            ChatEntryKind.Assistant => new AssistantMessageItem
-            {
-                Text = e.Text ?? "", Reasoning = e.Reasoning ?? "", IsStreaming = false, Ended = e.Ended, SentAt = e.Sent, FirstWords = e.FirstWords,
-            },
+            ChatEntryKind.Assistant => ReplyFrom(e, _previews),
             ChatEntryKind.Tool => new ToolCallItem(e.CallId ?? "", e.Name ?? "", e.Summary ?? "")
             {
                 ResultText = e.Text ?? "",
@@ -397,6 +396,18 @@ public sealed partial class MainWindowViewModel
         // Lines saved before the chat kept times show none.
         (item.At, item.RunTook) = (e.At, e.RunTook);
         return item;
+    }
+
+    /// <summary>A reply as its file keeps it, with the picture of the work its run ended with.</summary>
+    public static AssistantMessageItem ReplyFrom(ChatEntry e, PreviewServices previews)
+    {
+        var reply = new AssistantMessageItem
+        {
+            Text = e.Text ?? "", Reasoning = e.Reasoning ?? "", IsStreaming = false, Ended = e.Ended, SentAt = e.Sent, FirstWords = e.FirstWords,
+        };
+        if (e.Capture is { } capture)
+            reply.ShowCapture(capture, e.Caption, previews);
+        return reply;
     }
 
     /// <summary>

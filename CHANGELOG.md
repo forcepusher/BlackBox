@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Settings → Advanced → Updates shows which version of Sloperator is running.
+- The agent shows you a picture of what it made: a window or a part of the screen, at full
+  resolution, under its final reply with a caption. Click it to see it full size.
 
 ### Changed
 - Sloperator runs on Avalonia 12 and SkiaSharp 4 (both the latest): buttons and rows sized by their

@@ -24,6 +24,9 @@ public sealed class ZoomTool : Tool
     /// <summary>The width of the rulers, in pixels of the picture.</summary>
     private const int Ruler = 30;
 
+    /// <summary>The JPEG quality its pictures go to the model at: sharper than a screenshot's, for small text.</summary>
+    internal const int Quality = 90;
+
     public override string Name => "zoom";
     public override string Description =>
         "Look closer at part of the screen: a sharp, enlarged picture of the region around (x, y), with rulers along its top and left edges " +
@@ -106,7 +109,7 @@ public sealed class ZoomTool : Tool
                 canvas.Restore();
             }
             using var snapshot = surface.Snapshot();
-            using var data = snapshot.Encode(SKEncodedImageFormat.Jpeg, 90);
+            using var data = snapshot.Encode(SKEncodedImageFormat.Jpeg, Quality);
             return data.ToArray();
         }
         finally
