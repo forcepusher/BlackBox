@@ -964,10 +964,10 @@ going or moving mid-task, greyed with a tip when they don't apply). What changed
   video's length.
 - Make the video and + Sound line greyed where they can't act (+ Sound line did nothing at 12 lines).
 - The ruler shows the time under the pointer (a dashed line and the time in a grey tag beside it, as the
-  playhead's is written, 0:09.4) and the video's end: a red line (`BbError`) down every row with "end
-  0:20" in a red tag on the ruler (the user picked these from four mockups, 2026-10-31; the others were a
+  playhead's is written, 0:09.4) and the video's end: a light grey line (`BbMuted`) down every
+  row with "end 0:20" in a light grey tag on the ruler (the user picked these from four mockups, 2026-10-31; the others were a
   play range, clip numbers on the ruler and previous / next clip). The end line was yellow and on the
-  ruler only, the playhead's colour.
+  ruler only, the playhead's colour; red, as first mocked and built, was "a bit scary" (the user).
 - A clip's and sound's edge handles are grey (`BbControlBorderHover`), yellow under the pointer and on
   the one picked: a 20% yellow on every edge looked lit all the time, as Make the video did.
 - The viewer's players: play a ghost icon (32, its icon 14) as the File inspector's, the time in
