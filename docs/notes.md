@@ -1805,15 +1805,16 @@ signs #808080 while the window isn't active. Windows 10 drew its own grey bar wh
 The bar had the blob 16x16 at 12 from the left and the title 8 after it until 2026-10-31, when
 the user asked for it to go: the title took its place at 12, and the exe, taskbar and Alt+Tab keep
 the icon.
-A chat window's bar has the server's state right after the title (`TitleBar.Status`), since
+A chat window's bar starts with the server's state (`TitleBar.Status`), the title after it, since
 2026-10-31 (the user: it was in the top bar under it, between the Side panel dropdown and History;
-put first beside minimize, the user wanted it on the left): the dot, the status word and the
-context's use, "● Connected · 15k of 256k used", in the muted 12 (faint while the window isn't
-active), 12 after the title, the word 8 after the dot. The context's use is last, so nothing moves
-as it comes after the first reply and grows; the title and the row move once, as the chat is named.
-The status is measured before the title (the two in a DockPanel of their own, against the left), so
-a long title is cut short with "…" before any of it; with no room left the `WholeRow` gives way, the
-context's use first, then the word, the dot staying (the word in the row's tooltip). The row is as tall as the strip and each part centred in it, as the
+put first beside minimize, then right after the title, the user wanted it on the left and the
+title last): the dot 12 from the left, the status word 8 after it and the context's use,
+"● Connected · 15k of 256k used", in the muted 12 (faint while the window isn't active), and the
+title 12 after them (its own margin). The dot and the word never move; the title moves as the
+context's use comes after the first reply and as its number grows. The status is docked before the
+title and measured first, so a long title is cut short with "…" before any of it; with no room left
+the `WholeRow` gives way, the context's use first, then the word, the dot staying (the word in the
+row's tooltip). Windows without a status (Settings) have the title at 12 as before. The row is as tall as the strip and each part centred in it, as the
 title is: the words share the title's baseline and the 8 x 8 dot (9 x 9 before, 11.25 px at 125%) is
 exactly in the middle at 100% and 125% (12 rows over and under it; 15 at 125%). Measured on the
 laptop's 100% (unaware) and 125% builds. The row is the client to Windows (not the caption), as the
